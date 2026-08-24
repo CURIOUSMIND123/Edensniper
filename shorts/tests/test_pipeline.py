@@ -254,3 +254,88 @@ class Subtitles(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ConfigErrorsAreNotRateLimits(unittest.TestCase):
+    """A missing API key used to be read as a transient 'unavailable' error,
+    which bought a pointless cooldown on every single call."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.cfg = make_cfg(Path(self.tmp.name))
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_missing_api_key_is_fatal_not_transient(self):
+        from autoshorts.llm import LLMUnavailable
+
+        verdict = classify(LLMUnavailable("No GEMINI_API_KEY set."), self.cfg)
+        self.assertEqual(verdict.kind, "fatal")
+        self.assertEqual(verdict.wait_seconds, 0)
+
+    def test_missing_key_sets_no_cooldown(self):
+        from autoshorts.llm import LLMUnavailable
+
+        store = Store(self.cfg.db_path)
+        gate = QuotaGate(store, self.cfg, log=lambda _m: None)
+
+        def boom():
+            raise LLMUnavailable("No GEMINI_API_KEY set.")
+
+        for _ in range(3):
+            with self.assertRaises(LLMUnavailable):
+                gate.call(boom, label="topics")
+        self.assertEqual(gate.blocked_for(), 0)
+        store.close()
+
+    def test_provider_misconfiguration_is_fatal(self):
+        from autoshorts.video import ProviderError
+
+        self.assertEqual(classify(ProviderError("no key for veo"), self.cfg).kind, "fatal")
+
+    def test_genuine_service_outage_is_still_transient(self):
+        verdict = classify(FakeError("503 Service Unavailable"), self.cfg)
+        self.assertEqual(verdict.kind, "transient")
+
+
+class SyncDestination(unittest.TestCase):
+    """Pointing sync at the output folder must not try to copy a file onto
+    itself and report a failure."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.cfg = make_cfg(Path(self.tmp.name))
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_copying_into_the_output_folder_is_a_no_op(self):
+        from autoshorts import sync
+
+        self.cfg.data["sync"] = {"enabled": True, "method": "copy",
+                                 "dest": str(self.cfg.output_dir)}
+        video = self.cfg.output_dir / "0001_x.mp4"
+        video.write_bytes(b"video")
+
+        messages: list[str] = []
+        self.assertEqual(sync.push(self.cfg, [video], log=messages.append), 1)
+        self.assertFalse([m for m in messages if "failed" in m])
+        self.assertEqual(video.read_bytes(), b"video")
+
+    def test_copying_to_a_real_destination_works(self):
+        from autoshorts import sync
+
+        dest = Path(self.tmp.name) / "phone"
+        self.cfg.data["sync"] = {"enabled": True, "method": "copy", "dest": str(dest)}
+        video = self.cfg.output_dir / "0001_x.mp4"
+        video.write_bytes(b"video")
+
+        self.assertEqual(sync.push(self.cfg, [video], log=lambda _m: None), 1)
+        self.assertEqual((dest / "0001_x.mp4").read_bytes(), b"video")
+
+    def test_disabled_sync_moves_nothing(self):
+        from autoshorts import sync
+
+        self.cfg.data["sync"] = {"enabled": False, "method": "copy", "dest": "/nope"}
+        self.assertEqual(sync.push(self.cfg, [Path("/tmp/x")], log=lambda _m: None), 0)

@@ -35,6 +35,11 @@ _DAILY_MARKERS = (
 )
 
 
+# Our own exceptions. These mean "the setup is wrong", never "try later".
+_CONFIG_ERROR_NAMES = {"LLMUnavailable", "ProviderError", "FFmpegMissing",
+                       "YouTubeNotConfigured"}
+
+
 @dataclass
 class Verdict:
     """What to do about an exception."""
@@ -69,9 +74,15 @@ def seconds_until_daily_reset(reset_hour_utc: int, now: dt.datetime | None = Non
 
 def classify(exc: BaseException, cfg, attempts: int = 0) -> Verdict:
     """Decide whether an exception is a quota wall, a blip, or a real bug."""
-    text = f"{type(exc).__name__}: {exc}".lower()
+    # Match on the message only. Matching the class name too used to make
+    # LLMUnavailable ("no API key") look like a transient "unavailable"
+    # network error, so a missing key bought a cooldown on every call.
+    text = str(exc).lower()
     status = getattr(exc, "code", None) or getattr(exc, "status_code", None)
     qcfg = cfg["quota"]
+
+    if type(exc).__name__ in _CONFIG_ERROR_NAMES:
+        return Verdict("fatal", 0, "configuration problem, not a rate limit")
 
     is_quota = status == 429 or any(marker in text for marker in _QUOTA_MARKERS)
 
@@ -91,8 +102,10 @@ def classify(exc: BaseException, cfg, attempts: int = 0) -> Verdict:
         return Verdict("quota", wait, "rate limited; backing off")
 
     if status in (500, 502, 503, 504) or any(
-        marker in text for marker in ("timeout", "timed out", "deadline", "unavailable",
-                                      "connection reset", "temporarily")
+        marker in text
+        for marker in ("timeout", "timed out", "deadline exceeded", "connection reset",
+                       "connection aborted", "service unavailable", "currently unavailable",
+                       "temporarily unavailable", "try again later", "internal error")
     ):
         wait = min(qcfg["max_backoff_seconds"], 15 * (2 ** min(attempts, 5)))
         return Verdict("transient", wait, "transient API/network error")

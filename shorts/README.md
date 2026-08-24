@@ -48,42 +48,42 @@ explainer, not a montage.
 
 ---
 
-## Setup
-
-### On a PC or laptop
+## Setup: one command
 
 ```bash
 cd shorts
-pip install -r requirements.txt
-sudo apt install ffmpeg          # macOS: brew install ffmpeg
-
-python -m autoshorts init
-export GEMINI_API_KEY=...        # free key: https://aistudio.google.com/apikey
-python -m autoshorts doctor      # tells you what's still missing
+bash start.sh
 ```
 
-### On the phone, with Termux
+That is the whole thing. It installs what is missing, asks you three
+questions, and starts. Run it again any time — it skips whatever is
+already done.
 
-Works fine — this is all Python and ffmpeg.
+It works the same on a laptop and on a phone through **Termux** (install
+Termux from F-Droid, then `pkg install git` and clone this repo).
+
+The three questions:
+
+1. **What should the channel be about?** Be specific. This is the single
+   biggest lever on whether the videos are any good.
+2. **Your free Gemini API key.** Get one at
+   <https://aistudio.google.com/apikey> — it takes thirty seconds and
+   costs nothing. This writes the scripts; it is *not* the thing that
+   makes the video. Skip it and the app still runs, but topics come from
+   a fixed built-in list that ignores your niche.
+3. **Where to copy finished videos.** On Termux, `/sdcard/Movies/AutoShorts`
+   puts them straight in your gallery.
+
+### If you'd rather do it by hand
 
 ```bash
-pkg install python ffmpeg git
-termux-setup-storage              # lets it write to /sdcard
 pip install -r requirements.txt
-python -m autoshorts init
+sudo apt install ffmpeg          # Termux: pkg install ffmpeg
+python -m autoshorts init        # writes config.yaml
+export GEMINI_API_KEY=...
+python -m autoshorts doctor      # says what is still missing
+python -m autoshorts run
 ```
-
-Then set `sync.dest` in `config.yaml` to `/sdcard/Movies/AutoShorts` so
-finished videos land in your gallery.
-
-### Configure
-
-Open `config.yaml` and set:
-
-- `niche` — what the channel is about. Be specific; this is the single
-  biggest lever on quality.
-- `provider` — `manual` or `api`.
-- `sync.dest` — where finished videos should land on the phone.
 
 ---
 

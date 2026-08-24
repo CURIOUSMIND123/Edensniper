@@ -34,6 +34,7 @@ class Runner:
         self.gate = QuotaGate(store, cfg, log=log)
         self.provider = video.build(cfg, self.gate, log)
         self._shipped = 0
+        self._waiting_on = None  # so "waiting for a clip" is said once, not every minute
 
     def request_stop(self, *_args) -> None:
         if self.stop:
@@ -76,6 +77,7 @@ class Runner:
         token = video.clip_token(clip["video_id"], clip["idx"])
         dest = video.clip_path(self.cfg, clip["video_id"], clip["idx"])
         self.store.set_video_status(clip["video_id"], "generating")
+        waiting = self._waiting_on == token
 
         if dest.exists() and dest.stat().st_size > 0:
             # Left over from an interrupted run — reuse it, don't pay twice.
@@ -83,10 +85,18 @@ class Runner:
             self.log(f"[clip] {token} already on disk")
             return "made"
 
-        self.log(f"[clip] {token} — {clip['caption'] or clip['prompt'][:60]}")
+        if not waiting:
+            self.log(f"[clip] {token} — {clip['caption'] or clip['prompt'][:60]}")
         try:
             self.provider.produce(clip, dest, attempts=clip["attempts"])
         except video.NotReady:
+            if not waiting:
+                self._waiting_on = token
+                self.log(
+                    f"[wait] waiting for {token}. Paste its prompt into Gemini, then "
+                    f"drop the clip into {self.cfg.inbox_dir}"
+                )
+                self.log(f"[wait] all pending prompts: {self.cfg.inbox_dir / 'PROMPTS.md'}")
             return "waiting"
         except Exception as exc:  # noqa: BLE001
             verdict = classify(exc, self.cfg, clip["attempts"])
@@ -101,6 +111,7 @@ class Runner:
             return "idle"
 
         self.store.complete_clip(clip["id"], str(dest))
+        self._waiting_on = None
         if self.cfg["sync"].get("include_clips"):
             sync.push(self.cfg, [dest], log=self.log)
         self.log(f"[clip] {token} done")
@@ -236,10 +247,6 @@ class Runner:
             self.retry_uploads()
 
             if outcome == "waiting":
-                self.log(
-                    f"[wait] next clip not in the inbox yet — "
-                    f"see {cfg.inbox_dir / 'PROMPTS.md'}"
-                )
                 self._nap(idle)
             elif outcome == "idle":
                 self._nap(idle)

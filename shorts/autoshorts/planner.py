@@ -67,6 +67,8 @@ Return one JSON object with keys "title", "description", "tags", "shots".
 """
 
 # Used only when there is no API key at all, so the pipeline still runs.
+# Note these are fixed virology topics: they do NOT follow your `niche`
+# setting. Without a key there is no model to think up topics for you.
 FALLBACK_TOPICS = [
     ("Why viruses are not technically alive", "they borrow every function of life"),
     ("The virus that only infects other viruses", "virophages hijack the hijackers"),
@@ -111,7 +113,14 @@ def discover_topics(store: Store, cfg, gate: QuotaGate, count: int = 12, log=pri
             label="topics",
         )
     except Exception as exc:  # noqa: BLE001
-        log(f"[topics] model unavailable ({type(exc).__name__}), using built-in list")
+        if not cfg.api_key:
+            log("[topics] no GEMINI_API_KEY, so there is no model to think up "
+                "topics — falling back to a fixed virology list")
+            log(f"[topics] this IGNORES your niche ({cfg['niche']!r}). "
+                "A free key at https://aistudio.google.com/apikey fixes it.")
+        else:
+            log(f"[topics] model call failed ({type(exc).__name__}: {exc}), "
+                "using built-in list")
         items = [
             {"title": title, "angle": angle}
             for title, angle in random.sample(FALLBACK_TOPICS, k=min(count, len(FALLBACK_TOPICS)))
@@ -181,7 +190,8 @@ def write_script(store: Store, cfg, gate: QuotaGate, topic, log=print) -> int | 
             generate_json, cfg.api_key, cfg["models"]["text"], prompt, label="script"
         )
     except Exception as exc:  # noqa: BLE001
-        log(f"[script] model unavailable ({type(exc).__name__}), using template")
+        detail = "no GEMINI_API_KEY" if not cfg.api_key else f"{type(exc).__name__}: {exc}"
+        log(f"[script] writing from a generic template ({detail})")
         data = _fallback_script(cfg, title, angle)
 
     shots = data.get("shots") or []

@@ -18,6 +18,9 @@ def _copy(src: Path, dest_dir: str, log) -> bool:
     try:
         dest.mkdir(parents=True, exist_ok=True)
         target = dest / src.name
+        if target.exists() and target.samefile(src):
+            # The sync folder is the output folder. Already where it belongs.
+            return True
         shutil.copy2(src, target)
         log(f"  copied to {target}")
         return True
