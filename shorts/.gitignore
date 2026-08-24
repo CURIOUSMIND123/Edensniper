@@ -1,0 +1,9 @@
+# Local state — never commit these
+config.yaml
+work/
+inbox/
+out/
+
+__pycache__/
+*.pyc
+.venv/

@@ -1,0 +1,76 @@
+# ============================================================
+#  AutoShorts config.  Copy to config.yaml and edit.
+#  Anything you leave out falls back to a sensible default.
+# ============================================================
+
+# ---- What the channel is about -----------------------------
+niche: "virology and infectious disease explained simply"
+
+# Extra steering for the topic finder. Be specific; this is the
+# single biggest lever on whether the videos are any good.
+audience: "curious adults with no science background"
+tone: "calm, factual, slightly eerie; never sensational, never medical advice"
+
+# ---- How clips are produced --------------------------------
+# api    = fully automatic, needs a Google AI Studio API key with
+#          Veo access (paid tier). Nothing to do by hand.
+# manual = you paste each prompt into the Gemini app yourself and
+#          drop the downloaded clip into inbox_dir. Everything
+#          else still happens automatically.
+provider: manual
+
+clips_per_video: 6          # 6 x ~10s = ~60s Short
+clip_seconds: 10
+aspect_ratio: "9:16"
+
+# ---- Where things live -------------------------------------
+paths:
+  work_dir: "./work"        # projects, clips, renders, database
+  inbox_dir: "./inbox"      # manual mode: drop downloaded clips here
+  output_dir: "./out"       # finished 60s Shorts land here
+
+# ---- Getting finished videos onto your phone ---------------
+sync:
+  enabled: true
+  # "copy"   -> plain folder copy (Termux: /sdcard/Movies/AutoShorts)
+  # "rclone" -> rclone copy to a remote (Google Drive, etc.)
+  # "none"   -> off
+  method: "copy"
+  dest: "/sdcard/Movies/AutoShorts"
+  rclone_remote: "gdrive:AutoShorts"
+  # Also push every individual 10s clip, not just the final video
+  include_clips: true
+
+# ---- Uploading ---------------------------------------------
+youtube:
+  enabled: false            # flip to true after you run `autoshorts auth-youtube`
+  privacy: "private"        # private | unlisted | public. Start private.
+  category_id: "27"         # 27 = Education
+  made_for_kids: false
+  # Appended to every description. Required-ish: disclose AI content.
+  disclosure: "Visuals in this video are AI-generated. Educational content, not medical advice."
+
+# ---- Models ------------------------------------------------
+models:
+  text: "gemini-2.5-flash"
+  video: "veo-3.0-generate-001"
+
+# ---- Quota behaviour (the part that lets you walk away) ----
+quota:
+  # When the daily cap is hit, sleep until this hour then resume.
+  # Google's free-tier day rolls over at midnight Pacific.
+  daily_reset_hour_utc: 8
+  # Per-request backoff when rate-limited without a retry hint.
+  min_backoff_seconds: 60
+  max_backoff_seconds: 3600
+  # Stop after this many consecutive hard failures on one clip.
+  max_attempts_per_clip: 4
+
+# ---- Pipeline pacing ---------------------------------------
+runner:
+  # Keep at least this many videos queued up and in progress.
+  target_pending_videos: 3
+  # How many finished Shorts to produce before stopping. 0 = forever.
+  max_videos: 0
+  # Seconds to idle when there is genuinely nothing to do.
+  idle_seconds: 60

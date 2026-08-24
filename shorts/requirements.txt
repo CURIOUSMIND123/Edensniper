@@ -1,0 +1,12 @@
+# Core
+google-genai>=1.0.0
+PyYAML>=6.0
+requests>=2.31
+
+# YouTube upload (optional but recommended)
+google-api-python-client>=2.100
+google-auth-oauthlib>=1.2
+google-auth-httplib2>=0.2
+
+# Topic discovery from public feeds (optional)
+feedparser>=6.0
