@@ -2,19 +2,35 @@
 
 I pulled the auto-captions of the channel's last **30 live streams** (5 Aug → 1 Oct 2026, ≈153 hours, 26 trading
 days), read them, and logged every trade call: setup, entry, stop-loss, targets, and what happened as he described
-it on stream. This folder has:
+it on stream. I then checked every call against **real market data**: Nifty/Sensex intraday bars and the
+exchanges' option records for each day. This folder has:
 
 | File | What it is |
 |---|---|
 | `README.md` | This report: the method, the rules, a scorecard, and a reality check |
+| [`market-check.md`](market-check.md) | **His calls checked against what the market actually did**, and what a follower would have made |
+| [`verified_calls.csv`](verified_calls.csv) | Every call with the matched strike, the real contract high/low, the market check, and the follower result |
+| [`charts/`](charts/) | One chart per day (real index path with his calls marked) plus summary charts |
 | [`trade_log.csv`](trade_log.csv) | 138 logged calls (117 from the main host) with entry / SL / targets / outcome |
-| [`daily-notes/`](daily-notes/) | One file per trading day: pre-market plan, every trade, and what he taught that day |
+| [`daily-notes/`](daily-notes/) | One file per trading day: pre-market plan, every trade, what he taught, and a market-check chart and table |
 | [`streams.md`](streams.md) | The 30 videos, dates, lengths, and who hosted each one |
 
 ---
 
 ## TL;DR
 
+**Checked against the real market** (details in [market-check.md](market-check.md)):
+- His quoted prices are real. Of 53 WIN claims I could compare, 44 exits sit inside the option's actual range for
+  that day.
+- **Copying his calls as given (his entry, his stop, his first target) won only 40% of the time.** That made about
+  **+0.28R per call before costs**, and roughly **zero after charges and 1 point of slippage** each way. Nifty calls
+  were barely positive after costs; Sensex calls were negative.
+- His direction is often right. 37 of the 48 calls that stopped a follower out later moved 2R or more his way. But
+  his stops are inside normal 1-minute noise. A follower who gets stopped is out, even when the called move comes later.
+- **This is not a "big money from tomorrow" method.** Paper-trade it first. The worst run in this sample was 7
+  losses in a row, and about −18R after costs.
+
+**From his narration** (what he said on stream):
 - **He doesn't predict direction.** Every morning he marks a few price "zones" and writes conditional plans for
   *both* a call (CE) and a put (PE): "CE only above X, PE only above Y". He then waits for price to prove itself at
   a zone and trades whichever side triggers. The "always right" impression mostly comes from this.
@@ -163,8 +179,8 @@ cheap PE** (about ₹100–120 each on Sensex, ₹30–60 on Nifty), usually bet
 
 ## 9. Scorecard: what happened in these 30 streams
 
-All numbers are **option-premium points as he stated or showed them on stream**. I couldn't see real fills, so this is
-his narrated record, not an audited one. "SCRATCH" means break-even or within a few points.
+All numbers are **option-premium points as he stated or showed them on stream**. This is his narrated record. For the
+check against real prices, and a 40% win rate for followers, see [market-check.md](market-check.md). "SCRATCH" means break-even or within a few points.
 
 ### Main host: 117 logged calls
 
@@ -268,19 +284,22 @@ Management:
 - [ ] Mid-day: half size. Expiry chop: consider a small strangle with risk capped at half the premium, or nothing.
 
 Before trading real money: **paper-trade this for 30+ sessions** and track *your own* win rate and R per trade. Your
-fills will be worse than what's narrated. Risk ~1% of capital per trade.
+fills will be worse than what's narrated. Risk ~1% of capital per trade. In the market check, copying every call
+mechanically roughly broke even after costs. Only Nifty calls stayed slightly positive. See
+[market-check.md](market-check.md#can-you-follow-this-from-tomorrow).
 
 ## 13. Method and limitations
 
 - **Data.** YouTube auto-generated Hindi captions (`hi-orig`) for the 30 most recent live streams, converted to
   timestamped text, transliterated to Latin script, and filtered to the trade-relevant lines. The 30 Sep and 1 Oct
   streams were read in full; the others were read through trade-related filters plus the full pre-market segment.
-- **Prices.** Index OHLC for each day came from Yahoo Finance (^NSEI, ^BSESN) and is used only for day-range and
-  context.
+- **Prices.** Index bars came from Yahoo Finance (^NSEI, ^BSESN): 1-minute from 4 Sep, 5-minute before that. Option
+  contract day OHLC came from the NSE and BSE F&O bhavcopy files. Minute-level option prices were reconstructed by
+  fitting a Black-Scholes model to each contract's real day range ([market-check.md](market-check.md)).
 - **Limits.** Auto-captions mishear some numbers (for example "2830" for "28–30"), so entries, stops and targets are
-  as close as the captions allowed. Outcomes are **as he narrated them**. There was no broker data and no
-  option-price history to verify fills, and "points" are option-premium points, which differ between Nifty and
-  Sensex. Trades marked UNCLEAR had no stated outcome.
+  as close as the captions allowed. Outcomes in the scorecard are **as he narrated them**. The market check uses
+  reconstructed option prices, not recorded ticks, and there was no broker data on his fills. "Points" are
+  option-premium points, which differ between Nifty and Sensex. Trades marked UNCLEAR had no stated outcome.
 - I deliberately did **not** commit the raw transcripts. Only summaries and short quotes are here.
 
 *This is research, not investment advice.*
