@@ -118,6 +118,25 @@ class TradeTests(unittest.TestCase):
         self.assertTrue(s.can_open(at(D1, 9, 25)))
         self.assertFalse(s.can_open(at(D1, 14, 35)))
 
+    def test_wider_stop_keeps_setup_filters(self):
+        # candle range 11 pts; 2x stop sits 22 pts below entry, but the 2R filter still uses the candle range
+        bars = opening() + [Bar(at(D1, 9, 35), 1023, 1030, 1022, 1029), Bar(at(D1, 9, 40), 1029, 1030, 1010, 1012),
+                            Bar(at(D1, 9, 45), 1012, 1052, 1011, 1050)]
+        tight = run_day(prev_day(), bars, P)
+        self.assertEqual(tight.trades[0].reason, "stop")           # 1x: stopped at 1014 on the dip
+        wide = run_day(prev_day(), bars, Params(zone_merge_pts=0, stop_mult=2.0))
+        tr = wide.trades[0]
+        self.assertEqual((tr.initial_stop, tr.reason, tr.exit), (1003, "target", 1050))  # 2x: survives the dip
+        self.assertAlmostEqual(tr.r, 25 / 22, places=3)             # R is measured on the wider stop
+
+    def test_plan_gives_both_directions(self):
+        s = Strategy(prev_day(), P)
+        plan = s.plan(1005)
+        self.assertEqual((plan["CE"]["level"], plan["CE"]["target"]), (1020, 1050))
+        self.assertEqual((plan["PE"]["level"], plan["PE"]["target"]), (1000, 980))
+        self.assertIn("CALL", plan["CE"]["text"])
+        self.assertIn("PUT", plan["PE"]["text"])
+
     def test_bar_path(self):
         self.assertEqual(bar_path(Bar(D1, 10, 12, 9, 11)), [10, 9, 12, 11])
         self.assertEqual(bar_path(Bar(D1, 10, 12, 9, 9.5)), [10, 12, 9, 9.5])

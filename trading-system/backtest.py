@@ -105,6 +105,7 @@ def main() -> None:
     ap.add_argument("--config", default="config.json")
     ap.add_argument("--slippage", type=float, default=1.0, help="option points lost on each fill")
     ap.add_argument("--out", default="backtest_trades.csv")
+    ap.add_argument("--stop-mults", default="", help="compare stop widths, e.g. 1,1.5,2 (x breakout-candle range)")
     a = ap.parse_args()
     cfg = load_config(a.config)
     tf, lot = cfg["timeframe_min"], cfg["risk"]["lot_size"]
@@ -121,11 +122,31 @@ def main() -> None:
     for b in idx1:
         one.setdefault(b.t.date().isoformat(), []).append(b)
     days = sorted(by_day)
+    mults = [float(x) for x in a.stop_mults.split(",")] if a.stop_mults else [None]
+    for m in mults:
+        params = params_from(cfg)
+        if m is not None:
+            params.stop_mult = m
+            print(f"\n=== stop = {m:g} x breakout-candle range ===")
+        rows = simulate(a, cfg, client, data, by_day, one, days, params, lot, tf)
+        if not rows:
+            print("no trades")
+            continue
+        out = a.out if m is None else a.out.replace(".csv", f"_stop{m:g}.csv")
+        with open(out, "w", newline="") as f:
+            w = csv.DictWriter(f, fieldnames=list(rows[0]))
+            w.writeheader()
+            w.writerows(rows)
+        report(rows, by_day, tf)
+        print(f"trades written to {out}")
+
+
+def simulate(a, cfg, client, data, by_day, one, days, params, lot, tf) -> List[dict]:
     rows = []
     for i, d in enumerate(days[1:], 1):
         if d < a.start:
             continue
-        s = run_day(by_day[days[i - 1]], by_day[d], params_from(cfg))
+        s = run_day(by_day[days[i - 1]], by_day[d], params)
         if not s.trades:
             continue
         day = date.fromisoformat(d)
@@ -161,16 +182,9 @@ def main() -> None:
                              reason=tr.reason, index_entry=round(tr.entry, 1), index_stop=round(tr.initial_stop, 1),
                              index_target=round(tr.target, 1), index_exit=round(tr.exit, 1), index_R=round(tr.r, 2),
                              option=sym, opt_buy=round(buy, 2), opt_sell=round(sell, 2), gross=round(gross), charges=ch,
-                             net=round(gross - ch)))
-    if not rows:
-        print("no trades")
-        return
-    with open(a.out, "w", newline="") as f:
-        w = csv.DictWriter(f, fieldnames=list(rows[0]))
-        w.writeheader()
-        w.writerows(rows)
-    report(rows, by_day, tf)
-    print(f"trades written to {a.out}")
+                             net=round(gross - ch),
+                             risk_rs=round(0.5 * abs(tr.entry - tr.initial_stop) * lot)))  # approx: delta ~0.5
+    return rows
 
 
 def report(rows: List[dict], by_day: Dict[str, List[Bar]], tf: int) -> None:
@@ -183,6 +197,8 @@ def report(rows: List[dict], by_day: Dict[str, List[Bar]], tf: int) -> None:
     ir = [r["index_R"] for r in rows]
     print(f"trades {len(rows)} on {len({r['day'] for r in rows})} days | win% {100 * sum(n > 0 for n in net) / len(net):.0f} "
           f"| net Rs {sum(net):+,.0f} per lot | avg {statistics.mean(net):+.0f}/trade | worst drawdown Rs {dd:,.0f}")
+    print(f"approx. risk per trade Rs {statistics.mean(r['risk_rs'] for r in rows):,.0f} per lot | "
+          f"calls (CE) Rs {sum(r['net'] for r in rows if r['side'] == 'CE'):+,.0f} | puts (PE) Rs {sum(r['net'] for r in rows if r['side'] == 'PE'):+,.0f}")
     print("exits:", {k: sum(1 for r in rows if r["reason"] == k) for k in sorted({r["reason"] for r in rows})})
     real = statistics.mean(ir)
     base = random_baseline(rows, by_day, tf)

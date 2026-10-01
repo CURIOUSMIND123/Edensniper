@@ -123,6 +123,7 @@ def run_live(args, cfg) -> None:
         warm_up(strat, done)
         log(f"{now:%H:%M:%S} caught up on {len(done)} finished candles; trades so far today: {len(strat.trades)}")
     last_bar = done[-1].t if done else None
+    sess.show_plan(done[-1].c if done else client.index_ltp(), now)
     errors = 0
     while True:
         now = ist_now()
@@ -188,6 +189,8 @@ def run_replay(args, cfg) -> None:
     sess = Session(day, strat, PaperBroker(quote, cfg["paper_slippage"]), risk, journal, "replay",
                    pick_option=pick, option_quote=quote, protect_mult=cfg["protect_mult"])
     print(f"replay {day} | zones: " + ", ".join(f"{z.name} {z.level:.0f}" for z in strat.zones))
+    sess.log = print
+    sess.show_plan(today[0].o, today[0].t)
     for b in today:
         for k, px in enumerate(bar_path(b)):
             state["index"] = px

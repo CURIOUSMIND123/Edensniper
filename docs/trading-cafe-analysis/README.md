@@ -28,6 +28,10 @@ exchanges' option records for each day. This folder has:
   were barely positive after costs; Sensex calls were negative.
 - His direction is often right. 37 of the 48 calls that stopped a follower out later moved 2R or more his way. But
   his stops are inside normal 1-minute noise. A follower who gets stopped is out, even when the called move comes later.
+- **A wider stop helped.** Keeping his entry and first target but using about 2× his stop raised the follower win
+  rate to 60% and net P&L (1 lot per call, after costs) from about ₹5,800 to ₹19,100. Each trade risked twice as
+  much, and this is one sample
+  ([details](market-check.md#what-if-you-used-a-wider-stop)).
 - **This is not a "big money from tomorrow" method.** Paper-trade it first. The worst run in this sample was 7
   losses in a row, and about −18R after costs.
 

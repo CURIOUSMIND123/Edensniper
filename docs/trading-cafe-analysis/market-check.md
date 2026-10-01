@@ -148,15 +148,40 @@ edge from luck.
 ### Why a follower does so much worse than his narration
 
 1. **Stops are tighter than the noise.** His median stop was 8 points on Nifty options and 25 on Sensex. In 37 of the
-   48 stopped calls, the option later moved at least 2R in his direction. A stop twice as wide gave about the same
-   profit per rupee risked: +0.59 of his stop units on 2× the risk. Wider stops are hurt less by costs, but this is
-   one sample of 80 calls, so treat it as an idea to paper-test, not a rule.
+   48 stopped calls, the option later moved at least 2R in his direction. See the wider-stop test below.
 2. **His tally isn't a follower's tally.** In 15 of his WIN claims, the option first dipped through his stated stop.
    He may have re-entered, held through the dip, or had a slightly better price or strike, and he counted the win.
    He also trails and takes partial profits. A follower using his stated stop was simply out.
 3. **The "unclear" calls were mostly losers** (8 of 9 hit the stop), and they never appear in his tally.
 4. **Sensex calls were close to worthless for a follower.** 68% of them hit the stop first. The Sensex total rests
    on one day, 17 Sep (+7.0R); without it, the Sensex calls lost 4.5R before costs.
+
+### What if you used a wider stop?
+
+His direction was better than a coin flip. 30 minutes after entry, the index had moved his way 62% of the time
+(84 calls; the 95% range is roughly 52–72%). So I re-ran the follower test with his entry and first target, but
+a wider stop. Figures are 1 lot per call, after charges and 1 point of slippage per fill.
+
+| Your stop | Win % | Net P&L, 80 calls | Avg risk per trade | Profit per ₹1 risked |
+|---|---|---|---|---|
+| His stop (1×) | 40% | +₹5,798 | ₹532 | 14 paise |
+| 1.5× | 48% | +₹5,336 | ₹799 | 8 paise |
+| **2×** | **60%** | **+₹19,138** | **₹1,065** | **22 paise** |
+| 2.5× | 65% | +₹21,328 | ₹1,331 | 20 paise |
+
+**What holds up at 2×:**
+- 16 of the 48 calls that were stopped at his stop became profitable.
+- With 2 points of slippage per fill it's still +₹11,798.
+- Without the best day it's +₹12,183.
+- It was better than 1× in both August and September.
+
+**What doesn't:**
+- 1.5× was worse than 1×, so the improvement may be partly luck.
+- Most of the gain per rupee came from **Sensex** calls (1 → 32 paise per ₹1 risked).
+- On **Nifty**, 2× gave more wins (59% vs 46%) and more rupees, but slightly less per ₹1 risked (16 vs 22 paise).
+- Each trade risks about twice as much, so it needs about twice the capital.
+
+`trading-system/call_helper.py` works out the wider stop, the break-even level and the size for a live call.
 
 ---
 
@@ -209,7 +234,8 @@ Following every call mechanically, as given, roughly broke even after costs in t
 
 1. **Paper-trade first, for at least 30 sessions.** Log your own fills, not his narration. Start real money only if
    your paper results, after costs, are positive.
-2. **Nifty only.** Sensex calls were negative for a follower after costs.
+2. **With his stop, Nifty only.** Sensex calls were negative for a follower after costs. With a 2× stop, Sensex calls
+   did best in this sample, but that's only 34 calls.
 3. **Skip a call if you missed his entry by more than 1–2 points.** Chasing turns a thin edge into a loss.
 4. **Size for the losing streaks.** Expect seven losses in a row and a −15 to −20R stretch. At 1% of capital per
    trade that's a 15–20% drawdown. Don't put more than 1% at risk on any call.
@@ -217,8 +243,9 @@ Following every call mechanically, as given, roughly broke even after costs in t
    losses each.
 6. **Put your stop and target in the system the moment you enter.** Don't wait for him to call the exit. The calls
    he never followed up on were mostly losers (8 of 9 checkable ones hit the stop).
-7. **Possible improvement to test on paper:** the same entries with roughly double his stop and half the size. In
-   this sample that kept the edge and made it less sensitive to costs. It's untested beyond these 80 calls.
+7. **Consider about 2× his stop, keeping his entry and first target.** In this sample it raised the follower win rate
+   from 40% to 60% and net P&L from about ₹5,800 to ₹19,100, but each trade risked about twice as much. Use
+   `call_helper.py` to size it, and paper-test it first. It's untested beyond these 80 calls.
 
 Context: SEBI's study found about **9 in 10 individual F&O traders lost money** over FY22–FY24. Copying someone's
 calls doesn't change that by default.

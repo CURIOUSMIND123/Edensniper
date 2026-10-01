@@ -120,6 +120,17 @@ class Session:
     def on_bar(self, bar: Bar) -> None:
         for ev in self.s.on_bar_close(bar):
             self.handle(ev, bar.c)
+        self.show_plan(bar.c, bar.t)
+
+    def show_plan(self, price: float, t: datetime) -> None:
+        """Log both directions (CALL above / PUT below) whenever the nearest zones change."""
+        plan = self.s.plan(price)
+        key = tuple((k, v["level"], v["target"]) for k, v in sorted(plan.items()))
+        if key != getattr(self, "_plan_key", None):
+            self._plan_key = key
+            for side in ("CE", "PE"):
+                if side in plan:
+                    self.log(f"{t:%H:%M} PLAN   {plan[side]['text']}")
 
     def end_of_day(self, now: datetime, index_price: float) -> None:
         if self.s.position is not None:

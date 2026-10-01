@@ -11,6 +11,8 @@ indicator("TCI Zone Breakout", overlay = true, max_lines_count = 500, max_labels
 grpR = "Rules"
 trigBuf  = input.float(1.0,  "Trigger buffer (pts)", group = grpR)
 stopBuf  = input.float(1.0,  "Stop buffer (pts)", group = grpR)
+stopMult = input.float(1.0,  "Stop width (x breakout-candle range)", minval = 1.0, step = 0.25, group = grpR,
+     tooltip = "1 = stop at the breakout candle's far end. 2 = twice that distance: survives more noise, but each trade risks twice as much.")
 minRisk  = input.float(6.0,  "Min risk (pts)", group = grpR)
 maxRisk  = input.float(35.0, "Max risk (pts)", group = grpR)
 minRR    = input.float(2.0,  "Min reward:risk to next zone", group = grpR)
@@ -27,6 +29,7 @@ maxTrades  = input.int(3,    "Max trades per day", group = grpT)
 maxLosses  = input.int(2,    "Stop after N losses", group = grpT)
 maxAttempt = input.int(2,    "Max attempts per zone and side", group = grpT)
 showZones  = input.bool(true, "Show zones", group = "Display")
+showPlan   = input.bool(true, "Show CALL / PUT plan table", group = "Display")
 
 // ---------- time helpers ----------
 TZ = "Asia/Kolkata"
@@ -60,6 +63,7 @@ var string pSide = ""
 var float pTrig = na
 var float pStop = na
 var float pTgt = na
+var float pCS = na
 var string pZone = ""
 var int pBar = na
 // open position
@@ -203,8 +207,9 @@ if pSide != "" and bar_index == pBar + 1
         gapped = pSide == "CE" ? open >= pTrig : open <= pTrig
         fill = gapped ? open : pTrig
         r = pSide == "CE" ? fill - pStop : pStop - fill
+        base = pSide == "CE" ? fill - pCS : pCS - fill
         rew = pSide == "CE" ? pTgt - fill : fill - pTgt
-        if r > 0 and rew >= minRR * r * 0.999
+        if r > 0 and base > 0 and rew >= minRR * base * 0.999
             side := pSide
             entry := fill
             stop := pStop
@@ -265,8 +270,9 @@ if barstate.isconfirmed
                     setSide := "PE"
         if setSide != ""
             t = setSide == "CE" ? high + trigBuf : low - trigBuf
-            s = setSide == "CE" ? low - stopBuf : high + stopBuf
-            r = math.abs(t - s)
+            cs = setSide == "CE" ? low - stopBuf : high + stopBuf
+            r = math.abs(t - cs)
+            s = setSide == "CE" ? t - stopMult * r : t + stopMult * r
             float nxt = na
             for i = 0 to nz_ - 1
                 v = array.get(zl, i)
@@ -281,12 +287,47 @@ if barstate.isconfirmed
                 pTrig := t
                 pStop := s
                 pTgt := tg
+                pCS := cs
                 pZone := zname
                 pBar := bar_index
                 label.new(bar_index, setSide == "CE" ? high : low, setSide + " setup: " + zname + "\nconfirm " + str.tostring(t, "#.0"),
                      style = setSide == "CE" ? label.style_label_down : label.style_label_up, size = size.tiny,
                      color = color.new(color.orange, 30), textcolor = color.black)
                 alert("TCI SETUP " + setSide + " " + zname + ": buy if next candle crosses " + str.tostring(t, "#.0") + " SL " + str.tostring(s, "#.0") + " T " + str.tostring(tg, "#.0"), alert.freq_once_per_bar_close)
+
+// ---------- both directions: CALL above / PUT below (like his morning plan) ----------
+var table planTbl = table.new(position.top_right, 2, 3, bgcolor = color.new(color.white, 15), border_color = color.new(color.gray, 70), border_width = 1)
+if showPlan and barstate.islast
+    float upZ = na
+    float upT = na
+    string upN = ""
+    float dnZ = na
+    float dnT = na
+    string dnN = ""
+    nzl = array.size(zl)
+    if nzl > 0
+        for i = 0 to nzl - 1
+            v = array.get(zl, i)
+            if v > close and na(upZ)
+                upZ := v
+                upN := array.get(zn, i)
+            else if v > close and na(upT)
+                upT := v
+        for i = nzl - 1 to 0
+            v = array.get(zl, i)
+            if v < close and na(dnZ)
+                dnZ := v
+                dnN := array.get(zn, i)
+            else if v < close and na(dnT)
+                dnT := v
+    table.cell(planTbl, 0, 0, "Side", text_color = color.black, text_size = size.small)
+    table.cell(planTbl, 1, 0, "Plan (" + str.tostring(tfMin) + "-min candle close, then follow-up)", text_color = color.black, text_size = size.small)
+    table.cell(planTbl, 0, 1, "CALL (CE)", text_color = color.teal, text_size = size.small)
+    table.cell(planTbl, 1, 1, na(upZ) ? "no zone above" : "close above " + str.tostring(upZ, "#") + " (" + upN + ")  ->  T " + (na(upT) ? str.tostring(blueRR) + "x range" : str.tostring(upT, "#")),
+         text_color = color.black, text_size = size.small, text_halign = text.align_left)
+    table.cell(planTbl, 0, 2, "PUT (PE)", text_color = color.maroon, text_size = size.small)
+    table.cell(planTbl, 1, 2, na(dnZ) ? "no zone below" : "close below " + str.tostring(dnZ, "#") + " (" + dnN + ")  ->  T " + (na(dnT) ? str.tostring(blueRR) + "x range" : str.tostring(dnT, "#")),
+         text_color = color.black, text_size = size.small, text_halign = text.align_left)
 
 // ---------- plots ----------
 plot(showZones ? pdh : na, "PDH", color.new(color.blue, 0), 1, plot.style_linebr)

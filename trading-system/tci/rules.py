@@ -12,9 +12,11 @@ How a trade happens (long side; the short side is the mirror image and buys a PE
    opened (or the previous candle closed) at or below.
 3. Follow-up: the very next candle must trade above the breakout candle's high
    (+ buffer). Only then do we buy. If it doesn't, the setup is cancelled.
-4. Stop: breakout candle's low (- buffer). Target: the next zone above the
-   entry. If that zone is closer than `min_rr` x risk, the trade is skipped.
-   With no zone above, the target is `blue_sky_rr` x risk.
+4. Stop: breakout candle's low (- buffer). With `stop_mult` > 1 the stop sits
+   that many candle-ranges below the entry instead (a wider stop that survives
+   normal noise). Target: the next zone above the entry. If that zone is closer
+   than `min_rr` x the candle range, the trade is skipped. With no zone above,
+   the target is `blue_sky_rr` x the candle range.
 5. Management: stop moves to entry once price has gone 1R in our favour; exit
    at stop, target, or the square-off time.
 6. Day limits: max trades, stop after N losses, max two attempts per zone,
@@ -50,7 +52,8 @@ class Params:
     max_risk_pts: float = 35.0
     min_rr: float = 2.0
     blue_sky_rr: float = 3.0
-    breakeven_at_r: float = 1.0
+    stop_mult: float = 1.0  # stop distance = stop_mult x breakout-candle range (filters still use the range)
+    breakeven_at_r: float = 1.0  # in units of the actual stop distance
     first_entry: time = time(9, 25)
     last_entry: time = time(14, 30)
     square_off: time = time(15, 15)
@@ -73,6 +76,7 @@ class Pending:
     target: float
     zone: Zone
     valid_for: datetime  # start time of the follow-up bar
+    candle_stop: float = 0.0  # the breakout candle's far end (- buffer); defines the setup's range
 
 
 @dataclass
@@ -201,9 +205,10 @@ class Strategy:
             return None
         fill = price if gap_open else pd.trigger
         risk = (fill - pd.stop) if pd.side == "CE" else (pd.stop - fill)
+        base = (fill - pd.candle_stop) if pd.side == "CE" else (pd.candle_stop - fill)
         reward = (pd.target - fill) if pd.side == "CE" else (fill - pd.target)
         self.pending = None
-        if risk <= 0 or reward < self.p.min_rr * risk * 0.999:
+        if risk <= 0 or base <= 0 or reward < self.p.min_rr * base * 0.999:
             return self._emit(Event("skip", now, pd.side, fill, "gap made R:R too poor"))
         self.position = Position(pd.side, fill, pd.stop, pd.target, risk, pd.zone, now)
         key = (pd.zone.name, pd.side)
@@ -302,18 +307,20 @@ class Strategy:
             if not crossed:
                 return None
             zone = max(crossed, key=lambda z: z.level)
-            side, trigger, stop = "CE", bar.h + p.trigger_buffer, bar.l - p.stop_buffer
+            side, trigger, candle_stop = "CE", bar.h + p.trigger_buffer, bar.l - p.stop_buffer
             above = [lv for lv in levels if lv > trigger]
-            risk = trigger - stop
+            risk = trigger - candle_stop
+            stop = trigger - p.stop_mult * risk
             target = min(above) if above else trigger + p.blue_sky_rr * risk
         elif bar.c < bar.o:
             crossed = [z for z in self.zones if bar.c < z.level <= ref_hi]
             if not crossed:
                 return None
             zone = min(crossed, key=lambda z: z.level)
-            side, trigger, stop = "PE", bar.l - p.trigger_buffer, bar.h + p.stop_buffer
+            side, trigger, candle_stop = "PE", bar.l - p.trigger_buffer, bar.h + p.stop_buffer
             below = [lv for lv in levels if lv < trigger]
-            risk = stop - trigger
+            risk = candle_stop - trigger
+            stop = trigger + p.stop_mult * risk
             target = max(below) if below else trigger - p.blue_sky_rr * risk
         else:
             return None
@@ -324,13 +331,36 @@ class Strategy:
         reward = abs(target - trigger)
         if reward < p.min_rr * risk:
             return self._skip(bar, side, trigger, f"next zone only {reward / risk:.1f}R away")
-        self.pending = Pending(side, trigger, stop, target, zone, follow_up_start)
+        self.pending = Pending(side, trigger, stop, target, zone, follow_up_start, candle_stop)
         return Event("setup", bar.t, side, trigger,
                      f"breakout of {zone.name} {zone.level:.0f}; buy {side} if index "
                      f"{'>=' if side == 'CE' else '<='} {trigger:.1f} next candle; stop {stop:.1f}; target {target:.1f}")
 
     def _skip(self, bar: Bar, side: str, trigger: float, why: str) -> Event:
         return Event("skip", bar.t, side, trigger, why)
+
+    def plan(self, price: float) -> dict:
+        """Both directions at once, like his "CE only above X, PE only below Y" morning plan.
+
+        For each side: the zone a candle must close beyond, and the first target (the next zone after it).
+        The exact entry and stop come from the breakout candle when it forms."""
+        lv = sorted(self.zones, key=lambda z: z.level)
+        up = [z for z in lv if z.level > price]
+        dn = [z for z in lv if z.level < price][::-1]
+        out = {}
+        if up:
+            out["CE"] = {"zone": up[0].name, "level": round(up[0].level, 1),
+                         "target": round(up[1].level, 1) if len(up) > 1 else None,
+                         "text": f"CALL (CE): a {self.p.timeframe_min}-min candle closes above {up[0].level:.0f} ({up[0].name}), "
+                                 f"then the next candle breaks its high -> first target "
+                                 + (f"{up[1].level:.0f} ({up[1].name})" if len(up) > 1 else f"{self.p.blue_sky_rr:g}x the candle range")}
+        if dn:
+            out["PE"] = {"zone": dn[0].name, "level": round(dn[0].level, 1),
+                         "target": round(dn[1].level, 1) if len(dn) > 1 else None,
+                         "text": f"PUT (PE): a {self.p.timeframe_min}-min candle closes below {dn[0].level:.0f} ({dn[0].name}), "
+                                 f"then the next candle breaks its low -> first target "
+                                 + (f"{dn[1].level:.0f} ({dn[1].name})" if len(dn) > 1 else f"{self.p.blue_sky_rr:g}x the candle range")}
+        return out
 
 
 def _add_minutes(t: datetime, m: int) -> datetime:

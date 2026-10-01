@@ -16,6 +16,8 @@
   },
   "rules": {
     "min_rr": 2.0,
+    "stop_mult": 1.0,
+    "breakeven_at_r": 1.0,
     "max_risk_pts": 35,
     "min_risk_pts": 6,
     "first_entry": "09:25",

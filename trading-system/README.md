@@ -36,6 +36,74 @@ costs: at least 40 trades over at least 20 days.
 Two months is a short test. Use `backtest.py` with your Groww API key to test a year or more of real option
 prices before deciding anything.
 
+## Wider stops, and calls and puts in both directions
+
+### Can a wider stop catch the moves that went his way after stopping out?
+
+**On his own calls, mostly yes, in this sample.**
+- His direction was better than a coin flip: 30 minutes after entry, the index had moved his way **62%** of the
+  time (84 calls; the 95% range is roughly 52–72%, so better than 50/50).
+- His stops were tight enough that normal noise took many trades out before the move came.
+- Keeping his entry and first target but placing the stop at **2× his stop distance** (80 checkable calls, 1 lot
+  each, after charges and 1 point of slippage per fill):
+
+| Your stop | Win % | Net P&L | Avg risk per trade | Profit per ₹1 risked |
+|---|---|---|---|---|
+| His stop (1×) | 40% | +₹5,798 | ₹532 | 14 paise |
+| 1.5× | 48% | +₹5,336 | ₹799 | 8 paise |
+| **2×** | **60%** | **+₹19,138** | **₹1,065** | **22 paise** |
+| 2.5× | 65% | +₹21,328 | ₹1,331 | 20 paise |
+| 3× | 68% | +₹18,913 | ₹1,598 | 15 paise |
+
+**What holds up at 2×:**
+- With 2 points of slippage per fill it's still +₹11,798.
+- Without the best day (15 Sep) it's +₹12,183.
+- It was better than 1× in both August and September.
+- Only a 3% bootstrap chance that the true result is zero or worse.
+
+**What doesn't:**
+- **1.5× was worse than 1×.** The results jump around, so 2× may be partly luck.
+- **The gain came mostly from Sensex calls.** Profit per ₹1 risked rose from 1 paisa to 32 paise. On Nifty calls, 2×
+  gave more wins (59% vs 46%) and more rupees (+₹8,450 vs +₹5,590), but **less per ₹1 risked** (16 vs 22 paise).
+  That is because each trade simply risked twice as much.
+- **Each trade risks about twice as much money,** so you need about twice the capital for the same 1% rule.
+- This is still one two-month sample in a falling market.
+
+**On the fixed rules (the bot), no.** Their direction is no better than random, so a wider stop only magnifies
+whatever the market does:
+- **5-minute rules:** 1× +₹7,426, 1.5× −₹200, 2× +₹4,472, 3× −₹10,890.
+- **The 2× version swings with the market.** It made +₹19,726 in September (1× made +₹8,584) and lost −₹13,594 in
+  July–August (1× lost −₹87).
+- **Random direction still did as well** in every version (56–91% of random runs).
+
+A wider stop helps only when the direction is right more often than chance. His live read showed some of that.
+The fixed rules didn't.
+
+### How to use a wider stop
+- **Following his live calls:** `python call_helper.py --index NIFTY --entry 172 --sl 160 --target 200 --capital 100000`.
+  It prints your stop (2× his distance), the break-even move, the rupee risk per lot, and how many lots your
+  budget allows.
+  - It says **SKIP** when one lot is too big.
+  - Don't shrink the stop to make a trade fit: the tight stop is the one that got hit 60% of the time.
+- **Bot and backtest:** set `"stop_mult": 2.0` under `rules` in `config.json`. To compare widths on real Groww data:
+  `python backtest.py --start 2025-10-01 --end 2026-09-30 --stop-mults 1,1.5,2`.
+- **Indicator:** set the input *Stop width (x breakout-candle range)*.
+
+### Calls (CE) and puts (PE) in both directions
+The rules always look both ways:
+- a breakout **up** through a zone means **buy a call (CE)**;
+- a breakdown **down** through a zone means **buy a put (PE)**.
+
+The fixed-rule results show why both matter. Over 10 Jul–1 Oct, puts made +₹21,338 and calls lost −₹13,912. In a
+rising market that would flip.
+
+Like his "CE above X, PE below Y" morning plan, the bot logs both sides whenever they change, and the indicator
+shows them in a table on the chart:
+```
+09:40 PLAN   CALL (CE): a 5-min candle closes above 23450 (PDH/prev last-hour high/ORL), then the next candle breaks its high -> first target 23588 (ORH)
+09:40 PLAN   PUT (PE): a 5-min candle closes below 23398 (PDC), then the next candle breaks its low -> first target 23383 (prev last-hour low)
+```
+
 ## The rules, exactly
 
 Nifty 50 index, 5-minute candles (the timeframe can be changed in `config.json`).
@@ -51,6 +119,8 @@ Nifty 50 index, 5-minute candles (the timeframe can be changed in `config.json`)
    puts). If it doesn't, the setup is cancelled. This is his "never buy the breakout candle itself" rule.
 4. **Stop:** 1 point beyond the breakout candle's other end.
    - Skip the trade if the stop is under 6 or over 35 index points away.
+   - With `stop_mult` above 1, the stop sits that many breakout-candle ranges away. The skip checks still use the
+     candle's range.
 5. **Target:** the next zone beyond the entry.
    - Skip the trade if that zone is less than **2 × the risk** away (his "no 1:1 trades" rule).
    - If there's no zone beyond the entry, the target is 3 × the risk.
@@ -104,7 +174,7 @@ Editor shows an error, paste it to me. The Python engine (`tci/rules.py`) is the
    pip install -r requirements.txt
    cp config.example.json config.json          # then edit capital and risk
    export GROWW_TOTP_TOKEN=...  GROWW_TOTP_SECRET=...
-   python -m unittest discover -s tests        # 16 tests, no account needed
+   python -m unittest discover -s tests        # 18 tests, no account needed
    ```
 
 ### Step 1: backtest on Groww's real option prices
@@ -164,14 +234,15 @@ Start with `"max_lots": 1`.
 | `tci/groww_client.py` | Wrapper for Groww's `growwapi` SDK (login, prices, candles, option chain, orders) |
 | `tci/risk.py`, `tci/costs.py`, `tci/journal.py` | Sizing and limits; brokerage, STT, exchange fees and GST; trade journal |
 | `live.py` | Paper or live session for today, or `--replay` of a saved day |
-| `backtest.py` | Backtest on Groww historical index and option candles, with the random-direction check |
+| `backtest.py` | Backtest on Groww historical index and option candles, with the random-direction check and `--stop-mults` |
+| `call_helper.py` | Follow a live call with a wider stop: your stop, break-even level, rupee risk and lots |
 | `tradingview/tci_zone_breakout.pine` | The indicator |
 | `tests/test_rules.py` | Unit tests for the rules, sizing, costs and the paper session |
 | `research/` | The trade lists behind the table above |
 
 ## How this was tested, and what wasn't
 
-- **Unit tests.** 16 tests cover the rules, risk sizing, costs and the paper session.
+- **Unit tests.** 18 tests cover the rules, risk sizing, costs and the paper session.
 - **End-to-end run.** `live.py` (paper and live order paths) and `backtest.py` were run against a **simulated Groww
   API**. It was built from Groww's SDK (v1.5.0) and docs, and fed real 15 Sep 2026 Nifty data. The full order
   sequence worked: limit buy, exchange stop, cancel, limit sell, journal.
