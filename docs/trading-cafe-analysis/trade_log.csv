@@ -1,0 +1,139 @@
+date,weekday,day_note,host,index,side,time_ist,setup,entry,stop_loss,sl_pts,targets,outcome,approx_pts,note
+2026-10-01,Thu,SENSEX expiry,Main,SENSEX,CE,09:26,Pullback to proven support / prior distribution zone,264-268,~233,32,351 / 408,WIN,90,"T1 hit, trailed to 323; ran ~100 pts"
+2026-10-01,Thu,SENSEX expiry,Main,SENSEX,CE,10:15,Retest of zone (he called SL too big),366,328,40,385 / 485,LOSS,-25,'kat dena' - stopped
+2026-10-01,Thu,SENSEX expiry,Main,SENSEX,PE,11:05,Trendline break + tight-range breakout / pullback,383 / 365-368,354 / 358,15-29,426 / 509,WIN,60,426 touched twice; viewers 390->450
+2026-10-01,Thu,SENSEX expiry,Main,SENSEX,PE,11:30,Shown example of a small SL,157,142,15,-,LOSS,-15,he displayed it to show SLs happen
+2026-10-01,Thu,SENSEX expiry,Main,SENSEX,PE,11:35,Re-entry after SL,315,~300,15,354,WIN,35,as displayed
+2026-10-01,Thu,SENSEX expiry,Main,SENSEX,JORI,12:35,Long strangle on volatile expiry (CE+PE ~₹120 each),240 combined,~140 combined,100,+150 combined,WIN,75,put leg 120->250+; booked
+2026-10-01,Thu,SENSEX expiry,Main,SENSEX,CE,13:30,"Pin-bar/engulfing reversal at base (low conviction, SL 50-60)",303,~250,55,424 / 605,WIN,80,he said 'who understands the risk can take'
+2026-10-01,Thu,SENSEX expiry,Main,SENSEX,JORI,14:15,2nd strangle 71400PE+71600CE,~240 combined,-,-,-,UNCLEAR,,
+2026-09-30,Wed,,Main,SENSEX,CE,09:17,Open gap-down-bullish; sustain above 321-322 zone,321-324,296,25-28,376 / 426,SCRATCH,5,"+20 scalp, re-entry +40, rest back to cost"
+2026-09-30,Wed,,Main,SENSEX,CE,10:00,Cluster breakout then pullback 346-354,346-354,321,25-30,376 / 557,WIN,55,"T1 376 hit, trailed to 400"
+2026-09-30,Wed,,Main,SENSEX,PE,10:15,"Reversal structure / higher-high, 25-pt risk",~335,~310,25,359-361 / 414,WIN,40,'put faster than call'
+2026-09-30,Wed,,Main,SENSEX,CE,10:35,Continuation above 333,333-334,~299,35,414,UNCLEAR,,
+2026-09-30,Wed,,Main,SENSEX,CE,11:55,"W pattern / swing-low SL (mid-day, small qty)",340,309-310,30,414,WIN,60,"380 part-book, 400-403 reached"
+2026-09-30,Wed,,Main,SENSEX,CE,13:00,Consolidation breakout above 375 (follow-up),375,348,25,455 / 488,WIN,90,"stalled first (some cut), then 400 broke -> 480+"
+2026-09-30,Wed,,Main,SENSEX,PE,14:00,Afternoon crash continuation (72900/72800PE),362-368 / 433-436,~407,25-30,484 / higher,WIN,80,exited near top
+2026-09-30,Wed,,Main,NIFTY,PE,14:00,Telegram Nifty put,149-153,-,-,255,WIN,100,as shown
+2026-09-29,Tue,NIFTY expiry,Main,NIFTY,PE,09:15,Put at 170 = 1:1 R:R,170,148,22,194,SKIPPED,,he passed; target was hit anyway
+2026-09-29,Tue,NIFTY expiry,Main,NIFTY,PE,09:28,"Day-high breakout, entry on follow-up candle",200,~185,15-24,206 / 238 / 267,WIN,60,266 hit; 'higher-high entry -> small qty'
+2026-09-29,Tue,NIFTY expiry,Main,NIFTY,CE,09:50,Base at 103 (bottom scalp),103,94-98,8,130 / 155,WIN,12,scalp
+2026-09-29,Tue,NIFTY expiry,Main,NIFTY,CE,11:30,Pullback entry,-,-,-,-,LOSS,-12,"'pullback men SL hit, uske baad tej bhaga'"
+2026-09-29,Tue,NIFTY expiry,Main,NIFTY,CE,11:40,"Consolidation breakout, high 127",127,~112,15,149,WIN,22,149 hit fast
+2026-09-29,Tue,NIFTY expiry,Telegram,NIFTY,CE,-,Telegram call (cited by associate),129-133,114,17,T1/T2/T3,WIN,130,129 -> 267
+2026-09-29,Tue,NIFTY expiry,Telegram,NIFTY,PE,-,Telegram call (cited by associate),-,-,15,-,LOSS,-15,'when we lose ~15 pts'
+2026-09-29,Tue,NIFTY expiry,Associate,NIFTY,CE,13:00,Afternoon scalps (15-min close + 1-min),various,6-14,10,-,WIN,15,"mostly +10-25, some cost-to-cost (aggregated)"
+2026-09-28,Mon,,Main,NIFTY,PE,09:20,"Break of prior-day distribution zone, follow-up entry",166,147-151,17,198 / 224 / 248,WIN,55,trailed to 222
+2026-09-28,Mon,,Main,NIFTY,CE,09:50,"Dead-cat bounce, 3 pin bars",129,123-125,5,137 / 156,UNCLEAR,,likely scratch/small loss
+2026-09-28,Mon,,Main,NIFTY,PE,10:15,Pullback 142-149 then base (also Telegram),142-149,~140,8-10,182-183,WIN,40,claims '202 pt move' on put
+2026-09-28,Mon,,Main,NIFTY,CE,12:00,"Bounce zone, mid-day",~128-154,-,-,primary,WIN,13,part-booked
+2026-09-28,Mon,,Main,NIFTY,CE,12:30,Ascending triangle,134,129,5,141 / 158,WIN,15,
+2026-09-28,Mon,,Main,NIFTY,PE,13:00,"Base 164-167, breakout 2:15pm",164-167,159-160,6,182 / 208 / 264,WIN,45,reached 215
+2026-09-25,Fri,,Associate,NIFTY,PE,09:45,15-min close below level,-,-,-,-,LOSS,-12,'put men ek SL hit'
+2026-09-25,Fri,,Associate,NIFTY,CE,10:15,15-min structure shift long,144,~134,10,152-155,WIN,12,'2700 profit 1 lot'
+2026-09-25,Fri,,Associate,NIFTY,CE,11:00,Re-entries 133/152/196,various,-,-,-,SCRATCH,0,mostly cost-to-cost
+2026-09-25,Fri,,Associate,NIFTY,PE,13:45,23150PE,146,~140,6,-,LOSS,-5,'nikal jao'
+2026-09-25,Fri,,Associate,NIFTY,CE,14:00,Short-covering rally,-,-,-,-,WIN,30,his tally: 42 / 20 / 10
+2026-09-25,Fri,,Telegram,NIFTY,CE,-,Telegram CE (shown by main host on 28th),147,132,15,-,LOSS,-15,SL 147->132
+2026-09-25,Fri,,Telegram,NIFTY,CE,-,Telegram CE (shown by main host on 28th),158-162,~147,15,-,WIN,115,158 -> 277
+2026-09-24,Thu,SENSEX expiry,Associate,SENSEX,PE,10:30,Telegram put; both targets done,~324,-,-,374,WIN,50,
+2026-09-24,Thu,SENSEX expiry,Associate,SENSEX,PE,12:00,Put re-entry 290,290,-,-,-,UNCLEAR,,
+2026-09-24,Thu,SENSEX expiry,Main,SENSEX,CE,13:45,Bounce at daily liquidity zone above 228-230,228-230,~190,35-40,260 / 278,UNCLEAR,,market kept falling; likely not triggered/small loss
+2026-09-23,Wed,,Main,SENSEX,CE,09:20,Above 355 zone,355-356,325,30,393 / 433 / 523,LOSS,-27,'355 vale kat do'
+2026-09-23,Wed,,Main,SENSEX,CE,09:42,Above 300 cluster (pullback plan),300,274,26,365,LOSS,-22,'SL hit ho gaya'
+2026-09-23,Wed,,Main,SENSEX,PE,10:15,Quick put to distribution,283-285,~270,15,distribution,WIN,25,'booked 25 pts'
+2026-09-23,Wed,,Main,SENSEX/NIFTY,CE,10:40,5-min TF entry 315-325 / Nifty CE 120-125,315-325,269-270,50,367 / 433 (Nifty 161),WIN,45,Nifty 23400 target hit
+2026-09-23,Wed,,Main,SENSEX,PE,11:55,Put above 321,321,307,14,-,LOSS,-14,'kat dena 307 ke niche'
+2026-09-23,Wed,,Main,SENSEX,PE,12:40,"Put 240-247, 20-pt max risk",240-247,236-237,8-10,277,WIN,25,"part-book +15, trail"
+2026-09-22,Tue,NIFTY expiry,Main,NIFTY,CE,09:20,"Base 145, entry above 157-158",157-158,144,13,173 / 179,LOSS,-13,'initial SL lag gaya - gracefully accept'
+2026-09-22,Tue,NIFTY expiry,Main,NIFTY,CE,09:45,Re-entry 159-160,159-160,152-153,7,179,SCRATCH,5,"170 part-book, rest ~BE"
+2026-09-22,Tue,NIFTY expiry,Main,NIFTY,CE,10:45,Scalps 133 / 105,133 / 105,124 / 93,8-11,124-148,WIN,9,small part-books
+2026-09-22,Tue,NIFTY expiry,Main,NIFTY,JORI,11:30,Cheap CE+PE combined ₹66,66 combined,~43,23,+20-30,WIN,30,put leg 31 -> 60-72
+2026-09-22,Tue,NIFTY expiry,Main,NIFTY,PE,12:40,Pin bar 172 / Telegram put 103-130,172 / 103-130,162-169,10,182 / 199,WIN,55,'200 Sensex pts in 10 min'
+2026-09-22,Tue,NIFTY expiry,Main,NIFTY,CE,14:15,Follow-up above 58,58,44-48,12,85-86,UNCLEAR,,
+2026-09-21,Mon,,Main,NIFTY,CE,09:25,Follow-up above 171-173 / pullback 160-163,160-173,157-167,6-14,183 / 202,SCRATCH,5,"momentum died; pullback buyers +10-15, others BE"
+2026-09-21,Mon,,Main,NIFTY,PE,10:10,Pullback 140-142 green-candle entry,140-142,136-137,5,165-166,WIN,11,
+2026-09-21,Mon,,Main,NIFTY,CE/PE,11:45,Mid-day pullback scalps,134-136,130,5,148 / 158,SCRATCH,3,'8-10 pt market'
+2026-09-21,Mon,,Telegram,NIFTY,CE,-,Telegram call,158-162,-,-,T2 ~193,WIN,30,
+2026-09-18,Fri,,Main,NIFTY,PE,09:25,Pullback candle then entry,~145,138-142,6,169 / 187,WIN,15,trailed out
+2026-09-18,Fri,,Main,NIFTY,CE,09:50,Consolidation break above 124,124-129,116-123,6-8,136 / 156,LOSS,-6,range-bound; viewer '₹900 loss'
+2026-09-18,Fri,,Main,NIFTY,PE,10:45,150-156 re-attempt,150-156,144-146,8,166 / 179,SCRATCH,-2,BE / cut
+2026-09-18,Fri,,Main,NIFTY,CE/PE,12:45,Mid-day CE 140-143 / PE 133-142,140-143,136-139,4,152-158,WIN,9,'₹1000 ban gaye'
+2026-09-17,Thu,SENSEX expiry,Main,SENSEX,PE,09:28,"First pin bar at key zone, entry above 292-293",292-293,~280,12,335 / 404 / 415,WIN,45,T1 hit
+2026-09-17,Thu,SENSEX expiry,Main,SENSEX,PE,09:50,Continuation after accumulation 410-430 (Telegram 287),381-430,404,25,533,WIN,100,'535 touched'
+2026-09-17,Thu,SENSEX expiry,Main,SENSEX,PE,11:00,Reversal at 230 zone / pullback 210-212,212-230,~210,20,291,WIN,65,'291 exit mila'
+2026-09-17,Thu,SENSEX expiry,Main,SENSEX,CE,11:40,Higher-high 325,325,308,17,385 / 414,WIN,70,'413 dot'
+2026-09-17,Thu,SENSEX expiry,Main,SENSEX,PE,12:15,74700PE 182-183,182-183,day-low,-,224 / 280,UNCLEAR,,
+2026-09-17,Thu,SENSEX expiry,Main,SENSEX,CE,13:00,Pullback/base 305,305,274-277,30,373 / 480,WIN,85,'mega trade'
+2026-09-17,Thu,SENSEX expiry,Main,SENSEX,JORI,13:40,Strangle #1 74300PE+74400CE ~₹240,240 combined,~130,110,+150-200,WIN,45,reached ~280
+2026-09-17,Thu,SENSEX expiry,Main,SENSEX,JORI,14:30,Strangle #2 (same strikes),~245 combined,~135,110,+150,LOSS,-110,'dusri vali complete fail' / 'jori zero'
+2026-09-16,Wed,,Main,SENSEX,PE,09:30,Consolidation breakout above 310,310,275,35,365 / 408-410,WIN,55,viewers exited 437
+2026-09-16,Wed,,Main,SENSEX,CE,09:45,Above 324-325,324-325,294-295,30,~395,LOSS,-30,re-entry advised later
+2026-09-16,Wed,,Main,SENSEX,CE,10:00,"Doji at 319-320, entry above",320,293,27,446,WIN,65,~75 pts to ~400
+2026-09-16,Wed,,Main,SENSEX,CE,11:00,74300CE breakout above 410,410,378-380,30,465 / 499,LOSS,-10,'reward kuch khas nahin' (scratch/small loss)
+2026-09-16,Wed,,Associate,SENSEX,CE/PE,12:30,Afternoon 15-min structure trades,370 / 315 / 325,spot-based,-,-,SCRATCH,0,cost-to-cost & trailing exits (aggregated)
+2026-09-15,Tue,NIFTY expiry,Main,NIFTY,PE,09:22,Follow-up above 172,172,160-161,12,200 / 235 / 256 / 309,WIN,80,trailed out ~254-259
+2026-09-15,Tue,NIFTY expiry,Main,NIFTY,PE,09:45,Higher-high add above 200/213,200-213,188-201,10,235,WIN,25,
+2026-09-15,Tue,NIFTY expiry,Main,NIFTY,PE,10:15,Triangle consolidation break above 152,152,143,9,187,WIN,25,'hat-trick'
+2026-09-15,Tue,NIFTY expiry,Main,NIFTY,CE,11:15,Counter-trend reversal after stop-hunt,118-124,105-114,15,139-163,LOSS,-15,'ek bada SL bhi aaya'
+2026-09-15,Tue,NIFTY expiry,Main,NIFTY,PE,12:20,Continuation above 190,190,175-187,10,202+,WIN,20,viewers 134 -> 293 on 23600PE
+2026-09-11,Fri,,Main,NIFTY,CE,09:30,"Small candles at zone, entry above 178-181",178-181,169-171,9,209-210,LOSS,-10,'ye trade work nahin kiya'
+2026-09-11,Fri,,Main,NIFTY,CE,10:05,Third attempt above 182-190,182-190,173,12,210 / 244,WIN,22,210 dot touch
+2026-09-11,Fri,,Main,NIFTY,CE,10:45,128 with day-low SL,128,~120,8-10,139 / 155,SCRATCH,0,trailed to BE
+2026-09-11,Fri,,Main,NIFTY,CE,11:30,Green-candle entry 245-250,245-250,236-245,8,268 / 294,WIN,18,268 touched
+2026-09-11,Fri,,Main,NIFTY,PE,12:00,Reversal above 161,161,150-152,10,196 / 227,UNCLEAR,,
+2026-09-11,Fri,,Associate,NIFTY,CE,13:00,Confluence + close above line,142 / 128,~132 / ~118,10,-,SCRATCH,2,-6 then +10 (aggregated)
+2026-09-10,Thu,SENSEX expiry,Associate,SENSEX,CE,10:20,Close above black line,~218,spot level,-,SD levels,WIN,15,part-book
+2026-09-10,Thu,SENSEX expiry,Associate,SENSEX,CE,10:55,After sellers' SL taken,~255,spot level,-,70,WIN,55,40-65 pts
+2026-09-10,Thu,SENSEX expiry,Associate,SENSEX,CE,11:25,Re-entry,~239,spot level,-,-,WIN,14,
+2026-09-10,Thu,SENSEX expiry,Associate,SENSEX,CE,12:00,Continuation,-,spot level,-,50,SCRATCH,0,+50 then dump -> exited at cost
+2026-09-08,Tue,NIFTY expiry,Main,NIFTY,PE,09:22,Follow-up above 160,160-162,153,7,178 / 184,WIN,10,
+2026-09-08,Tue,NIFTY expiry,Main,NIFTY,PE,09:50,Pullback 157-159,157-159,153,5,178,WIN,10,
+2026-09-08,Tue,NIFTY expiry,Main,NIFTY,PE,10:00,Barcode breakout above 180,180,171-172,8,198-199 / 209,WIN,16,
+2026-09-08,Tue,NIFTY expiry,Main,NIFTY,CE,10:40,Reversal attempts 141-145 (stop-hunt incomplete),141-145,135-139,6,154 / 173,SCRATCH,0,"mixed: some +10-24, some SL"
+2026-09-08,Tue,NIFTY expiry,Main,NIFTY,PE,11:30,23850PE continuation,~121 / 173,167,6,182 / 198,WIN,45,trailed 182-183
+2026-09-07,Mon,,Main,NIFTY,PE,09:28,Follow-up above 178 (he noted ~1:1),178,164-168,15,204-205,SCRATCH,-5,no momentum; tightened & exited
+2026-09-07,Mon,,Main,NIFTY,CE,10:00,Swing-low base 135-138,135-138,128-129,8,179-183,WIN,15,part-book 151-152
+2026-09-07,Mon,,Main,NIFTY,CE,11:20,Consolidation breakout 152-155,152-155,148,6,181-182,WIN,13,156 -> 169
+2026-09-07,Mon,,Main,NIFTY,CE,12:15,Reversal ~107-110,107-110,~101,7,124 / 138,WIN,15,'hat-trick'
+2026-09-04,Fri,,Main,NIFTY,CE,09:45,Follow-up above 136 (refused early),136,130,6,149 / 168,WIN,18,'22-pt trade'
+2026-09-04,Fri,,Main,NIFTY,PE,10:00,Reversal above 134,134,129,5,145 / 156,SCRATCH,-3,+7 then faded
+2026-09-04,Fri,,Main,NIFTY,CE,11:15,Pullback 150-157,150-157,~146-150,6-8,168 / 204,WIN,15,
+2026-09-03,Thu,SENSEX expiry,Main,SENSEX,CE,09:30,Aggressive 286-290 or strong above 303,286-303,275,15-28,376 / 383,WIN,55,"340 part-book, 362 exit"
+2026-09-03,Thu,SENSEX expiry,Main,SENSEX,PE,10:15,Follow-up above 371-372 (1:1.5 only),371-372,357,15,405-410,SCRATCH,5,modest
+2026-09-03,Thu,SENSEX expiry,Main,SENSEX,CE,10:30,Bounce scalp,368-377,~355,15,~397,WIN,20,
+2026-09-03,Thu,SENSEX expiry,Main,SENSEX,PE,11:15,PE ideas above 480/500 (risky),480,~444,30,-,UNCLEAR,,
+2026-09-03,Thu,SENSEX expiry,Main,SENSEX,CE,12:45,Cheaper strike ~₹194,194,180,14,236 / 320,WIN,35,'240 entries +30'
+2026-09-02,Tue,NIFTY expiry,Telegram,SENSEX,CE,12:25,Telegram call (shown 3 Sept),282-292,-,-,383,WIN,95,~100 pts
+2026-08-25,Tue,NIFTY expiry,Main,NIFTY,CE,09:25,Above 120-121,120-121,112,8,~150,LOSS,-9,'111 pe exit'
+2026-08-25,Tue,NIFTY expiry,Main,SENSEX,CE,09:35,77400CE above 345,345,312-314,31,380 / 418,UNCLEAR,,
+2026-08-25,Tue,NIFTY expiry,Main,NIFTY,CE,10:00,163-164,163-164,154-156,9,183,LOSS,-9,'accept kar lo'
+2026-08-25,Tue,NIFTY expiry,Main,NIFTY,PE,10:30,Above 160 / pullback 152-155,152-160,144-148,8-12,-,UNCLEAR,,choppy
+2026-08-25,Tue,NIFTY expiry,Main,NIFTY,CE,12:00,170-175 / Telegram 163,163-175,160-169,8,187 / 198,WIN,25,T2 hit
+2026-08-21,Fri,,Main,NIFTY,PE,09:20,9-pt SL vs 14-pt target,-,-,9,-,SKIPPED,,R:R poor
+2026-08-21,Fri,,Main,NIFTY,CE,09:50,136-141 (wanted 131-133 pullback),136-141,128-135,6,164-166,LOSS,-6,'hit ho gaya'
+2026-08-21,Fri,,Main,SENSEX,CE,11:30,424-428,424-428,419 (trail),-,450,WIN,12,T1 hit
+2026-08-21,Fri,,Main,NIFTY,CE,12:45,138-143,138-143,133-137,5,153 / 164,WIN,10,
+2026-08-21,Fri,,Main,NIFTY/SENSEX,PE,13:30,Nifty PE 139 / Sensex PE 415-420,139 / 415-420,~15 (Sensex),-,164 / 461,WIN,30,targets hit
+2026-08-20,Thu,SENSEX expiry,Main,SENSEX,PE,12:30,"Breakout + pullback, entry above 354; re-entry 340",340-354,328 / ~335,15-26,422,WIN,40,50% booked 370
+2026-08-20,Thu,SENSEX expiry,Main,SENSEX,CE,13:15,Fast scalp 285,285,265,20,310 / 368,WIN,20,
+2026-08-20,Thu,SENSEX expiry,Main,SENSEX,JORI,13:30,"Strangle, risk half of premium",~1800 Rs combined,-,-,-,SCRATCH,0,ended ~cost
+2026-08-18,Tue,NIFTY expiry,Main,NIFTY,PE,09:20,ITM 24400PE at key zone,148,~138,10,169,WIN,22,booked 170-174
+2026-08-18,Tue,NIFTY expiry,Main,NIFTY,PE,09:50,Re-entry after it sustains above 173-174,173-174,164-167,7,196,WIN,20,
+2026-08-18,Tue,NIFTY expiry,Main,NIFTY,PE,11:00,Aggressive 197-198,197-198,186-188,10,219 / 232,WIN,10,slow; trailed
+2026-08-18,Tue,NIFTY expiry,Main,NIFTY,CE,12:15,24100CE pullback 112-115,112-115,105-109,7,139,WIN,10,
+2026-08-18,Tue,NIFTY expiry,Main,NIFTY,JORI,12:50,Cheap strangle ₹39 combined,39 combined,19,20,+25-30,UNCLEAR,,
+2026-08-07,Fri,,Main,NIFTY,CE/PE,09:35,Above 177,177,170,7,189,LOSS,-7,"'169 hit ho gaya, kat do'"
+2026-08-07,Fri,,Main,NIFTY,CE/PE,10:00,Breakout above 212-216,212-216,203-210,8,234-239,SCRATCH,0,no follow-up
+2026-08-07,Fri,,Main,NIFTY,PE,10:45,"Engulfing at 174-175, entry above 179",179,170-175,6,189,WIN,10,
+2026-08-07,Fri,,Main,NIFTY,PE,11:30,Two dojis 185-186,185-186,179-180,6,208,UNCLEAR,,
+2026-08-07,Fri,,Main,NIFTY,PE,12:30,191-200,191-200,186-190,10,224 / 244,UNCLEAR,,10-12 pt market
+2026-08-06,Thu,SENSEX expiry,Main,SENSEX,PE,09:25,"Above 307 (big SL, small qty)",307,267-278,30,359 / 429,WIN,60,384-385 fully booked
+2026-08-06,Thu,SENSEX expiry,Main,SENSEX,CE,11:15,78800CE bottom buy,-,-,-,all targets,WIN,40,'almost all targets done'
+2026-08-06,Thu,SENSEX expiry,Main,SENSEX,CE,12:00,"Engulfing, entry above 320",320,308,12,364,WIN,40,'364 dot touch'
+2026-08-06,Thu,SENSEX expiry,Telegram,SENSEX,PE,11:33,Telegram put,422,-,-,478,WIN,50,
+2026-08-05,Wed,RBI policy,Main,SENSEX,CE,09:35,79100CE above 280,280,265,15,312-314,SCRATCH,5,'steam nikal gaya'; 180->197 booked by viewer
+2026-08-05,Wed,RBI policy,Main,SENSEX,PE,10:00,Put continuation,~450,~428,22,499,WIN,45,'~96-100 pt move'
+2026-08-05,Wed,RBI policy,Main,SENSEX,PE,10:45,Second big move,-,-,-,-,WIN,70,'do baar 70-80 point ke munh'
+2026-08-05,Wed,RBI policy,Main,SENSEX,PE,12:15,"After 209 break, entry ~237",237,~215,22,296 / 365,WIN,75,'~80 pts'
+2026-08-05,Wed,RBI policy,Main,SENSEX,PE,14:15,Trend continuation 444/521,444,~424,20,546,WIN,50,trailed 499-500
