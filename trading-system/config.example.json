@@ -1,0 +1,31 @@
+{
+  "underlying": "NIFTY",
+  "timeframe_min": 5,
+  "target_premium": 150,
+  "paper_slippage": 1.0,
+  "poll_seconds": 1.0,
+  "protect_mult": 2.0,
+  "journal_dir": "journal",
+  "risk": {
+    "capital": 50000,
+    "risk_per_trade_pct": 1.0,
+    "max_daily_loss_pct": 2.0,
+    "max_lots": 1,
+    "lot_size": 65,
+    "kill_switch_file": "STOP"
+  },
+  "rules": {
+    "min_rr": 2.0,
+    "max_risk_pts": 35,
+    "min_risk_pts": 6,
+    "first_entry": "09:25",
+    "last_entry": "14:30",
+    "square_off": "15:15",
+    "max_trades": 3,
+    "max_losses": 2
+  },
+  "go_live_gate": {
+    "min_paper_trades": 40,
+    "min_paper_days": 20
+  }
+}

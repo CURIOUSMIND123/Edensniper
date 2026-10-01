@@ -14,6 +14,7 @@ exchanges' option records for each day. This folder has:
 | [`trade_log.csv`](trade_log.csv) | 138 logged calls (117 from the main host) with entry / SL / targets / outcome |
 | [`daily-notes/`](daily-notes/) | One file per trading day: pre-market plan, every trade, what he taught, and a market-check chart and table |
 | [`streams.md`](streams.md) | The 30 videos, dates, lengths, and who hosted each one |
+| [`../../trading-system/`](../../trading-system/README.md) | His setup as fixed rules: TradingView indicator, Groww backtester, and a paper/live bot (with the test results) |
 
 ---
 

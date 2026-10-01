@@ -1,0 +1,7 @@
+config.json
+journal/
+logs/
+data/cache/
+backtest_trades.csv
+STOP
+__pycache__/
