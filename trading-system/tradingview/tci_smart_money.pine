@@ -12,6 +12,7 @@
 //   RETEST - a level broken in the last hour is retested and holds -> trade the break direction
 //   (BREAK - strong candle through a level; off by default, it lost money in the test)
 // Entry only when one of the next 2 candles breaks the signal candle (his follow-up rule).
+// No new entries 11:00-14:00 (mid-day chop: the losing trades clustered there).
 // SL beyond the signal candle, at least 25 and at most 60 points. T1 = first liquidity at least 50 points
 // away. MAX = the next liquidity after T1. Stop to entry after 1R; after T1 the stop trails 2 x ATR behind
 // the best price until MAX, the trail, or 15:15.
@@ -50,6 +51,10 @@ orMins     = input.int(15, "Opening range (minutes)", group = G3)
 G4 = "Session (IST, HHMM)"
 firstEntry = input.int(920, "First entry", group = G4)
 lastEntry  = input.int(1445, "Last entry", group = G4)
+usePause   = input.bool(true, "Pause new entries in the mid-day chop", group = G4,
+     tooltip = "In the test, entries between 11:00 and 14:00 won 12% of the time and lost money in both halves of the data.")
+pauseFrom  = input.int(1100, "Pause from", group = G4)
+pauseTo    = input.int(1400, "Pause until", group = G4)
 squareOff  = input.int(1515, "Square-off", group = G4)
 maxTrades  = input.int(4, "Max trades per day", group = G4)
 maxLosses  = input.int(2, "Stop after N losses", group = G4)
@@ -241,7 +246,8 @@ curC := close
 curDow := dayofweek(time, TZ)
 
 canOpen(atMin) =>
-    posSide == 0 and atMin >= toMin(firstEntry) and atMin <= toMin(lastEntry) and dayTrades < maxTrades and dayLosses < maxLosses
+    paused = usePause and atMin >= toMin(pauseFrom) and atMin < toMin(pauseTo)
+    posSide == 0 and not paused and atMin >= toMin(firstEntry) and atMin <= toMin(lastEntry) and dayTrades < maxTrades and dayLosses < maxLosses
 
 // distances to the liquidity beyond the entry -> [T1, MAX]
 targets(side, fp, dist) =>

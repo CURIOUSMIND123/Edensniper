@@ -38,7 +38,7 @@ Made for the **NIFTY 5-minute chart**.
 | T1 | The first liquidity level **at least 50 points** away (or 2 × the SL if there's none) |
 | MAX | The next liquidity level after T1: the "maximum you can get" |
 | Managing | SL to entry after 1R. After T1, the SL trails 2 × ATR behind the best price, like a Supertrend line. Exit at MAX, the trailing SL, or 3:15 pm |
-| Day limits | Entries 9:20–2:45, at most 4 trades, stop after 2 losses |
+| Day limits | Entries 9:20–11:00 and 2:00–2:45 (paused at mid-day), at most 4 trades, stop after 2 losses |
 
 All of these numbers can be changed in Settings → Inputs.
 
@@ -54,25 +54,44 @@ All of these numbers can be changed in Settings → Inputs.
 ### Tested on real Nifty data (5-min, 17 Jul – 1 Oct 2026, 1 lot, after charges and 1 pt slippage per fill)
 | | |
 |---|---|
-| Trades | 79 on 49 days, 37% winners |
-| Average | +3.3 index points per trade. Winners average +57, losers −28 |
-| Net | **+₹11,448**, worst drawdown **−₹16,673** |
-| By month | July −₹2,063, **August −₹10,753**, **September +₹26,278**, 1 Oct −₹2,014 |
-| Best trades | SELL retest 15 Sep (+139 pts), SELL retest 24 Sep (+130), SELL trap 22 Sep (+87). **Without these three: −₹12,303** |
-| Better than random? | Random direction at the same moments did as well 10% of the time. Encouraging, but not proof |
+| Trades | 57 on the default settings |
+| Outcome | **22 winners (avg +55 pts), 21 losers (avg −30 pts), 14 break-even** |
+| Net | **+₹23,772**, worst drawdown **−₹10,361**; never more than 4 losses in a row |
+| By month | July +₹1,270, August −₹4,043, **September +₹28,559**, 1 Oct −₹2,014 |
+| Best trades | SELL retest 15 Sep (+139 pts), SELL retest 24 Sep (+130), SELL trap 22 Sep (+87). Without these three: about break-even (+₹21) |
+| Better than random? | Random direction at the same moments did as well only 1% of the time |
 
-**What this means:**
-- It's a trend catcher. It loses small and often in choppy weeks, then makes it back on a few big trend days.
-- You must survive the losing weeks to be there on the big day.
-- I removed the BREAK setup **after** seeing it lose. That makes these numbers optimistic, and 11 weeks is a short
-  test.
-- Paper-trade it for a month before using real money, and watch the Scorecard row on your own chart.
+**A 39% win rate is not a guaranteed loss.** What matters is the win rate × average win against the loss rate ×
+average loss:
+- (22 × 55) − (21 × 30) ≈ +580 points over 57 trades, about +10 points a trade.
+- With wins about twice the size of losses, you break even at roughly a 35% win rate.
+- The danger is the thin margin, not the 39%. It depends on keeping losses small (never move the SL away) and
+  letting the few big winners run.
+
+### Why most trades don't win (from the first 79 test trades)
+- **34 full stop-outs.** 20 of them never went even 10 points our way: the signal was simply wrong. Another 10 went
+  +15 to +24 and then reversed.
+- **19 came back to entry.** They went a median +39 points our way first, but none reached a 50-point T1. The SL
+  had moved to entry, so they cost only charges.
+- **Losers clustered at mid-day.** Entries between 11:00 and 13:59: 25 trades, 12% winners, −₹11,611. That was
+  true in both July–August and September, and it matches his own rule that mid-day is chop. **Now paused by
+  default.**
+- **Other patterns didn't hold up.** Some looked strong in one half of the data but not the other, so they are not
+  rules. Levels from the previous day did better (40% winners) than opening-range levels (13%). Stops of 26–40
+  points did better than forced 25-point stops on small candles. Trades against the last hour's move (traps)
+  won more often.
+- **One idea backfired.** Capping T1 at 70 points looked good on paper, but did worse when re-run properly.
+
+**Honest limits:**
+- I chose these defaults after looking at this data, and 11 weeks is short.
+- Most of the profit came from three trend days in September.
+- Expect losing weeks. Paper-trade first, and watch the Scorecard row on your own chart.
 
 ### Your earlier requests, and where they are
 - **Buttons off the candle, with an arrow:** done (below the candle for BUY, above it for SELL).
 - **SL at least 25, target at least 50:** done (Settings → Risk and targets).
 - **Maximum profit:** the MAX line plus the trailing SL after T1. Switch on *Exit fully at T1* if you prefer to book
-  everything at T1. In the test that did worse (−₹384 instead of +₹11,448).
+  everything at T1. In the test that made +₹16,064 instead of +₹23,772: steadier, but less.
 - **Levels before the open:** the liquidity map and the plan table.
 
 ---

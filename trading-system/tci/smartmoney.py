@@ -51,6 +51,9 @@ class SMParams:
     min_sl: float = 25.0
     max_sl: float = 60.0
     min_t1: float = 50.0
+    t1_cap: float = 0.0          # if > 0: T1 is never farther than this (the nearest liquidity is the realistic target)
+    pause_from: Optional[time] = time(11, 0)   # no new entries 11:00-14:00: the mid-day chop lost money in both halves of the test
+    pause_to: Optional[time] = time(14, 0)
     be_at_r: float = 1.0
     trail_atr: float = 2.0
     exit_mode: str = "trail"     # "trail": trail after T1 to MAX | "t1": full exit at T1
@@ -61,7 +64,7 @@ class SMParams:
     max_trades: int = 4
     max_losses: int = 2
     use_trap: bool = True
-    use_break: bool = True
+    use_break: bool = False      # strong-break entries lost money in the test (false breakouts)
     use_retest: bool = True
 
 
@@ -183,7 +186,8 @@ class SmartMoney:
     def can_open(self, now: datetime) -> bool:
         p = self.p
         losses = sum(1 for t in self.day_trades if t.points < 0)
-        return (self.position is None and p.first_entry <= now.time() <= p.last_entry
+        paused = p.pause_from is not None and p.pause_from <= now.time() < p.pause_to
+        return (self.position is None and p.first_entry <= now.time() <= p.last_entry and not paused
                 and len(self.day_trades) < p.max_trades and losses < p.max_losses)
 
     def levels_beyond(self, side: str, price: float) -> List[PoolLevel]:
@@ -242,6 +246,8 @@ class SmartMoney:
         opp = self.levels_beyond(s.side, fill)
         far = [l for l in opp if abs(l.price - fill) >= self.p.min_t1]
         t1 = far[0].price if far else fill + sgn * max(self.p.min_t1, 2 * dist)
+        if self.p.t1_cap and abs(t1 - fill) > self.p.t1_cap:
+            t1 = fill + sgn * self.p.t1_cap
         beyond = [l for l in opp if sgn * (l.price - t1) >= 25]
         tmax = beyond[0].price if beyond else t1 + (t1 - fill)
         tr = SMTrade(s.side, s.setup, s.detail, now, fill, sl, t1, tmax, sl=sl, best=fill)

@@ -68,6 +68,20 @@ class TrapTests(unittest.TestCase):
         self.assertGreater(tr.exit, 1100)                   # locked in more than T1
 
 
+class PauseTests(unittest.TestCase):
+    def test_no_new_entries_at_mid_day(self):
+        prev = day(D0, 1000)
+        prev[20] = Bar(prev[20].t, 1000, 1001, 990, 999)          # PDL 990
+        prev[10] = Bar(prev[10].t, 1000, 1100, 999, 1001)
+        noon = D1.replace(hour=11, minute=30)
+        today = [Bar(D1 + timedelta(minutes=5 * i), 1000, 1002, 998, 1000) for i in range(27)]   # quiet until 11:30
+        today += [Bar(noon + timedelta(minutes=5), 999, 1000, 975, 998), Bar(noon + timedelta(minutes=10), 998, 1003, 997, 1002)]
+        e = run(prev + today, SMParams())
+        self.assertFalse([x for x in e.trades if x.opened >= D1])
+        e2 = run(prev + today, SMParams(pause_from=None, pause_to=None))
+        self.assertTrue([x for x in e2.trades if x.opened >= D1])
+
+
 class MapTests(unittest.TestCase):
     def test_map_has_levels_both_sides(self):
         prev = day(D0, 1000)
