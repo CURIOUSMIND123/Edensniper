@@ -1,5 +1,9 @@
 # TCI zone-breakout system for Groww: indicator, backtester, paper and live bot
 
+> **Looking for the one indicator with everything in it** (liquidity zones, stop-hunt sweeps, pin bars,
+> demand/supply, PCR/OI walls, VWAP, BUY/SELL with SL and T1–T3)? It's **TCI All-in-One**. Start with the
+> plain-language guide: [`tradingview/README.md`](tradingview/README.md).
+
 This folder turns the method described in [`docs/trading-cafe-analysis`](../docs/trading-cafe-analysis/README.md) into
 fixed rules that a computer can follow. It contains:
 - a **TradingView indicator** you can watch while you trade in the Groww app;
@@ -236,7 +240,10 @@ Start with `"max_lots": 1`.
 | `live.py` | Paper or live session for today, or `--replay` of a saved day |
 | `backtest.py` | Backtest on Groww historical index and option candles, with the random-direction check and `--stop-mults` |
 | `call_helper.py` | Follow a live call with a wider stop: your stop, break-even level, rupee risk and lots |
-| `tradingview/tci_zone_breakout.pine` | The indicator |
+| `tradingview/tci_all_in_one.pine` | **TCI All-in-One** indicator: his full method plus smart-money context ([guide](tradingview/README.md)) |
+| `tci/allinone.py` | The All-in-One rules in Python (backtested; the reference for the indicator) |
+| `smart_money.py` | PCR, CALL/PUT OI walls and max pain from Groww's option chain, to type into the indicator |
+| `tradingview/tci_zone_breakout.pine` | The simpler zone-breakout indicator |
 | `tests/test_rules.py` | Unit tests for the rules, sizing, costs and the paper session |
 | `research/` | The trade lists behind the table above |
 

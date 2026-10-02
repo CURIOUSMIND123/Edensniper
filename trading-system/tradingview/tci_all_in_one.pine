@@ -1,0 +1,663 @@
+//@version=5
+// ============================================================================
+// TCI All-in-One: his price-action method + smart-money context, in one indicator
+// For the NIFTY or SENSEX index chart, 5-minute (works on 1-15 minute charts).
+//
+// It draws, automatically:
+//   - previous-day high/low/close, previous day's last-hour high/low ("distribution"), opening range
+//   - liquidity: swing highs (buy-side) and swing lows (sell-side), "EQH/EQL" when equal
+//   - demand / supply zones (the base before a strong move); only the first touch is traded
+//   - optional: OI walls and PCR you type in from the option chain, futures VWAP, big-volume candles
+// and gives BUY (call) / SELL (put) signals with SL, T1, T2, T3 from three setups:
+//   SWEEP    - stop-hunt: price runs a liquidity level and closes back with a pin bar / engulfing (the trap)
+//   ZONE     - first touch of a fresh demand / supply zone with a pin bar / engulfing
+//   BREAKOUT - strong close through a key level
+// Entry only if the NEXT candle breaks the signal candle (his follow-up rule).
+// The table at the top right scores its own past signals on the loaded chart, so you can judge it yourself.
+// Reference implementation (same rules, backtested): trading-system/tci/allinone.py
+// ============================================================================
+indicator("TCI All-in-One", "TCI AIO", overlay = true, max_lines_count = 500, max_labels_count = 500, max_boxes_count = 200)
+
+// ---------------- inputs ----------------
+G1 = "Signals"
+useSweep   = input.bool(true, "SWEEP signals (stop-hunt + pin bar / engulfing)", group = G1)
+useZone    = input.bool(true, "ZONE signals (first touch of demand / supply)", group = G1)
+useBreak   = input.bool(true, "BREAKOUT signals (strong close through a level)", group = G1)
+useBias    = input.bool(false, "Only trade in the direction of the bias score", group = G1)
+confirmN   = input.int(1, "Follow-up candles allowed to confirm", minval = 1, maxval = 3, group = G1)
+G2 = "Liquidity and zones"
+pivLen     = input.int(3, "Swing strength (candles each side)", minval = 2, maxval = 10, group = G2)
+maxSwings  = input.int(8, "Swing levels kept per side", minval = 2, maxval = 15, group = G2)
+eqTol      = input.float(0.15, "Equal highs/lows tolerance (x ATR)", step = 0.05, group = G2)
+dispATR    = input.float(1.5, "Strong candle for a zone (body x ATR)", step = 0.1, group = G2)
+maxZones   = input.int(6, "Zones kept per side", minval = 1, maxval = 10, group = G2)
+pinBody    = input.float(2.0, "Pin bar: wick >= x body", step = 0.25, group = G2)
+pinRange   = input.float(0.5, "Pin bar: wick >= x candle range", step = 0.05, group = G2)
+brkBody    = input.float(0.5, "Breakout candle: body >= x range", step = 0.05, group = G2)
+sweepMin   = input.float(1.0, "Sweep must go beyond the level by (pts)", group = G2)
+orMins     = input.int(15, "Opening range (minutes)", group = G2)
+G3 = "Risk and targets"
+trigBuf    = input.float(1.0, "Entry buffer beyond the signal candle (pts)", group = G3)
+slBuf      = input.float(2.0, "SL buffer (pts)", group = G3)
+minSL      = input.float(5.0, "Min SL (pts)", group = G3)
+maxSL      = input.float(40.0, "Max SL (pts)", group = G3)
+minRoom    = input.float(1.5, "Skip if next opposing level is closer than (x risk)", step = 0.25, group = G3)
+t1MaxR     = input.float(3.0, "Use that level as T1 only if within (x risk)", step = 0.25, group = G3)
+exitMode   = input.string("T1", "Exit", options = ["T1", "Split"], group = G3,
+     tooltip = "T1: exit at T1, stop to entry after 1R.  Split: book half at T1, stop to entry, rest at T2.")
+strikeStep = input.int(50, "Option strike step (NIFTY 50, SENSEX 100)", group = G3)
+itmSteps   = input.int(2, "Suggested strike: strikes in-the-money", minval = 0, maxval = 5, group = G3)
+G4 = "Session (IST, HHMM)"
+firstEntry = input.int(920, "First entry", group = G4)
+lastEntry  = input.int(1430, "Last entry", group = G4)
+squareOff  = input.int(1515, "Square-off", group = G4)
+distFrom   = input.int(1400, "Prev-day last-hour window starts", group = G4)
+maxTrades  = input.int(4, "Max trades per day", group = G4)
+maxLosses  = input.int(2, "Stop after N losses", group = G4)
+G5 = "Smart money context (type in from the option chain each morning)"
+pcrVal     = input.float(0.0, "PCR (0 = not set)", step = 0.01, group = G5)
+ceWall     = input.float(0.0, "Strike with highest CALL OI = resistance (0 = not set)", group = G5)
+peWall     = input.float(0.0, "Strike with highest PUT OI = support (0 = not set)", group = G5)
+wallsAsLv  = input.bool(true, "Use OI walls as levels for targets", group = G5)
+futSym     = input.symbol("NSE:NIFTY1!", "Futures symbol (for VWAP and volume)", group = G5)
+showVwap   = input.bool(true, "Show futures VWAP (shifted to the index)", group = G5)
+showVol    = input.bool(true, "Mark big-volume candles (futures volume > 2x average)", group = G5)
+G6 = "Display"
+showLiq    = input.bool(true, "Show liquidity lines", group = G6)
+showZones  = input.bool(true, "Show demand / supply zones", group = G6)
+showDaily  = input.bool(true, "Show previous-day and opening-range levels", group = G6)
+showTable  = input.bool(true, "Show dashboard", group = G6)
+
+// ---------------- basics ----------------
+TZ = "Asia/Kolkata"
+toMin(hhmm) =>
+    int(hhmm / 100) * 60 + hhmm % 100
+barMin = hour(time, TZ) * 60 + minute(time, TZ)
+tfMin = timeframe.isminutes ? timeframe.multiplier : 5
+barEnd = barMin + tfMin
+newDay = timeframe.change("D")
+atr = ta.atr(14)
+atrP = nz(atr[1], atr)
+ph = ta.pivothigh(high, pivLen, pivLen)
+pl = ta.pivotlow(low, pivLen, pivLen)
+[fClose, fVwap, fVol, fVolAvg] = request.security(futSym, timeframe.period, [close, ta.vwap(hlc3), volume, ta.sma(volume, 20)], ignore_invalid_symbol = true)
+idxVwap = na(fVwap) or na(fClose) ? float(na) : fVwap - (fClose - close)
+bigVol = not na(fVol) and not na(fVolAvg) and fVolAvg > 0 and fVol > 2 * fVolAvg
+
+// ---------------- day levels ----------------
+var float curH = na
+var float curL = na
+var float curC = na
+var float curLH = na
+var float curLL = na
+var float pdh = na
+var float pdl = na
+var float pdc = na
+var float plh = na
+var float pll = na
+var float orH = na
+var float orL = na
+var bool orDone = false
+var float dayOpen = na
+var int dayTrades = 0
+var int dayLosses = 0
+if newDay
+    pdh := curH
+    pdl := curL
+    pdc := curC
+    plh := curLH
+    pll := curLL
+    curH := high
+    curL := low
+    curLH := na
+    curLL := na
+    orH := na
+    orL := na
+    orDone := false
+    dayOpen := open
+    dayTrades := 0
+    dayLosses := 0
+else
+    curH := math.max(nz(curH, high), high)
+    curL := math.min(nz(curL, low), low)
+curC := close
+if barMin >= toMin(distFrom)
+    curLH := math.max(nz(curLH, high), high)
+    curLL := math.min(nz(curLL, low), low)
+
+// ---------------- persistent structures ----------------
+var float[] shP = array.new_float()     // unswept swing highs (buy-side liquidity)
+var bool[] shEq = array.new_bool()
+var line[] shLn = array.new_line()
+var float[] slP = array.new_float()     // unswept swing lows (sell-side liquidity)
+var bool[] slEq = array.new_bool()
+var line[] slLn = array.new_line()
+var float[] zLo = array.new_float()     // demand / supply zones
+var float[] zHi = array.new_float()
+var int[] zKind = array.new_int()       // +1 demand, -1 supply
+var int[] zBar = array.new_int()
+var bool[] zTouched = array.new_bool()
+var box[] zBox = array.new_box()
+var int trend = 0
+var float lastSH = na
+var float lastSL = na
+
+// pending signal and open position
+var int pSide = 0
+var float pTrig = na
+var float pSL = na
+var int pBar = na
+var string pSetup = ""
+var string pDetail = ""
+var int posSide = 0
+var float posEntry = na
+var float posSL = na
+var float posSL0 = na
+var float posT1 = na
+var float posT2 = na
+var float posT3 = na
+var bool halfDone = false
+var float halfPx = na
+var string posSetup = ""
+var line lnSL = na
+var line lnT1 = na
+var line lnT2 = na
+var line lnT3 = na
+// self-score on the loaded chart
+var int nTrades = 0
+var int nWins = 0
+var float sumR = 0.0
+var int nSweep = 0
+var float rSweep = 0.0
+var int nZone = 0
+var float rZone = 0.0
+var int nBrk = 0
+var float rBrk = 0.0
+var string lastMsg = "Waiting for a setup"
+
+// ---------------- level list (built every bar from the structures above) ----------------
+lvP = array.new_float()
+lvS = array.new_int()          // +1 high side, -1 low side, 0 middle
+lvN = array.new_string()
+if not na(pdh)
+    array.push(lvP, pdh)
+    array.push(lvS, 1)
+    array.push(lvN, "PDH")
+if not na(pdl)
+    array.push(lvP, pdl)
+    array.push(lvS, -1)
+    array.push(lvN, "PDL")
+if not na(pdc)
+    array.push(lvP, pdc)
+    array.push(lvS, 0)
+    array.push(lvN, "PDC")
+if not na(plh)
+    array.push(lvP, plh)
+    array.push(lvS, 1)
+    array.push(lvN, "Prev last-hour high")
+if not na(pll)
+    array.push(lvP, pll)
+    array.push(lvS, -1)
+    array.push(lvN, "Prev last-hour low")
+if orDone
+    array.push(lvP, orH)
+    array.push(lvS, 1)
+    array.push(lvN, "ORH")
+    array.push(lvP, orL)
+    array.push(lvS, -1)
+    array.push(lvN, "ORL")
+if array.size(shP) > 0
+    for i = 0 to array.size(shP) - 1
+        array.push(lvP, array.get(shP, i))
+        array.push(lvS, 1)
+        array.push(lvN, array.get(shEq, i) ? "equal highs" : "swing high")
+if array.size(slP) > 0
+    for i = 0 to array.size(slP) - 1
+        array.push(lvP, array.get(slP, i))
+        array.push(lvS, -1)
+        array.push(lvN, array.get(slEq, i) ? "equal lows" : "swing low")
+
+canOpen(atMin) =>
+    posSide == 0 and atMin >= toMin(firstEntry) and atMin <= toMin(lastEntry) and dayTrades < maxTrades and dayLosses < maxLosses
+
+// targets from the opposing levels (also used for the "room" check)
+targets(side, fp, risk) =>
+    dist = array.new_float()   // distances from the entry to every opposing level, in points
+    nlv = array.size(lvP)
+    if nlv > 0
+        for i = 0 to nlv - 1
+            d = side * (array.get(lvP, i) - fp)
+            if d > 0.5
+                array.push(dist, d)
+    nzn = array.size(zLo)
+    if nzn > 0
+        for i = 0 to nzn - 1
+            edge = array.get(zKind, i) == -1 ? array.get(zLo, i) : array.get(zHi, i)
+            d = side * (edge - fp)
+            if array.get(zKind, i) == -side and d > 0.5
+                array.push(dist, d)
+    if wallsAsLv and ceWall > 0 and side == 1 and ceWall - fp > 0.5
+        array.push(dist, ceWall - fp)
+    if wallsAsLv and peWall > 0 and side == -1 and fp - peWall > 0.5
+        array.push(dist, fp - peWall)
+    array.sort(dist, order.ascending)
+    float room = array.size(dist) > 0 ? array.get(dist, 0) : na
+    float d1 = 2 * risk
+    if array.size(dist) > 0 and room >= minRoom * risk and room <= t1MaxR * risk
+        d1 := room
+    float d2 = d1 + risk
+    if array.size(dist) > 0
+        for i = 0 to array.size(dist) - 1
+            d = array.get(dist, i)
+            if d - d1 >= 0.5 * risk
+                if d <= 5 * risk
+                    d2 := d
+                break
+    d3 = math.max(4 * risk, d2 + risk)
+    [fp + side * d1, fp + side * d2, fp + side * d3, room]
+
+fmt(x) =>
+    str.tostring(x, "#")
+strikeFor(side, px) =>
+    side == 1 ? math.floor(px / strikeStep) * strikeStep - math.max(itmSteps - 1, 0) * strikeStep : math.ceil(px / strikeStep) * strikeStep + math.max(itmSteps - 1, 0) * strikeStep
+
+// ---------------- intrabar: entry trigger and exits (green candle O-L-H-C, red O-H-L-C) ----------------
+green = close >= open
+for k = 0 to 3
+    px = k == 0 ? open : k == 3 ? close : (k == 1) == green ? low : high
+    gap = k == 0
+    bool doClose = false
+    float closePx = na
+    string closeWhy = ""
+    if posSide != 0
+        isBuy = posSide == 1
+        tgt = halfDone ? posT2 : posT1
+        if isBuy ? px <= posSL : px >= posSL
+            doClose := true
+            closePx := gap ? px : posSL
+            closeWhy := posSL == posSL0 ? "SL" : "Breakeven"
+        else if isBuy ? px >= tgt : px <= tgt
+            fillX = gap ? px : tgt
+            if exitMode == "Split" and not halfDone
+                halfDone := true
+                halfPx := fillX
+                posSL := posEntry
+                line.set_y1(lnSL, posEntry)
+                line.set_y2(lnSL, posEntry)
+                label.new(bar_index, fillX, "T1 hit: book half, SL to entry", style = label.style_label_left, size = size.tiny,
+                     color = color.new(color.green, 30), textcolor = color.white)
+            else
+                doClose := true
+                closePx := fillX
+                closeWhy := halfDone ? "T2" : "T1"
+    else if pSide != 0 and bar_index > pBar and bar_index <= pBar + confirmN and canOpen(barMin)
+        hit = pSide == 1 ? px >= pTrig : px <= pTrig
+        if hit
+            fillPx = gap ? px : pTrig
+            risk = pSide == 1 ? fillPx - pSL : pSL - fillPx
+            side = pSide
+            pSide := 0
+            if risk >= minSL and risk <= maxSL
+                [t1, t2, t3, room] = targets(side, fillPx, risk)
+                if na(room) or room >= minRoom * risk
+                    posSide := side
+                    posEntry := fillPx
+                    posSL := pSL
+                    posSL0 := pSL
+                    posT1 := t1
+                    posT2 := t2
+                    posT3 := t3
+                    halfDone := false
+                    posSetup := pSetup
+                    dayTrades += 1
+                    opt = fmt(strikeFor(side, fillPx)) + (side == 1 ? " CE" : " PE")
+                    txt = (side == 1 ? "BUY (call) " : "SELL (put) ") + fmt(fillPx) + "\nSL " + fmt(posSL) + "  T1 " + fmt(t1) + "  T2 " + fmt(t2) + "  T3 " + fmt(t3) + "\n" + pSetup + ": " + pDetail + "\noption idea: " + opt
+                    label.new(bar_index, fillPx, txt, style = side == 1 ? label.style_label_up : label.style_label_down,
+                         yloc = side == 1 ? yloc.belowbar : yloc.abovebar, size = size.small, textcolor = color.white,
+                         color = side == 1 ? color.new(color.teal, 0) : color.new(color.maroon, 0))
+                    lnSL := line.new(bar_index, posSL, bar_index + 1, posSL, color = color.red, width = 2)
+                    lnT1 := line.new(bar_index, t1, bar_index + 1, t1, color = color.green, width = 2)
+                    lnT2 := line.new(bar_index, t2, bar_index + 1, t2, color = color.new(color.green, 40))
+                    lnT3 := line.new(bar_index, t3, bar_index + 1, t3, color = color.new(color.green, 70))
+                    lastMsg := txt
+                    alert("TCI " + txt, alert.freq_once_per_bar)
+                else
+                    lastMsg := "Skipped " + (side == 1 ? "BUY" : "SELL") + ": next level only " + str.tostring(room / risk, "#.#") + "R away"
+    if doClose
+        exitAvg = halfDone ? (halfPx + closePx) / 2 : closePx
+        r = posSide * (exitAvg - posEntry) / math.abs(posEntry - posSL0)
+        nTrades += 1
+        nWins += r > 0 ? 1 : 0
+        sumR += r
+        if posSetup == "SWEEP"
+            nSweep += 1
+            rSweep += r
+        else if posSetup == "ZONE"
+            nZone += 1
+            rZone += r
+        else
+            nBrk += 1
+            rBrk += r
+        dayLosses += r < 0 ? 1 : 0
+        label.new(bar_index, closePx, closeWhy + " " + str.tostring(r, "+0.0;-0.0") + "R", style = label.style_label_left, size = size.tiny,
+             color = r > 0 ? color.new(color.green, 20) : r < 0 ? color.new(color.red, 20) : color.new(color.gray, 20), textcolor = color.white)
+        alert("TCI EXIT " + (posSide == 1 ? "BUY" : "SELL") + " " + closeWhy + " at " + fmt(closePx), alert.freq_once_per_bar)
+        lastMsg := "Last trade: " + closeWhy + " " + str.tostring(r, "+0.0;-0.0") + "R"
+        posSide := 0
+        halfDone := false
+
+// ---------------- bar close: opening range, square-off, signals, structure ----------------
+if barstate.isconfirmed
+    // opening range
+    if not orDone
+        orH := math.max(nz(orH, high), high)
+        orL := math.min(nz(orL, low), low)
+        if barEnd >= toMin(915) + orMins
+            orDone := true
+    // open position housekeeping
+    if posSide != 0
+        line.set_x2(lnSL, bar_index + 1)
+        line.set_x2(lnT1, bar_index + 1)
+        line.set_x2(lnT2, bar_index + 1)
+        line.set_x2(lnT3, bar_index + 1)
+        if barEnd >= toMin(squareOff)
+            exitAvg = halfDone ? (halfPx + close) / 2 : close
+            r = posSide * (exitAvg - posEntry) / math.abs(posEntry - posSL0)
+            nTrades += 1
+            nWins += r > 0 ? 1 : 0
+            sumR += r
+            if posSetup == "SWEEP"
+                nSweep += 1
+                rSweep += r
+            else if posSetup == "ZONE"
+                nZone += 1
+                rZone += r
+            else
+                nBrk += 1
+                rBrk += r
+            dayLosses += r < 0 ? 1 : 0
+            label.new(bar_index, close, "Square-off " + str.tostring(r, "+0.0;-0.0") + "R", style = label.style_label_left, size = size.tiny,
+                 color = color.new(color.gray, 20), textcolor = color.white)
+            lastMsg := "Squared off " + str.tostring(r, "+0.0;-0.0") + "R"
+            posSide := 0
+            halfDone := false
+        else if exitMode == "T1" and posSL == posSL0
+            mv = posSide == 1 ? high - posEntry : posEntry - low
+            if mv >= math.abs(posEntry - posSL0)
+                posSL := posEntry
+                line.set_y1(lnSL, posEntry)
+                line.set_y2(lnSL, posEntry)
+    if pSide != 0 and bar_index >= pBar + confirmN
+        pSide := 0
+
+    // ---- candle patterns
+    rng = high - low
+    body = math.abs(close - open)
+    upW = high - math.max(open, close)
+    loW = math.min(open, close) - low
+    bullPin = rng > 0 and loW >= pinBody * body and loW >= pinRange * rng
+    bearPin = rng > 0 and upW >= pinBody * body and upW >= pinRange * rng
+    bullEng = close > open and close[1] < open[1] and close >= open[1] and open <= close[1]
+    bearEng = close < open and close[1] > open[1] and close <= open[1] and open >= close[1]
+    bullRej = bullPin or bullEng
+    bearRej = bearPin or bearEng
+    patB = bullPin ? "pin bar" : "engulfing"
+    patS = bearPin ? "pin bar" : "engulfing"
+
+    // ---- detect (structure as it was before this candle)
+    int sSide = 0
+    string sSetup = ""
+    string sDetail = ""
+    float sSL = na
+    nlv = array.size(lvP)
+    if useSweep and bullRej and nlv > 0
+        float best = na
+        string bn = ""
+        for i = 0 to nlv - 1
+            v = array.get(lvP, i)
+            if array.get(lvS, i) == -1 and low < v - sweepMin and close > v and (na(best) or v < best)
+                best := v
+                bn := array.get(lvN, i)
+        if not na(best)
+            sSide := 1
+            sSetup := "SWEEP"
+            sDetail := "swept " + bn + " " + fmt(best) + " + " + patB
+            sSL := low - slBuf
+    if sSide == 0 and useSweep and bearRej and nlv > 0
+        float best = na
+        string bn = ""
+        for i = 0 to nlv - 1
+            v = array.get(lvP, i)
+            if array.get(lvS, i) == 1 and high > v + sweepMin and close < v and (na(best) or v > best)
+                best := v
+                bn := array.get(lvN, i)
+        if not na(best)
+            sSide := -1
+            sSetup := "SWEEP"
+            sDetail := "swept " + bn + " " + fmt(best) + " + " + patS
+            sSL := high + slBuf
+    nzz = array.size(zLo)
+    if sSide == 0 and useZone and nzz > 0
+        for i = 0 to nzz - 1
+            if sSide != 0
+                break
+            lo = array.get(zLo, i)
+            hi = array.get(zHi, i)
+            fresh = not array.get(zTouched, i)
+            if bullRej and trend >= 0 and array.get(zKind, i) == 1 and fresh and low <= hi and close > lo
+                sSide := 1
+                sSetup := "ZONE"
+                sDetail := "first touch of demand " + fmt(lo) + "-" + fmt(hi) + " + " + patB
+                sSL := math.min(low, lo) - slBuf
+            else if bearRej and trend <= 0 and array.get(zKind, i) == -1 and fresh and high >= lo and close < hi
+                sSide := -1
+                sSetup := "ZONE"
+                sDetail := "first touch of supply " + fmt(lo) + "-" + fmt(hi) + " + " + patS
+                sSL := math.max(high, hi) + slBuf
+    if sSide == 0 and useBreak and rng > 0 and body >= brkBody * rng and nlv > 0
+        refLo = math.min(open, nz(close[1], open))
+        refHi = math.max(open, nz(close[1], open))
+        float best = na
+        string bn = ""
+        for i = 0 to nlv - 1
+            v = array.get(lvP, i)
+            s = array.get(lvS, i)
+            if close > open and s >= 0 and refLo <= v and v < close and (na(best) or v > best)
+                best := v
+                bn := array.get(lvN, i)
+            if close < open and s <= 0 and close < v and v <= refHi and (na(best) or v < best)
+                best := v
+                bn := array.get(lvN, i)
+        if not na(best)
+            sSide := close > open ? 1 : -1
+            sSetup := "BREAKOUT"
+            sDetail := (sSide == 1 ? "closed above " : "closed below ") + bn + " " + fmt(best)
+            sSL := sSide == 1 ? low - slBuf : high + slBuf
+
+    // ---- update liquidity, structure and zones with this candle
+    if array.size(shP) > 0
+        for i = array.size(shP) - 1 to 0
+            if high > array.get(shP, i) + sweepMin
+                ln = array.get(shLn, i)
+                line.set_x2(ln, bar_index)
+                line.set_style(ln, line.style_dotted)
+                array.remove(shP, i)
+                array.remove(shEq, i)
+                array.remove(shLn, i)
+    if array.size(slP) > 0
+        for i = array.size(slP) - 1 to 0
+            if low < array.get(slP, i) - sweepMin
+                ln = array.get(slLn, i)
+                line.set_x2(ln, bar_index)
+                line.set_style(ln, line.style_dotted)
+                array.remove(slP, i)
+                array.remove(slEq, i)
+                array.remove(slLn, i)
+    if not na(lastSH) and close > lastSH
+        trend := 1
+    if not na(lastSL) and close < lastSL
+        trend := -1
+    if array.size(zLo) > 0
+        for i = array.size(zLo) - 1 to 0
+            kd = array.get(zKind, i)
+            dead = kd == 1 ? close < array.get(zLo, i) : close > array.get(zHi, i)
+            if dead
+                bx = array.get(zBox, i)
+                box.set_right(bx, bar_index)
+                array.remove(zLo, i)
+                array.remove(zHi, i)
+                array.remove(zKind, i)
+                array.remove(zBar, i)
+                array.remove(zTouched, i)
+                array.remove(zBox, i)
+            else
+                touchedNow = bar_index > array.get(zBar, i) and (kd == 1 ? low <= array.get(zHi, i) : high >= array.get(zLo, i))
+                if touchedNow and not array.get(zTouched, i)
+                    array.set(zTouched, i, true)
+                    box.set_bgcolor(array.get(zBox, i), kd == 1 ? color.new(color.green, 93) : color.new(color.red, 93))
+                box.set_right(array.get(zBox, i), bar_index + 1)
+    if math.abs(close - open) >= dispATR * atrP
+        isBull = close > open
+        kb = 1
+        for k = 1 to 3
+            if (close[k] < open[k]) == isBull
+                kb := k
+                break
+        zl = low[kb]
+        zh = high[kb]
+        bx = box.new(bar_index - kb, zh, bar_index + 1, zl, border_color = color.new(color.gray, 100),
+             bgcolor = showZones ? (isBull ? color.new(color.green, 80) : color.new(color.red, 80)) : na)
+        array.push(zLo, zl)
+        array.push(zHi, zh)
+        array.push(zKind, isBull ? 1 : -1)
+        array.push(zBar, bar_index)
+        array.push(zTouched, false)
+        array.push(zBox, bx)
+        // keep at most maxZones per kind (drop the oldest)
+        cnt = 0
+        for i = array.size(zKind) - 1 to 0
+            if array.get(zKind, i) == (isBull ? 1 : -1)
+                cnt += 1
+                if cnt > maxZones
+                    box.delete(array.get(zBox, i))
+                    array.remove(zLo, i)
+                    array.remove(zHi, i)
+                    array.remove(zKind, i)
+                    array.remove(zBar, i)
+                    array.remove(zTouched, i)
+                    array.remove(zBox, i)
+    if not na(ph)
+        eq = false
+        if array.size(shP) > 0
+            for i = 0 to array.size(shP) - 1
+                if math.abs(array.get(shP, i) - ph) <= eqTol * atrP
+                    eq := true
+        ln = line.new(bar_index - pivLen, ph, bar_index + 1, ph, color = showLiq ? color.new(color.red, 30) : na, style = line.style_dashed)
+        array.push(shP, ph)
+        array.push(shEq, eq)
+        array.push(shLn, ln)
+        if eq and showLiq
+            label.new(bar_index - pivLen, ph, "EQH", style = label.style_none, textcolor = color.red, size = size.tiny)
+        if array.size(shP) > maxSwings
+            line.delete(array.shift(shLn))
+            array.shift(shP)
+            array.shift(shEq)
+        lastSH := ph
+    if not na(pl)
+        eq = false
+        if array.size(slP) > 0
+            for i = 0 to array.size(slP) - 1
+                if math.abs(array.get(slP, i) - pl) <= eqTol * atrP
+                    eq := true
+        ln = line.new(bar_index - pivLen, pl, bar_index + 1, pl, color = showLiq ? color.new(color.green, 30) : na, style = line.style_dashed)
+        array.push(slP, pl)
+        array.push(slEq, eq)
+        array.push(slLn, ln)
+        if eq and showLiq
+            label.new(bar_index - pivLen, pl, "EQL", style = label.style_none, textcolor = color.green, size = size.tiny)
+        if array.size(slP) > maxSwings
+            line.delete(array.shift(slLn))
+            array.shift(slP)
+            array.shift(slEq)
+        lastSL := pl
+    if array.size(shLn) > 0
+        for i = 0 to array.size(shLn) - 1
+            line.set_x2(array.get(shLn, i), bar_index + 1)
+    if array.size(slLn) > 0
+        for i = 0 to array.size(slLn) - 1
+            line.set_x2(array.get(slLn, i), bar_index + 1)
+
+    // ---- arm the signal (entry needs the follow-up candle)
+    if sSide != 0 and posSide == 0 and pSide == 0 and canOpen(barEnd)
+        trig = sSide == 1 ? high + trigBuf : low - trigBuf
+        risk = math.abs(trig - sSL)
+        pdcRef = nz(pdc, close)
+        score = trend + (close > pdcRef ? 1 : -1) + (close > nz(dayOpen, close) ? 1 : -1) + (orDone ? (close > (orH + orL) / 2 ? 1 : -1) : 0)
+        if risk < minSL or risk > maxSL
+            lastMsg := "Skipped " + sSetup + ": SL " + fmt(risk) + " pts"
+        else if useBias and ((sSide == 1 and score < 0) or (sSide == -1 and score > 0))
+            lastMsg := "Skipped " + sSetup + " against bias " + str.tostring(score)
+        else
+            pSide := sSide
+            pTrig := trig
+            pSL := sSL
+            pBar := bar_index
+            pSetup := sSetup
+            pDetail := sDetail
+            label.new(bar_index, sSide == 1 ? low : high, (sSide == 1 ? "BUY setup\n" : "SELL setup\n") + sDetail + "\nenter beyond " + fmt(trig),
+                 style = sSide == 1 ? label.style_label_up : label.style_label_down, yloc = sSide == 1 ? yloc.belowbar : yloc.abovebar,
+                 size = size.tiny, color = color.new(color.orange, 20), textcolor = color.black)
+            alert("TCI SETUP " + (sSide == 1 ? "BUY" : "SELL") + ": " + sDetail + ". Enter if next candle crosses " + fmt(trig) + ", SL " + fmt(sSL), alert.freq_once_per_bar_close)
+
+// ---------------- plots ----------------
+plot(showDaily ? pdh : na, "PDH", color.new(color.blue, 0), 1, plot.style_linebr)
+plot(showDaily ? pdl : na, "PDL", color.new(color.blue, 0), 1, plot.style_linebr)
+plot(showDaily ? pdc : na, "PDC", color.new(color.gray, 0), 1, plot.style_linebr)
+plot(showDaily ? plh : na, "Prev last-hour high", color.new(color.purple, 30), 1, plot.style_linebr)
+plot(showDaily ? pll : na, "Prev last-hour low", color.new(color.purple, 30), 1, plot.style_linebr)
+plot(showDaily and orDone ? orH : na, "ORH", color.new(color.orange, 0), 1, plot.style_linebr)
+plot(showDaily and orDone ? orL : na, "ORL", color.new(color.orange, 0), 1, plot.style_linebr)
+plot(showVwap ? idxVwap : na, "Futures VWAP (index terms)", color.new(color.fuchsia, 20), 2)
+plot(ceWall > 0 ? ceWall : na, "CALL OI wall", color.new(color.red, 0), 2, plot.style_linebr)
+plot(peWall > 0 ? peWall : na, "PUT OI wall", color.new(color.green, 0), 2, plot.style_linebr)
+plotshape(showVol and bigVol, "Big futures volume", shape.diamond, location.bottom, color.new(color.fuchsia, 0), size = size.tiny)
+
+// ---------------- dashboard ----------------
+var table tb = table.new(position.top_right, 2, 10, bgcolor = color.new(color.white, 10), border_color = color.new(color.gray, 70), border_width = 1)
+if showTable and barstate.islast
+    pdcRef = nz(pdc, close)
+    score = trend + (close > pdcRef ? 1 : -1) + (close > nz(dayOpen, close) ? 1 : -1) + (orDone ? (close > (orH + orL) / 2 ? 1 : -1) : 0)
+    biasTxt = score >= 2 ? "BULLISH " : score <= -2 ? "BEARISH " : "NEUTRAL "
+    biasCol = score >= 2 ? color.green : score <= -2 ? color.red : color.gray
+    float upLiq = na
+    float dnLiq = na
+    if array.size(lvP) > 0
+        for i = 0 to array.size(lvP) - 1
+            v = array.get(lvP, i)
+            if v > close and (na(upLiq) or v < upLiq)
+                upLiq := v
+            if v < close and (na(dnLiq) or v > dnLiq)
+                dnLiq := v
+    pcrTxt = pcrVal <= 0 ? "not set" : str.tostring(pcrVal, "#.##") + (pcrVal >= 1.7 ? "  very high: put writers heavy, watch for a top" : pcrVal >= 1.3 ? "  high: put writers = support" : pcrVal <= 0.5 ? "  very low: call writers heavy, watch for a bottom" : pcrVal <= 0.7 ? "  low: call writers = resistance" : "  neutral")
+    wallTxt = (ceWall > 0 ? "CE " + fmt(ceWall) + " (" + fmt(ceWall - close) + " away)" : "CE -") + " | " + (peWall > 0 ? "PE " + fmt(peWall) + " (" + fmt(close - peWall) + " away)" : "PE -")
+    vwTxt = na(idxVwap) ? "n/a" : close > idxVwap ? "above VWAP (buyers in control)" : "below VWAP (sellers in control)"
+    table.cell(tb, 0, 0, "Bias", text_size = size.small)
+    table.cell(tb, 1, 0, biasTxt + (score > 0 ? "+" : "") + str.tostring(score) + "  (structure " + (trend > 0 ? "up" : trend < 0 ? "down" : "-") + ")", text_color = biasCol, text_size = size.small, text_halign = text.align_left)
+    table.cell(tb, 0, 1, "VWAP", text_size = size.small)
+    table.cell(tb, 1, 1, vwTxt, text_size = size.small, text_halign = text.align_left)
+    table.cell(tb, 0, 2, "PCR", text_size = size.small)
+    table.cell(tb, 1, 2, pcrTxt, text_size = size.small, text_halign = text.align_left)
+    table.cell(tb, 0, 3, "OI walls", text_size = size.small)
+    table.cell(tb, 1, 3, wallTxt, text_size = size.small, text_halign = text.align_left)
+    table.cell(tb, 0, 4, "Liquidity", text_size = size.small)
+    table.cell(tb, 1, 4, "above " + (na(upLiq) ? "-" : fmt(upLiq)) + " | below " + (na(dnLiq) ? "-" : fmt(dnLiq)), text_size = size.small, text_halign = text.align_left)
+    table.cell(tb, 0, 5, "Now", text_size = size.small)
+    table.cell(tb, 1, 5, posSide != 0 ? (posSide == 1 ? "IN BUY " : "IN SELL ") + fmt(posEntry) + "  SL " + fmt(posSL) + "  T1 " + fmt(posT1) + "  T2 " + fmt(posT2) + "  T3 " + fmt(posT3) : pSide != 0 ? "Setup armed: " + pDetail + " | enter beyond " + fmt(pTrig) : lastMsg, text_size = size.small, text_halign = text.align_left)
+    table.cell(tb, 0, 6, "Today", text_size = size.small)
+    table.cell(tb, 1, 6, str.tostring(dayTrades) + " trades, " + str.tostring(dayLosses) + " losses" + (dayTrades >= maxTrades or dayLosses >= maxLosses ? "  -> DONE FOR THE DAY" : ""), text_size = size.small, text_halign = text.align_left)
+    table.cell(tb, 0, 7, "Scorecard", text_size = size.small)
+    table.cell(tb, 1, 7, nTrades == 0 ? "no closed trades on this chart yet" : str.tostring(nTrades) + " trades | win " + str.tostring(100.0 * nWins / nTrades, "#") + "% | avg " + str.tostring(sumR / nTrades, "+0.00;-0.00") + "R | total " + str.tostring(sumR, "+0.0;-0.0") + "R", text_size = size.small, text_halign = text.align_left)
+    table.cell(tb, 0, 8, "By setup", text_size = size.small)
+    table.cell(tb, 1, 8, "Sweep " + str.tostring(nSweep) + " (" + str.tostring(rSweep, "+0.0;-0.0") + "R)  Zone " + str.tostring(nZone) + " (" + str.tostring(rZone, "+0.0;-0.0") + "R)  Breakout " + str.tostring(nBrk) + " (" + str.tostring(rBrk, "+0.0;-0.0") + "R)", text_size = size.small, text_halign = text.align_left)
+    table.cell(tb, 0, 9, "Note", text_size = size.small)
+    table.cell(tb, 1, 9, "Scorecard is in index R before costs. Costs and slippage cut about 0.3R per trade.", text_size = size.tiny, text_halign = text.align_left)
