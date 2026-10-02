@@ -1,5 +1,83 @@
-# TCI All-in-One indicator: plain-language guide
+# TCI indicators for TradingView: plain-language guide
 
+## TCI Smart Money (newest, use this one)
+
+File: [`tci_smart_money.pine`](tci_smart_money.pine). Copy it with the button on the copy page.
+Made for the **NIFTY 5-minute chart**.
+
+![TCI Smart Money](smart-money-preview.png)
+
+### What you see
+- **Liquidity map, always on, also before the open.** Dashed lines run into the future: red for the nearest 3 levels
+  **above** price, green for the nearest 3 **below**. These are where stop-losses sit, the places smart money
+  drives price to:
+  - highs and lows of the last 5 sessions that haven't been taken yet (PDH, PDL, "Thu high" and so on);
+  - previous week high and low (PWH, PWL);
+  - major swing highs and lows on the 5-minute chart (6 candles each side), shown as EQH/EQL when two are equal;
+  - today's opening range (ORH, ORL);
+  - the previous close (PDC, the gap-fill level);
+  - the OI walls you type in.
+
+  If there aren't 3 real levels on a side (for example at a fresh multi-day low), round 100s fill in.
+- **The plan table** (top right) lists those levels with their distance from price. It writes his "CE above X, PE
+  below Y" plan from them, plus the open trade, today's count, and a scorecard of past signals on your chart.
+- **Signals:** a green **BUY** button below the candle, or a red **SELL** button above it. The arrow points at the
+  candle and the entry price is on the button, so the candle stays visible. Hover the button for the SL, T1, MAX, the
+  reason and an option strike idea.
+- **Trade lines:** red **SL**, green **T1** (minimum target), light green **MAX** (the maximum target: the next big
+  liquidity).
+
+### The rules
+| | |
+|---|---|
+| **TRAP** (on) | Price runs through a liquidity level, taking the stops, and the 5-min candle closes back with a pin bar, engulfing candle or strong close. Trade the other way. This is the "everyone long, he says short" move |
+| **RETEST** (on) | A level broken in the last hour is retested and holds. Trade in the break direction |
+| **BREAK** (off) | A strong candle closes through a level. Off because it lost money in the test (false breakouts) |
+| Entry | Only when one of the next 2 candles breaks the signal candle (his follow-up rule) |
+| SL | Beyond the signal candle or the swept extreme. **At least 25 points**; skipped if over 60 |
+| T1 | The first liquidity level **at least 50 points** away (or 2 × the SL if there's none) |
+| MAX | The next liquidity level after T1: the "maximum you can get" |
+| Managing | SL to entry after 1R. After T1, the SL trails 2 × ATR behind the best price, like a Supertrend line. Exit at MAX, the trailing SL, or 3:15 pm |
+| Day limits | Entries 9:20–2:45, at most 4 trades, stop after 2 losses |
+
+All of these numbers can be changed in Settings → Inputs.
+
+### Monday morning (or any morning) before 9:15
+1. Open the 5-min Nifty chart. The map already shows the nearest liquidity above and below, from the last sessions,
+   the week and the swings.
+2. Optional: type the PCR and the highest CALL and PUT OI strikes from Groww's option chain into Settings → Smart money
+   context. The walls get drawn and are used as targets.
+3. Read the **Plan** row. For example: "SELL if price runs above 22,611 and a 5-min candle closes back below it.
+   BUY if price runs below 22,218 and closes back above it. After a clean break, wait for the retest."
+4. Wait for the button. Don't trade the open or the break candle itself.
+
+### Tested on real Nifty data (5-min, 17 Jul – 1 Oct 2026, 1 lot, after charges and 1 pt slippage per fill)
+| | |
+|---|---|
+| Trades | 79 on 49 days, 37% winners |
+| Average | +3.3 index points per trade. Winners average +57, losers −28 |
+| Net | **+₹11,448**, worst drawdown **−₹16,673** |
+| By month | July −₹2,063, **August −₹10,753**, **September +₹26,278**, 1 Oct −₹2,014 |
+| Best trades | SELL retest 15 Sep (+139 pts), SELL retest 24 Sep (+130), SELL trap 22 Sep (+87). **Without these three: −₹12,303** |
+| Better than random? | Random direction at the same moments did as well 10% of the time. Encouraging, but not proof |
+
+**What this means:**
+- It's a trend catcher. It loses small and often in choppy weeks, then makes it back on a few big trend days.
+- You must survive the losing weeks to be there on the big day.
+- I removed the BREAK setup **after** seeing it lose. That makes these numbers optimistic, and 11 weeks is a short
+  test.
+- Paper-trade it for a month before using real money, and watch the Scorecard row on your own chart.
+
+### Your earlier requests, and where they are
+- **Buttons off the candle, with an arrow:** done (below the candle for BUY, above it for SELL).
+- **SL at least 25, target at least 50:** done (Settings → Risk and targets).
+- **Maximum profit:** the MAX line plus the trailing SL after T1. Switch on *Exit fully at T1* if you prefer to book
+  everything at T1. In the test that did worse (−₹384 instead of +₹11,448).
+- **Levels before the open:** the liquidity map and the plan table.
+
+---
+
+## Older version: TCI All-in-One
 One TradingView indicator that puts his whole method on your chart and gives **BUY / SELL signals with SL and
 targets on the index**.
 
@@ -15,7 +93,7 @@ option strike idea.
 Everything else (liquidity lines, zones, previous-day levels, VWAP, the dashboard) is still calculated. Each one can
 be switched on under **Settings → Inputs → Display**. Full view: [`all-in-one-preview.png`](all-in-one-preview.png).
 
-## Put it on your chart (one time, about 2 minutes)
+### Put it on your chart (one time, about 2 minutes)
 
 1. Open [tradingview.com](https://www.tradingview.com) (a free account is fine) and open the **NIFTY** chart
    (`NSE:NIFTY`) on the **5-minute** timeframe.

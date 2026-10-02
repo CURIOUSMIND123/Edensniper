@@ -1,8 +1,9 @@
 # TCI zone-breakout system for Groww: indicator, backtester, paper and live bot
 
-> **Looking for the one indicator with everything in it** (liquidity zones, stop-hunt sweeps, pin bars,
-> demand/supply, PCR/OI walls, VWAP, BUY/SELL with SL and T1–T3)? It's **TCI All-in-One**. Start with the
-> plain-language guide: [`tradingview/README.md`](tradingview/README.md).
+> **Looking for the TradingView indicator?** Use **TCI Smart Money**
+> ([`tradingview/tci_smart_money.pine`](tradingview/tci_smart_money.pine)). It has a liquidity map above and below
+> price (also before the open), trap / retest signals, SL of at least 25, T1 of at least 50, a MAX target and a
+> trailing SL. Plain-language guide: [`tradingview/README.md`](tradingview/README.md).
 
 This folder turns the method described in [`docs/trading-cafe-analysis`](../docs/trading-cafe-analysis/README.md) into
 fixed rules that a computer can follow. It contains:
@@ -240,6 +241,8 @@ Start with `"max_lots": 1`.
 | `live.py` | Paper or live session for today, or `--replay` of a saved day |
 | `backtest.py` | Backtest on Groww historical index and option candles, with the random-direction check and `--stop-mults` |
 | `call_helper.py` | Follow a live call with a wider stop: your stop, break-even level, rupee risk and lots |
+| `tradingview/tci_smart_money.pine` | **TCI Smart Money** indicator: liquidity map, trap / retest signals, SL / T1 / MAX ([guide](tradingview/README.md)) |
+| `tci/smartmoney.py` | The Smart Money rules in Python (backtested; the reference for the indicator) |
 | `tradingview/tci_all_in_one.pine` | **TCI All-in-One** indicator: his full method plus smart-money context ([guide](tradingview/README.md)) |
 | `tci/allinone.py` | The All-in-One rules in Python (backtested; the reference for the indicator) |
 | `smart_money.py` | PCR, CALL/PUT OI walls and max pain from Groww's option chain, to type into the indicator |
