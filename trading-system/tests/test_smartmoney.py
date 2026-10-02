@@ -31,7 +31,7 @@ class TrapTests(unittest.TestCase):
         self.prev[10] = Bar(self.prev[10].t, 1000, 1100, 999, 1001)   # PDH 1100
         self.prev[20] = Bar(self.prev[20].t, 1000, 1001, 990, 999)    # PDL 990
 
-    def test_trap_below_pdl_gives_buy_with_min_25_sl_and_50_target(self):
+    def test_trap_below_pdl_gives_buy_with_target_at_liquidity_1_to_2(self):
         today = [Bar(t(0), 1000, 1002, 998, 1000), Bar(t(1), 1000, 1001, 998, 999), Bar(t(2), 999, 1000, 998, 999),
                  Bar(t(3), 999, 1000, 975, 998),       # runs 15 below PDL, closes back above: trap (pin bar)
                  Bar(t(4), 998, 1003, 997, 1002),      # follow-up breaks 1000 + 1
@@ -41,16 +41,19 @@ class TrapTests(unittest.TestCase):
         self.assertTrue(sig and sig[0][2].startswith("BUY TRAP") and "990" in sig[0][2], e.events)
         tr = [x for x in e.trades if x.opened >= D1][0]
         self.assertEqual((tr.side, tr.entry), ("BUY", 1001))
-        self.assertEqual(tr.sl0, 1001 - 28)                 # structure: 975 - 2 = 973 -> 28 points (>= 25)
-        self.assertEqual(tr.t1, 1100)                       # first liquidity at least 50 points away: PDH
-        self.assertGreaterEqual(tr.t1 - tr.entry, 50)
+        self.assertEqual(tr.sl0, 1001 - 28)                 # structure: 975 - 2 = 973 -> 28 points
+        self.assertEqual(tr.t1, 1100)                       # first liquidity at least 2 x 28 = 56 points away: PDH
+        self.assertGreaterEqual(tr.t1 - tr.entry, 2 * tr.risk)
 
     def test_min_sl_applies_when_structure_is_tight(self):
         today = [Bar(t(0), 1000, 1002, 998, 1000), Bar(t(1), 1000, 1001, 998, 999), Bar(t(2), 999, 1000, 998, 999),
                  Bar(t(3), 999, 1000, 986, 999.5), Bar(t(4), 999.5, 1003, 998, 1002)]
         e = run(self.prev + today, SMParams())
         tr = [x for x in e.trades if x.opened >= D1][0]
-        self.assertEqual(tr.entry - tr.sl0, 25)             # structure says 16, minimum is 25
+        self.assertEqual(tr.entry - tr.sl0, 17)             # entry 1001, SL just beyond the swept low (986 - 2 = 984)
+        e2 = run(self.prev + today, SMParams(min_sl=25))
+        tr2 = [x for x in e2.trades if x.opened >= D1][0]
+        self.assertEqual(tr2.entry - tr2.sl0, 25)           # a minimum SL widens it
 
     def test_after_t1_the_stop_trails_toward_max(self):
         self.prev[25] = Bar(self.prev[25].t, 1000, 1200, 999, 1001)  # PDH 1200 (takes out the earlier 1100 high)
@@ -60,12 +63,29 @@ class TrapTests(unittest.TestCase):
                  Bar(t(5), 1002, 1105, 1001, 1104),     # T1 (1100) hit: keep the trade, trail it
                  Bar(t(6), 1104, 1150, 1100, 1148),
                  Bar(t(7), 1148, 1149, 1060, 1062)]     # pullback hits the trailing stop
-        e = run(self.prev + today, SMParams())
+        e = run(self.prev + today, SMParams(partial_at_r=0))
         tr = [x for x in e.trades if x.opened >= D1][0]
         self.assertEqual((tr.t1, tr.tmax), (1100, 1200))
         self.assertTrue(tr.t1_hit)
         self.assertEqual(tr.reason, "trail")
         self.assertGreater(tr.exit, 1100)                   # locked in more than T1
+
+
+class HalfBookingTests(unittest.TestCase):
+    def test_half_booked_at_1r_then_stop_to_entry(self):
+        prev = day(D0, 1000)
+        prev[10] = Bar(prev[10].t, 1000, 1100, 999, 1001)
+        prev[20] = Bar(prev[20].t, 1000, 1001, 990, 999)
+        today = [Bar(t(0), 1000, 1002, 998, 1000), Bar(t(1), 1000, 1001, 998, 999), Bar(t(2), 999, 1000, 998, 999),
+                 Bar(t(3), 999, 1000, 975, 998), Bar(t(4), 998, 1003, 997, 1002),
+                 Bar(t(5), 1002, 1035, 1001, 1033),     # +1R (28 pts) reached: half booked at 1029
+                 Bar(t(6), 1033, 1034, 995, 997)]       # falls back: rest stopped at entry 1001
+        e = run(prev + today, SMParams())
+        tr = [x for x in e.trades if x.opened >= D1][0]
+        self.assertEqual(tr.half_px, 1029)
+        self.assertEqual(tr.reason, "breakeven")
+        self.assertEqual(tr.exit, (1029 + 1001) / 2)    # average of the two halves: still a winner
+        self.assertGreater(tr.points, 0)
 
 
 class PauseTests(unittest.TestCase):

@@ -34,10 +34,10 @@ Made for the **NIFTY 5-minute chart**.
 | **RETEST** (on) | A level broken in the last hour is retested and holds. Trade in the break direction |
 | **BREAK** (off) | A strong candle closes through a level. Off because it lost money in the test (false breakouts) |
 | Entry | Only when one of the next 2 candles breaks the signal candle (his follow-up rule) |
-| SL | Beyond the signal candle or the swept extreme. **At least 25 points**; skipped if over 60 |
-| T1 | The first liquidity level **at least 50 points** away (or 2 × the SL if there's none) |
+| SL | Just beyond the signal candle or the swept level: 15–40 points, about 26 on average. Skipped if over 40 |
+| T1 | The first liquidity level at least **2 × the SL** away: **1:2 or better** (or exactly 2 × SL if there's none) |
 | MAX | The next liquidity level after T1: the "maximum you can get" |
-| Managing | SL to entry after 1R. After T1, the SL trails 2 × ATR behind the best price, like a Supertrend line. Exit at MAX, the trailing SL, or 3:15 pm |
+| Managing | His rule: **book half at 1:1 and move the SL to entry**. After T1, the SL on the rest trails 2 × ATR behind the best price, like a Supertrend line. Exit at MAX, the trailing SL, or 3:15 pm |
 | Day limits | Entries 9:20–11:00 and 2:00–2:45 (paused at mid-day), at most 4 trades, stop after 2 losses |
 
 All of these numbers can be changed in Settings → Inputs.
@@ -54,21 +54,35 @@ All of these numbers can be changed in Settings → Inputs.
 ### Tested on real Nifty data (5-min, 17 Jul – 1 Oct 2026, 1 lot, after charges and 1 pt slippage per fill)
 | | |
 |---|---|
-| Trades | 57 on the default settings |
-| Outcome | **22 winners (avg +55 pts), 21 losers (avg −30 pts), 14 break-even** |
-| Net | **+₹23,772**, worst drawdown **−₹10,361**; never more than 4 losses in a row |
-| By month | July +₹1,270, August −₹4,043, **September +₹28,559**, 1 Oct −₹2,014 |
-| Best trades | SELL retest 15 Sep (+139 pts), SELL retest 24 Sep (+130), SELL trap 22 Sep (+87). Without these three: about break-even (+₹21) |
-| Better than random? | Random direction at the same moments did as well only 1% of the time |
+| Trades | 53 on the default settings |
+| Outcome | **31 ended in profit (58%)**, 21 losses, 1 flat. Average profit +32 pts, average loss −24 pts |
+| Net | **+₹16,735**, worst drawdown **−₹5,079**; never more than 3 losses in a row |
+| By month | July +₹2,728, August +₹3,800, September +₹11,693, 1 Oct (2 trades) −₹1,485 |
+| Without the 3 best trades | +₹1,752 |
+| Better than random? | Random direction at the same moments did as well 6% of the time |
 
-**A 39% win rate is not a guaranteed loss.** What matters is the win rate × average win against the loss rate ×
-average loss:
-- (22 × 55) − (21 × 30) ≈ +580 points over 57 trades, about +10 points a trade.
-- With wins about twice the size of losses, you break even at roughly a 35% win rate.
-- The danger is the thin margin, not the 39%. It depends on keeping losses small (never move the SL away) and
-  letting the few big winners run.
+### Can it win 90% of the time at 1:2? No, and neither can TCI
+Win rate and reward pull against each other. This is the same set of signals with the stop just beyond the level
+and different targets (no breakeven move):
 
-### Why most trades don't win (from the first 79 test trades)
+| Target | Win rate | Average result per trade |
+|---|---|---|
+| 0.25 × SL | 63% | −0.21R (loses money) |
+| 0.5 × SL | 63% | −0.05R |
+| 1 × SL (1:1) | 50% | 0.00R |
+| 2 × SL (1:2) | 36% | −0.02R |
+| 3 × SL (1:3) | 32% | −0.01R |
+
+- Every step up in reward costs win rate. 90% wins only happen with tiny targets, and those lose money overall.
+- 90% at 1:2 would mean +1.7R on every trade. Nobody sustains that. TCI's own co-host said their win rate is about
+  40%, and copying his calls exactly won 40% of the time
+  ([market-check.md](../../docs/trading-cafe-analysis/market-check.md)).
+- What raises the win rate **without** shrinking the winners is his own management: **book half at 1:1 and move the
+  SL to entry**. That turned 39% winners into 58–63% that end in profit.
+- **10-point stops don't work on the 5-minute chart.** The stop just beyond a real level averages about 26 points.
+  Tighter stops sit inside normal noise and get hit first. They also tested worse with targets at 1:2 and 1:3.
+
+### Why most trades didn't win in the first version (79 test trades)
 - **34 full stop-outs.** 20 of them never went even 10 points our way: the signal was simply wrong. Another 10 went
   +15 to +24 and then reversed.
 - **19 came back to entry.** They went a median +39 points our way first, but none reached a 50-point T1. The SL
@@ -89,9 +103,9 @@ average loss:
 
 ### Your earlier requests, and where they are
 - **Buttons off the candle, with an arrow:** done (below the candle for BUY, above it for SELL).
-- **SL at least 25, target at least 50:** done (Settings → Risk and targets).
+- **Level-based SL and targets at 1:2 or better:** done. The SL sits just beyond the level and T1 is the next liquidity at least 2 × SL away. Set *Minimum SL* to 25 and *Also at least this many points* to 50 if you prefer the earlier rule.
 - **Maximum profit:** the MAX line plus the trailing SL after T1. Switch on *Exit fully at T1* if you prefer to book
-  everything at T1. In the test that made +₹16,064 instead of +₹23,772: steadier, but less.
+  everything at T1. In earlier tests that earned less, because the big trend days pay for everything else.
 - **Levels before the open:** the liquidity map and the plan table.
 
 ---

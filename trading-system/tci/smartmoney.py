@@ -12,11 +12,12 @@ Signals (BUY = call, SELL = put):
   * BREAK   a strong candle (body >= 50% of range, range >= 0.8 ATR) closes through a pool level
   * RETEST  a level broken in the last hour is retested and holds with a rejection candle
 Entry only when one of the next `confirm_bars` candles breaks the signal candle (his follow-up rule).
-Risk: SL beyond the signal candle / swept extreme, at least `min_sl` (25) and at most `max_sl` (60) points.
-Targets: T1 = first opposing pool level at least `min_t1` (50) points away (else entry +/- max(50, 2R));
+Risk: SL just beyond the signal candle / swept extreme, at least `min_sl` (15) and at most `max_sl` (40) points.
+Targets: T1 = first opposing pool level at least `rr_min` (2) x SL away (else 2 x SL);
 MAX = the next pool level beyond T1 (the big liquidity), else T1 + (T1 - entry).
-Management: stop to entry after 1R; after T1 the stop trails `trail_atr` x ATR behind the best price
-(like a Supertrend line); exit at MAX, the trailing stop, or 15:15.
+Management (his rules): book half at 1:1 and move the stop to entry; after T1 the stop trails
+`trail_atr` x ATR behind the best price (like a Supertrend line); exit at MAX, the trailing stop, or 15:15.
+No new entries 11:00-14:00.
 """
 from __future__ import annotations
 
@@ -48,10 +49,15 @@ class SMParams:
     confirm_bars: int = 2
     trigger_buffer: float = 1.0
     sl_buffer: float = 2.0
-    min_sl: float = 25.0
-    max_sl: float = 60.0
-    min_t1: float = 50.0
+    min_sl: float = 15.0
+    max_sl: float = 40.0
+    min_t1: float = 0.0
     t1_cap: float = 0.0          # if > 0: T1 is never farther than this (the nearest liquidity is the realistic target)
+    rr_min: float = 2.0          # T1 = first liquidity at least rr_min x SL away (1:2 or better)
+    room_check: bool = False     # with rr_min: skip the trade if any liquidity sits closer than rr_min x SL (no room)
+    fixed_rr: float = 0.0        # if > 0: T1 = exactly fixed_rr x SL (ignores liquidity; for testing)
+    entry_mode: str = "break"    # "break": next candle breaks the signal candle | "pullback": limit at the candle's middle
+    partial_at_r: float = 1.0    # if > 0: book half when price is this many R in profit, move SL to entry (his "book one lot at 1:1")
     pause_from: Optional[time] = time(11, 0)   # no new entries 11:00-14:00: the mid-day chop lost money in both halves of the test
     pause_to: Optional[time] = time(14, 0)
     be_at_r: float = 1.0
@@ -86,6 +92,7 @@ class SMSignal:
     trigger: float
     sl_struct: float
     valid_until: datetime
+    limit: float = 0.0           # pullback entry price (middle of the signal candle)
 
 
 @dataclass
@@ -105,6 +112,8 @@ class SMTrade:
     exit: float = 0.0
     reason: str = ""
     t1_t: Optional[datetime] = None
+    half_px: Optional[float] = None
+    half_t: Optional[datetime] = None
 
     @property
     def risk(self) -> float:
@@ -232,20 +241,31 @@ class SmartMoney:
         s = self.pending
         if s is None or now <= s.t or now >= s.valid_until:
             return
-        hit = px >= s.trigger if s.side == "BUY" else px <= s.trigger
+        sgn = 1 if s.side == "BUY" else -1
+        if self.p.entry_mode == "pullback":
+            hit = px <= s.limit if s.side == "BUY" else px >= s.limit
+            level = s.limit
+        else:
+            hit = px >= s.trigger if s.side == "BUY" else px <= s.trigger
+            level = s.trigger
         if not hit or not self.can_open(now):
             return
         self.pending = None
-        fill = px if gap_open else s.trigger
-        sgn = 1 if s.side == "BUY" else -1
+        fill = px if gap_open else level
         dist = max(self.p.min_sl, sgn * (fill - s.sl_struct))
         if dist > self.p.max_sl:
             self.log(now, "skip", f"{s.side} {s.setup}: stop would be {dist:.0f} pts")
             return
         sl = fill - sgn * dist
         opp = self.levels_beyond(s.side, fill)
-        far = [l for l in opp if abs(l.price - fill) >= self.p.min_t1]
-        t1 = far[0].price if far else fill + sgn * max(self.p.min_t1, 2 * dist)
+        need = max(self.p.min_t1, self.p.rr_min * dist)
+        if self.p.room_check and self.p.rr_min and opp and abs(opp[0].price - fill) < self.p.rr_min * dist:
+            self.log(now, "skip", f"{s.side} {s.setup}: {opp[0].name} only {abs(opp[0].price - fill) / dist:.1f}R away")
+            return
+        far = [l for l in opp if abs(l.price - fill) >= need]
+        t1 = far[0].price if far else fill + sgn * max(need, 2 * dist)
+        if self.p.fixed_rr:
+            t1 = fill + sgn * self.p.fixed_rr * dist
         if self.p.t1_cap and abs(t1 - fill) > self.p.t1_cap:
             t1 = fill + sgn * self.p.t1_cap
         beyond = [l for l in opp if sgn * (l.price - t1) >= 25]
@@ -262,6 +282,12 @@ class SmartMoney:
             out = px if gap_open else tr.sl
             reason = "stop" if tr.sl == tr.sl0 else ("trail" if tr.t1_hit else "breakeven")
             return self._close(now, out, reason)
+        if self.p.partial_at_r and tr.half_px is None:
+            lvl = tr.entry + (1 if buy else -1) * self.p.partial_at_r * tr.risk
+            if (px >= lvl) if buy else (px <= lvl):
+                tr.half_px, tr.half_t = (px if gap_open else lvl), now
+                tr.sl = max(tr.sl, tr.entry) if buy else min(tr.sl, tr.entry)
+                self.log(now, "half", f"{tr.side} booked half at {tr.half_px:.1f}, SL to entry")
         tgt = tr.tmax if (tr.t1_hit and self.p.exit_mode == "trail") else tr.t1
         if (px >= tgt) if buy else (px <= tgt):
             out = px if gap_open else tgt
@@ -275,6 +301,8 @@ class SmartMoney:
     def _close(self, now, px, reason):
         tr = self.position
         tr.closed, tr.exit, tr.reason = now, px, reason
+        if tr.half_px is not None:
+            tr.exit = (tr.half_px + px) / 2   # average of the two halves
         self.trades.append(tr)
         self.position = None
         self.log(now, "exit", f"{tr.side} {reason} @ {px:.1f} ({tr.points:+.0f} pts, {tr.r:+.2f}R)")
@@ -352,7 +380,8 @@ class SmartMoney:
         p = self.p
         valid = end + timedelta(minutes=p.timeframe_min * p.confirm_bars)
         mk = lambda side, setup, detail, sl: SMSignal(b.t, side, setup, detail,
-                                                      b.h + p.trigger_buffer if side == "BUY" else b.l - p.trigger_buffer, sl, valid)
+                                                      b.h + p.trigger_buffer if side == "BUY" else b.l - p.trigger_buffer, sl, valid,
+                                                      (b.h + b.l) / 2)
         # 1. trap: run through a pool level, close back with a rejection
         if p.use_trap:
             lows = [l for l in self.pool if l.side == "low" and b.l < l.price - p.sweep_min and b.c > l.price]
