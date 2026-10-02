@@ -3,9 +3,17 @@
 One TradingView indicator that puts his whole method on your chart and gives **BUY / SELL signals with SL and
 targets on the index**.
 
-File: [`tci_all_in_one.pine`](tci_all_in_one.pine) · Example of what it draws: [`all-in-one-preview.png`](all-in-one-preview.png)
+File: [`tci_all_in_one.pine`](tci_all_in_one.pine)
 
-![preview](all-in-one-preview.png)
+**By default it's clean:** a green **BUY** or red **SELL** button at the entry price, one red **stop-loss** line
+and one green **target** line while the trade is open, and a small "+2.0R / −1.0R" note at the exit. The stop-loss
+line steps to the entry price once the trade is 1R in profit. Hover the button to see the reason, T2, T3 and an
+option strike idea.
+
+![clean view](clean-preview.png)
+
+Everything else (liquidity lines, zones, previous-day levels, VWAP, the dashboard) is still calculated. Each one can
+be switched on under **Settings → Inputs → Display**. Full view: [`all-in-one-preview.png`](all-in-one-preview.png).
 
 ## Put it on your chart (one time, about 2 minutes)
 
@@ -19,10 +27,17 @@ File: [`tci_all_in_one.pine`](tci_all_in_one.pine) · Example of what it draws: 
 3. For phone alerts: **Alerts (clock icon) → Create alert → Condition: TCI All-in-One → "Any alert() function
    call" → Create**.
 
+**If it shows up in a separate panel under the chart instead of on the candles:** hover the indicator's name →
+**⋯ (More)** → **Move to** → **Existing pane above**. Or delete it from the chart (bin icon) and click **Add to
+chart** again.
+
+**To hide the row of numbers next to its name:** right-click the indicator → **Settings → Style** → untick **Inputs in
+status line** and **Values in status line**.
+
 For SENSEX, open `BSE:SENSEX` and in the settings set **Option strike step** to 100 and the futures symbol to
 `BSE:SENSEX1!`.
 
-## What you'll see
+## Everything it can draw (switch on in Settings → Display)
 
 | On the chart | What it means (his words) |
 |---|---|
@@ -36,9 +51,10 @@ For SENSEX, open `BSE:SENSEX` and in the settings set **Option strike step** to 
 | Pink line | Futures VWAP, shifted to the index. Above = buyers in control, below = sellers |
 | Thick red / green lines | CALL / PUT OI walls you typed in (resistance / support) |
 | Pink diamond at the bottom | A big-volume candle in futures (big players active) |
-| Orange **"BUY setup" / "SELL setup"** label | A setup formed. **Don't enter yet** |
-| Teal **BUY** / maroon **SELL** label | Entry confirmed. It shows the index entry, **SL, T1, T2, T3**, the reason, and an option strike idea |
-| Small grey / green / red label | The exit: target, SL, breakeven or square-off, with the result in R |
+| Orange **"BUY setup" / "SELL setup"** label | A setup formed. **Don't enter yet** (off by default) |
+| Green **BUY** / red **SELL** button | Entry confirmed, at the index entry price. Hover for SL, T1–T3, the reason and an option idea (set *Signal label* to Detailed to write it all on the chart) |
+| Red line / green line | The stop-loss and the target of the open trade |
+| Small green / red text | The exit, with the result in R (+2.0R = twice the risk) |
 
 **The three setups:**
 - **SWEEP (the trap).** Price runs past a liquidity line, taking the stops, then the candle closes back inside as a

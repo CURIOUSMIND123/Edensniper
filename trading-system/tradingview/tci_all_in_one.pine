@@ -61,13 +61,18 @@ ceWall     = input.float(0.0, "Strike with highest CALL OI = resistance (0 = not
 peWall     = input.float(0.0, "Strike with highest PUT OI = support (0 = not set)", group = G5)
 wallsAsLv  = input.bool(true, "Use OI walls as levels for targets", group = G5)
 futSym     = input.symbol("NSE:NIFTY1!", "Futures symbol (for VWAP and volume)", group = G5)
-showVwap   = input.bool(true, "Show futures VWAP (shifted to the index)", group = G5)
-showVol    = input.bool(true, "Mark big-volume candles (futures volume > 2x average)", group = G5)
-G6 = "Display"
-showLiq    = input.bool(true, "Show liquidity lines", group = G6)
-showZones  = input.bool(true, "Show demand / supply zones", group = G6)
-showDaily  = input.bool(true, "Show previous-day and opening-range levels", group = G6)
-showTable  = input.bool(true, "Show dashboard", group = G6)
+showVwap   = input.bool(false, "Show futures VWAP (shifted to the index)", group = G5)
+showVol    = input.bool(false, "Mark big-volume candles (futures volume > 2x average)", group = G5)
+G6 = "Display (clean by default: BUY / SELL button, one SL line, one target line)"
+labelStyle = input.string("Button", "Signal label", options = ["Button", "Detailed"], group = G6,
+     tooltip = "Button: just BUY / SELL and the price (hover it for SL, targets and the reason). Detailed: everything written on the chart.")
+showExits  = input.bool(true, "Mark exits (small text: +2.0R / -1.0R)", group = G6)
+showT23    = input.bool(false, "Also draw T2 and T3 lines", group = G6)
+showSetups = input.bool(false, "Show setup labels (before the follow-up candle confirms)", group = G6)
+showLiq    = input.bool(false, "Show liquidity lines", group = G6)
+showZones  = input.bool(false, "Show demand / supply zones", group = G6)
+showDaily  = input.bool(false, "Show previous-day and opening-range levels", group = G6)
+showTable  = input.bool(false, "Show dashboard", group = G6)
 
 // ---------------- basics ----------------
 TZ = "Asia/Kolkata"
@@ -160,10 +165,9 @@ var float posT3 = na
 var bool halfDone = false
 var float halfPx = na
 var string posSetup = ""
-var line lnSL = na
-var line lnT1 = na
-var line lnT2 = na
-var line lnT3 = na
+var int exitBar = na          // the bar a trade closed on, so its SL / target lines run up to the exit
+var float exitSL = na
+var float exitTg = na
 // self-score on the loaded chart
 var int nTrades = 0
 var int nWins = 0
@@ -283,10 +287,9 @@ for k = 0 to 3
                 halfDone := true
                 halfPx := fillX
                 posSL := posEntry
-                line.set_y1(lnSL, posEntry)
-                line.set_y2(lnSL, posEntry)
-                label.new(bar_index, fillX, "T1 hit: book half, SL to entry", style = label.style_label_left, size = size.tiny,
-                     color = color.new(color.green, 30), textcolor = color.white)
+                if showExits
+                    label.new(bar_index, fillX, "T1: book half, SL to entry", style = label.style_none, size = size.tiny,
+                         textcolor = color.green)
             else
                 doClose := true
                 closePx := fillX
@@ -313,13 +316,11 @@ for k = 0 to 3
                     dayTrades += 1
                     opt = fmt(strikeFor(side, fillPx)) + (side == 1 ? " CE" : " PE")
                     txt = (side == 1 ? "BUY (call) " : "SELL (put) ") + fmt(fillPx) + "\nSL " + fmt(posSL) + "  T1 " + fmt(t1) + "  T2 " + fmt(t2) + "  T3 " + fmt(t3) + "\n" + pSetup + ": " + pDetail + "\noption idea: " + opt
-                    label.new(bar_index, fillPx, txt, style = side == 1 ? label.style_label_up : label.style_label_down,
-                         yloc = side == 1 ? yloc.belowbar : yloc.abovebar, size = size.small, textcolor = color.white,
-                         color = side == 1 ? color.new(color.teal, 0) : color.new(color.maroon, 0))
-                    lnSL := line.new(bar_index, posSL, bar_index + 1, posSL, color = color.red, width = 2)
-                    lnT1 := line.new(bar_index, t1, bar_index + 1, t1, color = color.green, width = 2)
-                    lnT2 := line.new(bar_index, t2, bar_index + 1, t2, color = color.new(color.green, 40))
-                    lnT3 := line.new(bar_index, t3, bar_index + 1, t3, color = color.new(color.green, 70))
+                    btn = (side == 1 ? "BUY\n" : "SELL\n") + fmt(fillPx)
+                    label.new(bar_index, fillPx, labelStyle == "Button" ? btn : txt, yloc = yloc.price,
+                         style = side == 1 ? label.style_label_up : label.style_label_down,
+                         size = labelStyle == "Button" ? size.normal : size.small, textcolor = color.white,
+                         color = side == 1 ? color.new(#089981, 0) : color.new(#F23645, 0), tooltip = txt)
                     lastMsg := txt
                     alert("TCI " + txt, alert.freq_once_per_bar)
                 else
@@ -340,8 +341,12 @@ for k = 0 to 3
             nBrk += 1
             rBrk += r
         dayLosses += r < 0 ? 1 : 0
-        label.new(bar_index, closePx, closeWhy + " " + str.tostring(r, "+0.0;-0.0") + "R", style = label.style_label_left, size = size.tiny,
-             color = r > 0 ? color.new(color.green, 20) : r < 0 ? color.new(color.red, 20) : color.new(color.gray, 20), textcolor = color.white)
+        exitBar := bar_index
+        exitSL := posSL
+        exitTg := halfDone ? posT2 : posT1
+        if showExits
+            label.new(bar_index, closePx, closeWhy + " " + str.tostring(r, "+0.0;-0.0") + "R", style = label.style_none, size = size.tiny,
+                 textcolor = r > 0 ? color.green : r < 0 ? color.red : color.gray)
         alert("TCI EXIT " + (posSide == 1 ? "BUY" : "SELL") + " " + closeWhy + " at " + fmt(closePx), alert.freq_once_per_bar)
         lastMsg := "Last trade: " + closeWhy + " " + str.tostring(r, "+0.0;-0.0") + "R"
         posSide := 0
@@ -357,10 +362,6 @@ if barstate.isconfirmed
             orDone := true
     // open position housekeeping
     if posSide != 0
-        line.set_x2(lnSL, bar_index + 1)
-        line.set_x2(lnT1, bar_index + 1)
-        line.set_x2(lnT2, bar_index + 1)
-        line.set_x2(lnT3, bar_index + 1)
         if barEnd >= toMin(squareOff)
             exitAvg = halfDone ? (halfPx + close) / 2 : close
             r = posSide * (exitAvg - posEntry) / math.abs(posEntry - posSL0)
@@ -377,8 +378,12 @@ if barstate.isconfirmed
                 nBrk += 1
                 rBrk += r
             dayLosses += r < 0 ? 1 : 0
-            label.new(bar_index, close, "Square-off " + str.tostring(r, "+0.0;-0.0") + "R", style = label.style_label_left, size = size.tiny,
-                 color = color.new(color.gray, 20), textcolor = color.white)
+            exitBar := bar_index
+            exitSL := posSL
+            exitTg := halfDone ? posT2 : posT1
+            if showExits
+                label.new(bar_index, close, "Exit 3:15 " + str.tostring(r, "+0.0;-0.0") + "R", style = label.style_none, size = size.tiny,
+                     textcolor = r > 0 ? color.green : r < 0 ? color.red : color.gray)
             lastMsg := "Squared off " + str.tostring(r, "+0.0;-0.0") + "R"
             posSide := 0
             halfDone := false
@@ -386,8 +391,6 @@ if barstate.isconfirmed
             mv = posSide == 1 ? high - posEntry : posEntry - low
             if mv >= math.abs(posEntry - posSL0)
                 posSL := posEntry
-                line.set_y1(lnSL, posEntry)
-                line.set_y2(lnSL, posEntry)
     if pSide != 0 and bar_index >= pBar + confirmN
         pSide := 0
 
@@ -605,12 +608,23 @@ if barstate.isconfirmed
             pBar := bar_index
             pSetup := sSetup
             pDetail := sDetail
-            label.new(bar_index, sSide == 1 ? low : high, (sSide == 1 ? "BUY setup\n" : "SELL setup\n") + sDetail + "\nenter beyond " + fmt(trig),
-                 style = sSide == 1 ? label.style_label_up : label.style_label_down, yloc = sSide == 1 ? yloc.belowbar : yloc.abovebar,
-                 size = size.tiny, color = color.new(color.orange, 20), textcolor = color.black)
-            alert("TCI SETUP " + (sSide == 1 ? "BUY" : "SELL") + ": " + sDetail + ". Enter if next candle crosses " + fmt(trig) + ", SL " + fmt(sSL), alert.freq_once_per_bar_close)
+            if showSetups
+                label.new(bar_index, sSide == 1 ? low : high, (sSide == 1 ? "BUY setup\n" : "SELL setup\n") + sDetail + "\nenter beyond " + fmt(trig),
+                     style = sSide == 1 ? label.style_label_up : label.style_label_down, yloc = sSide == 1 ? yloc.belowbar : yloc.abovebar,
+                     size = size.tiny, color = color.new(color.orange, 20), textcolor = color.black)
+                alert("TCI SETUP " + (sSide == 1 ? "BUY" : "SELL") + ": " + sDetail + ". Enter if next candle crosses " + fmt(trig) + ", SL " + fmt(sSL), alert.freq_once_per_bar_close)
 
-// ---------------- plots ----------------
+// ---------------- the two trade lines: SL (red) and target (green), drawn only while a trade is open ----------------
+inTrade = posSide != 0
+justExited = not na(exitBar) and bar_index == exitBar
+slNow = inTrade ? posSL : justExited ? exitSL : na
+tgNow = inTrade ? (halfDone ? posT2 : posT1) : justExited ? exitTg : na
+plot(slNow, "Stop-loss", color.new(#F23645, 0), 2, plot.style_linebr)
+plot(tgNow, "Target", color.new(#089981, 0), 2, plot.style_linebr)
+plot(showT23 and inTrade ? posT2 : na, "T2", color.new(#089981, 55), 1, plot.style_linebr)
+plot(showT23 and inTrade ? posT3 : na, "T3", color.new(#089981, 75), 1, plot.style_linebr)
+
+// ---------------- optional context plots (off by default) ----------------
 plot(showDaily ? pdh : na, "PDH", color.new(color.blue, 0), 1, plot.style_linebr)
 plot(showDaily ? pdl : na, "PDL", color.new(color.blue, 0), 1, plot.style_linebr)
 plot(showDaily ? pdc : na, "PDC", color.new(color.gray, 0), 1, plot.style_linebr)
