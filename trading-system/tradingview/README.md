@@ -11,8 +11,11 @@ File: [`tci_all_in_one.pine`](tci_all_in_one.pine) · Example of what it draws: 
 
 1. Open [tradingview.com](https://www.tradingview.com) (a free account is fine) and open the **NIFTY** chart
    (`NSE:NIFTY`) on the **5-minute** timeframe.
-2. At the bottom, click **Pine Editor**. Delete what's there, paste the whole of `tci_all_in_one.pine`, then click
-   **Save** and **Add to chart**.
+2. At the bottom, click **Pine Editor**. Select everything in it and delete it, so it's empty. Paste the **whole**
+   of `tci_all_in_one.pine`, then click **Save** and **Add to chart**.
+   - The second line must be `//@version=5`.
+   - If you see "compile as Pine v1", or errors at `rSweep += r` or `else`, that line didn't get pasted. Empty the
+     editor and paste the full file again.
 3. For phone alerts: **Alerts (clock icon) → Create alert → Condition: TCI All-in-One → "Any alert() function
    call" → Create**.
 
