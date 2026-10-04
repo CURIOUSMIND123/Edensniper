@@ -6,7 +6,7 @@ from datetime import datetime, time, timedelta
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from tci.fairprice import FPParams, htf_bias, run_day  # noqa: E402
+from tci.fairprice import FPParams, htf_bias, run_day, tested_params, usual_range  # noqa: E402
 from tci.rules import Bar  # noqa: E402
 
 D0 = datetime(2026, 9, 14, 9, 15)
@@ -134,6 +134,53 @@ class LossLimitTests(unittest.TestCase):
         s = run_day(prev_day(1000), bars, NO_CONT)
         self.assertEqual([(t.setup, t.reason) for t in s.trades], [("BOS", "SL")] * 3)
         self.assertTrue(s.stopped)
+
+
+class TestedVersionTests(unittest.TestCase):
+    def test_usual_range_is_the_median_of_recent_days(self):
+        self.assertIsNone(usual_range([100, 90]))
+        self.assertEqual(usual_range([100, 90, 120]), 100)
+        self.assertEqual(usual_range([50] * 30 + [100, 90, 120, 80], n=4), 95)
+
+    def test_tested_params_scale_with_the_range(self):
+        p = tested_params(100)
+        self.assertEqual((p.sl, p.tp, p.swing_n, p.max_losses), (40, 120, 2, 2))
+        self.assertFalse(p.use_continuation or p.use_displacement)
+
+    def big_drop_then_break(self, depth):
+        """Open 1000, fall `depth` points, a swing high with 2 lower highs each side, then a close above it."""
+        bars = [Bar(m(0), 1000, 1001, 999, 1000)]
+        px, i = 1000, 1
+        while px > 1000 - depth:
+            bars.append(Bar(m(i), px, px + 1, px - 6, px - 5)); px -= 5; i += 1
+        lo = px
+        bars += [Bar(m(i), lo, lo + 3, lo - 1, lo + 2), Bar(m(i + 1), lo + 2, lo + 6, lo, lo + 4),
+                 Bar(m(i + 2), lo + 4, lo + 10, lo + 3, lo + 5),                      # swing high lo + 10
+                 Bar(m(i + 3), lo + 5, lo + 8, lo + 1, lo + 2), Bar(m(i + 4), lo + 2, lo + 7, lo, lo + 6),
+                 Bar(m(i + 5), lo + 6, lo + 13, lo + 5, lo + 12)]                     # closes above it
+        return bars, lo
+
+    def test_tested_version_buys_only_after_a_big_move_away(self):
+        bars, lo = self.big_drop_then_break(110)                 # range 100: needs 96 points of room
+        tr = run_day(prev_day(1000), bars, tested_params(100)).trades
+        self.assertEqual([(t.setup, t.side, t.entry, t.sl, t.tp) for t in tr], [("BOS", "BUY", lo + 12, lo + 12 - 40, lo + 12 + 120)])
+        bars2, _ = self.big_drop_then_break(60)                  # not far enough from the open
+        self.assertFalse(run_day(prev_day(1000), bars2, tested_params(100)).trades)
+
+    def test_swing_needs_two_lower_highs_on_each_side_when_swing_n_is_2(self):
+        bars, lo = self.big_drop_then_break(110)
+        bars[-3] = Bar(bars[-3].t, lo + 5, lo + 11, lo + 1, lo + 2)   # a right-hand candle higher than the swing
+        p = tested_params(100)
+        self.assertFalse(run_day(prev_day(1000), bars, p).trades)
+
+    def test_break_even_moves_the_stop_to_entry(self):
+        bars, lo = self.big_drop_then_break(110)
+        e = lo + 12
+        bars += [Bar(m(200), e, e + 45, e - 1, e + 40), Bar(m(201), e + 40, e + 41, e - 5, e - 4)]
+        p = tested_params(100)
+        p.be_at_r = 1.0
+        tr = run_day(prev_day(1000), bars, p).trades[0]
+        self.assertEqual((tr.reason, tr.exit), ("BE", e))
 
 
 if __name__ == "__main__":

@@ -1,23 +1,23 @@
 # TCI indicators for TradingView: plain-language guide
 
-## Fair Price (newest): JJ Simon's method, 1-minute chart
+## Fair Price Reversal (newest): Nifty 1-minute chart
 
-File: [`fair_price.pine`](fair_price.pine). Made for the **NIFTY or SENSEX 1-minute chart**. The full rules, the
-morning routine, sizing for ₹30k and the test results are in the
-[Fair Price playbook](../FAIR_PRICE_PLAYBOOK.md). The Fair Price Desk app
-([`../app/fair-price-desk.html`](../app/fair-price-desk.html)) reads a screenshot of this chart and works out the
-trade, and it has a copy button for this code.
+File: [`fair_price.pine`](fair_price.pine). Made for the **NIFTY 1-minute chart**. Full rules, the 915-day test
+and what it means for your money: [Fair Price playbook](../FAIR_PRICE_PLAYBOOK.md).
 
-![Fair Price](fair-price-preview.png)
+![Fair Price Reversal](fair-price-preview.png)
 
-- **Blue line**: the fair price (the 9:15 open). Dotted lines: too close to it to trade.
-- **BUY / SELL CONT**: the opening-candle trade at 9:16, only when it agrees with the bias (the table says which).
-- **BUY / SELL BOS**: a candle closed beyond the latest swing, back toward the fair price.
-- **Red / green lines**: stop and target (Nifty 20 / 30, Sensex 60 / 90; the opening trade doubles them when the
-  9:15 candle is big). Hover a label for the option strike, lots and rupee risk.
-- **Table**: fair price, bias, distance to fair, whether the 9:15 to 10:45 window is open, the open trade, today's
-  results, and size. After 2 losses in a row it says STOP.
-- Settings: Index (NIFTY / SENSEX), manual fair price for news days, capital and risk.
+- **Blue line**: the fair price (the 9:15 open).
+- **Dotted lines**: the BUY ZONE below and the SELL ZONE above. Only moves this far from the open are traded
+  (about 94 Nifty points in October 2026; the distance adjusts to recent days by itself).
+- **BUY / SELL label**: a candle closed beyond the latest swing, back toward the open. The label shows the entry,
+  the **STOP** and the **TARGET**, and red and green lines mark them. Stop about 39 Nifty points, target 3 times that.
+- **TARGET HIT / STOP HIT / 3:15 EXIT**: how the trade ended.
+- **Box at the top right**: what to do now (wait, which level to watch, the trade you're in, or done for today).
+- Alerts: condition "Fair Price Reversal", "Any alert() function call".
+
+On 915 days of data it made +43R on Nifty over 125 trades, positive every year. But the last 15 months only
+broke even and the last four lost. Sensex is weaker. His original rules lost heavily over the same period.
 
 ## TCI Smart Money (5-minute chart)
 

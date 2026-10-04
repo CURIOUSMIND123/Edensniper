@@ -5,3 +5,4 @@ data/cache/
 backtest_trades.csv
 STOP
 __pycache__/
+research/.cache/

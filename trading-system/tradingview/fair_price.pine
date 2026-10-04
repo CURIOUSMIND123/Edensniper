@@ -1,99 +1,98 @@
-// Fair Price for TradingView. Select and copy EVERYTHING in this file, including the next line.
+// Fair Price Reversal for TradingView. Select and copy EVERYTHING in this file, including the next line.
 //@version=5
 // ============================================================================
-// Fair Price: JJ Simon's "fair pricing theory" for NIFTY and SENSEX, 1-MINUTE chart only
+// Fair Price Reversal: NIFTY 1-MINUTE chart (it also runs on SENSEX, which was weaker in the test)
 //
-// FAIR PRICE = the 9:15 opening price (blue line). The rush of orders at the open pushes price away
-// from it; for the first 90 minutes price tends to come back. On news days type the pre-news price.
-// BIAS = the opposite of the last session: opened above yesterday's open -> shorts, below -> longs.
-// TRADE 1 (CONT): the 9:15 candle's colour, at its close, only if it agrees with the bias.
-//   If that candle is bigger than the stop, stop and target double and you use half the lots.
-// THEN (BOS): only trades back toward the fair price, on a candle CLOSE beyond the latest swing
-//   (a wick higher / lower than the candle on each side). Displacement entries are optional and
-//   off: they lost money in the test.
-// Only when the fair price is at least 80% of the target away. Fixed stop and target (1 : 1.5):
-//   NIFTY 20 / 30 points, SENSEX 60 / 90 points. New entries 9:15-10:45 only. Anything open
-//   is closed at 3:15. Stop for the day after 2 losses in a row (his rule is 3; 2 suits Rs 30k).
+// Built on JJ Simon's "fair pricing theory", then tuned and tested on 915 days of Nifty 1-minute data
+// (Jan 2023 - Oct 2026). Only the version that held up over the whole period is used.
+// FAIR PRICE = today's 9:15 open (blue line).
+// ZONES = far enough from fair price to trade (dotted lines): 0.8 x the target away from the open.
+//   Only big moves away from the open are traded.
+// SIGNAL = inside a zone, the first 1-minute candle that CLOSES beyond the latest swing, back toward the
+//   fair price. BUY below fair price, SELL above it. A swing high is a candle whose high is above the
+//   2 candles before and the 2 after it (swing low: the same with lows).
+// STOP = 0.4 x the usual opening range. TARGET = 3 x the stop. "Usual opening range" = the median
+//   9:15-10:45 high-low of the last 20 days (Nifty in Oct 2026: about 98 points, so stop ~39, target ~118).
+// New signals 9:15-10:45 only. One trade at a time. 2 losses in a row = done for the day. Exit by 3:15.
 // Reference implementation (same rules, backtested): trading-system/tci/fairprice.py
 // ============================================================================
-indicator("Fair Price (Nifty / Sensex 1m)", "FAIR", overlay = true, max_lines_count = 500, max_labels_count = 500)
+indicator("Fair Price Reversal", "FPR", overlay = true, max_lines_count = 500, max_labels_count = 500)
 
 // ---------------- inputs ----------------
-G0 = "Index"
-idx        = input.string("NIFTY", "Index", options = ["NIFTY", "SENSEX"], group = G0)
-G1 = "Entries"
-useCont    = input.bool(true, "Trade 1: opening candle continuation", group = G1)
-useBias    = input.bool(true, "Opening candle must agree with the bias", group = G1)
-useBOS     = input.bool(true, "Break of structure back toward fair price", group = G1)
-useDisp    = input.bool(false, "Displacement candle back toward fair price (lost money in the test)", group = G1)
-G2 = "Stop and target in index points (0 = preset: NIFTY 20 / 30, SENSEX 60 / 90)"
-slIn       = input.float(0, "Stop", minval = 0, group = G2)
-tpIn       = input.float(0, "Target", minval = 0, group = G2)
-tgtFair    = input.bool(false, "Target = the fair price itself (instead of the fixed target)", group = G2)
-minRoom    = input.float(0.8, "Room needed to fair price, as a share of the target", step = 0.1, group = G2)
-G3 = "Session"
-winSess    = input.session("0915-1045", "New entries only in (IST)", group = G3)
-maxLoss    = input.int(2, "Stop for the day after this many losses in a row (his rule: 3)", minval = 1, maxval = 5, group = G3)
-manualFair = input.float(0, "Manual fair price for today (0 = the 9:15 open). Use on news days", group = G3)
-G4 = "Your money"
-capital    = input.float(30000, "Capital (Rs)", group = G4)
-riskPct    = input.float(5.0, "Max loss per trade (% of capital)", step = 0.5, group = G4)
-delta      = input.float(0.5, "Option delta (at-the-money is about 0.5)", step = 0.05, group = G4)
-costLot    = input.float(130, "Charges + slippage per lot, buy and sell (Rs)", group = G4)
-showTable  = input.bool(true, "Show the plan table", group = G4)
-showBand   = input.bool(true, "Show the no-trade band around fair price", group = G4)
+G1 = "Rules (tested defaults: change them and the test no longer applies)"
+stopK       = input.float(0.4, "Stop = this x the usual opening range", step = 0.05, group = G1)
+rr          = input.float(3.0, "Target = this x the stop", step = 0.5, group = G1)
+roomK       = input.float(0.8, "Zones start this x the target away from fair price", step = 0.1, group = G1)
+swingN      = input.int(2, "Swing strength (candles on each side)", minval = 1, maxval = 5, group = G1)
+winSess     = input.session("0915-1045", "New signals only in (IST)", group = G1)
+maxLoss     = input.int(2, "Done for the day after this many losses in a row", minval = 1, maxval = 5, group = G1)
+nDays       = input.int(20, "Usual opening range: median of the last N days", minval = 3, maxval = 60, group = G1)
+G2 = "Overrides"
+manualFair  = input.float(0, "Manual fair price for today (0 = the 9:15 open)", group = G2)
+manualRange = input.float(0, "Manual usual opening range in points (0 = automatic)", group = G2)
+fallbackPct = input.float(0.45, "Under 3 days of chart history: range = this % of price", step = 0.05, group = G2)
+G3 = "Display"
+showZones   = input.bool(true, "Show the buy / sell zone lines", group = G3)
+showBox     = input.bool(true, "Show the status box", group = G3)
+zoneAlerts  = input.bool(true, "Also alert when price enters a zone", group = G3)
 
-// ---------------- presets ----------------
-isNifty = idx == "NIFTY"
-SL      = slIn > 0 ? slIn : (isNifty ? 20.0 : 60.0)
-TP      = tpIn > 0 ? tpIn : (isNifty ? 30.0 : 90.0)
-lotSize = isNifty ? 65 : 20
-step    = isNifty ? 50 : 100
-TZ      = "Asia/Kolkata"
-GREEN   = color.new(#089981, 0)
-RED     = color.new(#f23645, 0)
-BLUE    = color.new(#2962ff, 0)
+TZ    = "Asia/Kolkata"
+GREEN = color.new(#089981, 0)
+RED   = color.new(#f23645, 0)
+BLUE  = color.new(#2962ff, 0)
+GREY  = color.new(#787b86, 0)
 
 fmt(x) => str.tostring(x, "#,##0.##")
-pts(x) => str.tostring(x, "+#,##0.#;-#,##0.#")
+pts(x) => str.tostring(x, "+#,##0;-#,##0")
 
 hm     = hour(time, TZ) * 100 + minute(time, TZ)
 newDay = dayofmonth(time, TZ) != dayofmonth(time[1], TZ)
 inWin  = not na(time(timeframe.period, winSess, TZ))
+inAM   = hm >= 915 and hm < 1045
+
+// ---------------- the usual opening range (median of past days' 9:15-10:45 high-low) ----------------
+var float[] ranges = array.new_float()
+var float amHi    = na
+var float amLo    = na
+var bool  fullDay = false
+var float uRange  = na
 
 // ---------------- state ----------------
-var float fair        = na
-var float dayOpen     = na
-var float prevDayOpen = na
-var int   bias        = 0
-var int   barsToday   = 0
-var float swHi        = na
-var float swLo        = na
-var int   pos         = 0
-var float pEntry      = na
-var float pSL         = na
-var float pTP         = na
-var int   pBar        = na
-var bool  pBig        = false
-var string pSetup     = ""
-var int   lossRow     = 0
-var bool  stopped     = false
-var int   nTr         = 0
-var int   nWin        = 0
-var int   nLoss       = 0
-var float dayPts      = 0.0
-var line  lFair       = na
-var line  lBandUp     = na
-var line  lBandDn     = na
-var label lbFair      = na
-var line  lSL         = na
-var line  lTP         = na
+var float fair      = na
+var int   barsToday = 0
+var float swHi      = na
+var float swLo      = na
+var int   pos       = 0
+var float pEntry    = na
+var float pSL       = na
+var float pTP       = na
+var int   pBar      = na
+var int   lossRow   = 0
+var bool  stopped   = false
+var int   nTr       = 0
+var int   nWin      = 0
+var int   nLoss     = 0
+var bool  zoneUpSaid = false
+var bool  zoneDnSaid = false
+var line  lFair     = na
+var line  lUp       = na
+var line  lDn       = na
+var label lbFair    = na
+var label lbUp      = na
+var label lbDn      = na
+var line  lSL       = na
+var line  lTP       = na
 
 if newDay
-    prevDayOpen := dayOpen
-    dayOpen := open
+    if fullDay and not na(amHi)
+        array.push(ranges, amHi - amLo)
+        if array.size(ranges) > nDays
+            array.shift(ranges)
+    fullDay := hm == 915
+    amHi := na
+    amLo := na
+    uRange := manualRange > 0 ? manualRange : array.size(ranges) >= 3 ? array.median(ranges) : open * fallbackPct / 100
     fair := manualFair > 0 ? manualFair : open
-    bias := na(prevDayOpen) ? 0 : open > prevDayOpen ? -1 : open < prevDayOpen ? 1 : 0
     barsToday := 0
     swHi := na
     swLo := na
@@ -103,24 +102,37 @@ if newDay
     nTr := 0
     nWin := 0
     nLoss := 0
-    dayPts := 0.0
+    zoneUpSaid := false
+    zoneDnSaid := false
     lFair := line.new(bar_index, fair, bar_index + 1, fair, color = BLUE, width = 2)
-    if showBand
-        lBandUp := line.new(bar_index, fair + minRoom * TP, bar_index + 1, fair + minRoom * TP, color = color.new(BLUE, 70), style = line.style_dotted)
-        lBandDn := line.new(bar_index, fair - minRoom * TP, bar_index + 1, fair - minRoom * TP, color = color.new(BLUE, 70), style = line.style_dotted)
     label.delete(lbFair)
     lbFair := label.new(bar_index, fair, "FAIR " + fmt(fair), style = label.style_label_left, color = BLUE, textcolor = color.white, size = size.small)
 barsToday += 1
+if inAM
+    amHi := na(amHi) ? high : math.max(amHi, high)
+    amLo := na(amLo) ? low : math.min(amLo, low)
 
-// keep today's fair price line and label running to the latest candle
+SL   = stopK * uRange
+TP   = rr * SL
+room = roomK * TP
+
+// zone lines for today
+if newDay and showZones and not na(fair)
+    lUp := line.new(bar_index, fair + room, bar_index + 1, fair + room, color = color.new(RED, 40), style = line.style_dotted, width = 2)
+    lDn := line.new(bar_index, fair - room, bar_index + 1, fair - room, color = color.new(GREEN, 40), style = line.style_dotted, width = 2)
+    label.delete(lbUp)
+    label.delete(lbDn)
+    lbUp := label.new(bar_index, fair + room, "SELL ZONE above " + fmt(fair + room), style = label.style_label_left, color = color.new(RED, 85), textcolor = RED, size = size.small)
+    lbDn := label.new(bar_index, fair - room, "BUY ZONE below " + fmt(fair - room), style = label.style_label_left, color = color.new(GREEN, 85), textcolor = GREEN, size = size.small)
 line.set_x2(lFair, bar_index + 1)
-if showBand
-    line.set_x2(lBandUp, bar_index + 1)
-    line.set_x2(lBandDn, bar_index + 1)
 label.set_x(lbFair, bar_index + 3)
+if showZones
+    line.set_x2(lUp, bar_index + 1)
+    line.set_x2(lDn, bar_index + 1)
+    label.set_x(lbUp, bar_index + 3)
+    label.set_x(lbDn, bar_index + 3)
 
-// ---------------- exits (finished candles only) ----------------
-// Candle path: green goes open-low-high-close, red goes open-high-low-close.
+// ---------------- exits (finished candles; green goes open-low-high-close, red open-high-low-close) ----------------
 hitAt(float px, int side, float sl, float tp) => side * (px - sl) <= 0 ? -1 : side * (px - tp) >= 0 ? 1 : 0
 
 if barstate.isconfirmed and pos != 0 and bar_index > pBar
@@ -133,13 +145,12 @@ if barstate.isconfirmed and pos != 0 and bar_index > pBar
     string why = ""
     if hit != 0
         exitPx := hit == 1 ? pTP : pSL
-        why := hit == 1 ? "TP" : "SL"
+        why := hit == 1 ? "TARGET HIT" : "STOP HIT"
     else if hm >= 1515
         exitPx := close
-        why := "3:15 exit"
+        why := "3:15 EXIT"
     if not na(exitPx)
         p = pos * (exitPx - pEntry)
-        dayPts += p
         if p > 0
             nWin += 1
             lossRow := 0
@@ -148,93 +159,105 @@ if barstate.isconfirmed and pos != 0 and bar_index > pBar
             lossRow += 1
             if lossRow >= maxLoss
                 stopped := true
-        label.new(bar_index, exitPx, why + " " + pts(p), style = label.style_none, textcolor = p >= 0 ? GREEN : RED, size = size.small)
-        alert("FAIR PRICE exit " + (pos == 1 ? "BUY" : "SELL") + ": " + why + " at " + fmt(exitPx) + " (" + pts(p) + " pts)", alert.freq_once_per_bar_close)
+        label.new(bar_index, exitPx, why + " " + pts(p) + " pts", style = label.style_label_left, color = color.new(p >= 0 ? GREEN : RED, 85), textcolor = p >= 0 ? GREEN : RED, size = size.small)
+        alert("FPR " + syminfo.ticker + " EXIT " + (pos == 1 ? "BUY" : "SELL") + ": " + why + " at " + fmt(exitPx) + " (" + pts(p) + " pts)", alert.freq_once_per_bar_close)
         line.set_x2(lSL, bar_index)
         line.set_x2(lTP, bar_index)
         pos := 0
         if stopped
-            label.new(bar_index, close, "STOP for today: " + str.tostring(lossRow) + " losses in a row", yloc = yloc.abovebar, style = label.style_label_down, color = color.gray, textcolor = color.white, size = size.small)
-            alert("FAIR PRICE: " + str.tostring(lossRow) + " losses in a row. Stop trading for today.", alert.freq_once_per_bar_close)
+            label.new(bar_index, close, "DONE FOR TODAY: " + str.tostring(lossRow) + " losses in a row", yloc = yloc.abovebar, style = label.style_label_down, color = GREY, textcolor = color.white, size = size.small)
+            alert("FPR " + syminfo.ticker + ": " + str.tostring(lossRow) + " losses in a row. No more trades today.", alert.freq_once_per_bar_close)
 
 if pos != 0
     line.set_x2(lSL, bar_index + 1)
     line.set_x2(lTP, bar_index + 1)
 
-// ---------------- swings (a wick beyond the candle before and after it) ----------------
-if barstate.isconfirmed and barsToday >= 3
-    if low[1] < low[2] and low[1] < low
-        swLo := low[1]
-    if high[1] > high[2] and high[1] > high
-        swHi := high[1]
+// ---------------- swings (only today's candles) ----------------
+isSwingHigh(int n) =>
+    bool ok = true
+    float m = high[n]
+    for i = 0 to 2 * n
+        if i != n and high[i] >= m
+            ok := false
+    ok
+isSwingLow(int n) =>
+    bool ok = true
+    float m = low[n]
+    for i = 0 to 2 * n
+        if i != n and low[i] <= m
+            ok := false
+    ok
+swHnow = isSwingHigh(swingN)
+swLnow = isSwingLow(swingN)
+if barstate.isconfirmed and barsToday >= 2 * swingN + 1
+    if swLnow
+        swLo := low[swingN]
+    if swHnow
+        swHi := high[swingN]
 
 // ---------------- entries (on the candle close) ----------------
-int sig = 0
-string setup = ""
-float sl0 = SL
-float tp0 = TP
-bool big = false
-if barstate.isconfirmed and pos == 0
-    if barsToday == 1
-        col = close > open ? 1 : close < open ? -1 : 0
-        if useCont and col != 0 and (not useBias or col == bias)
-            big := high - low > SL
-            sig := col
-            setup := "CONT"
-            sl0 := big ? 2 * SL : SL
-            tp0 := big ? 2 * TP : TP
-    else if not stopped and inWin
-        gap = fair - close
-        d = gap > 0 ? 1 : -1
-        room = math.abs(gap)
-        roomOk = tgtFair ? room >= 1.5 * SL : room >= minRoom * TP
-        bos = d == 1 ? (not na(swHi) and close > swHi and close[1] <= swHi) : (not na(swLo) and close < swLo and close[1] >= swLo)
-        body = math.abs(close - open)
-        disp = d == 1 ? (close > open and close[1] < open[1] and body > math.abs(close[1] - open[1]) and close > high[1]) : (close < open and close[1] > open[1] and body > math.abs(close[1] - open[1]) and close < low[1])
-        if roomOk and useBOS and bos
-            sig := d
-            setup := "BOS"
-        else if roomOk and useDisp and disp
-            sig := d
-            setup := "DISP"
-        tp0 := tgtFair ? room : TP
+gap = fair - close
+inBuyZone  = not na(fair) and gap >= room
+inSellZone = not na(fair) and -gap >= room
+if barstate.isconfirmed and zoneAlerts and inWin and pos == 0 and not stopped
+    if inBuyZone and not zoneDnSaid
+        zoneDnSaid := true
+        alert("FPR " + syminfo.ticker + ": price is in the BUY ZONE (below " + fmt(fair - room) + "). Watch for a candle to close above the last swing high.", alert.freq_once_per_bar_close)
+    if inSellZone and not zoneUpSaid
+        zoneUpSaid := true
+        alert("FPR " + syminfo.ticker + ": price is in the SELL ZONE (above " + fmt(fair + room) + "). Watch for a candle to close below the last swing low.", alert.freq_once_per_bar_close)
 
-riskLot  = sl0 * delta * lotSize + costLot
-lotsOk   = math.floor(capital * riskPct / 100 / riskLot)
-atm      = math.round(close / step) * step
+int sig = 0
+if barstate.isconfirmed and pos == 0 and not stopped and inWin and barsToday > 1
+    if inBuyZone and not na(swHi) and close > swHi and close[1] <= swHi
+        sig := 1
+    else if inSellZone and not na(swLo) and close < swLo and close[1] >= swLo
+        sig := -1
 
 if sig != 0
     pos := sig
     pEntry := close
-    pSL := close - sig * sl0
-    pTP := close + sig * tp0
+    pSL := close - sig * SL
+    pTP := close + sig * TP
     pBar := bar_index
-    pBig := big
-    pSetup := setup
     nTr += 1
     lSL := line.new(bar_index, pSL, bar_index + 1, pSL, color = RED, width = 2)
     lTP := line.new(bar_index, pTP, bar_index + 1, pTP, color = GREEN, width = 2)
-    opt = str.tostring(atm) + (sig == 1 ? " CE" : " PE")
-    sizeTxt = lotsOk >= 1 ? "Buy " + opt + ", " + str.tostring(lotsOk) + " lot(s)\nLoss if SL hits about Rs " + fmt(math.round(riskLot * lotsOk)) : "SKIP: one lot would lose about Rs " + fmt(math.round(riskLot)) + ", more than your limit"
-    tip = setup + (big ? " (big opening candle: double stop, half size)" : "") + "\nEntry " + fmt(close) + "\nSL " + fmt(pSL) + " (" + fmt(sl0) + " pts)\nTarget " + fmt(pTP) + " (" + fmt(tp0) + " pts)\n" + sizeTxt
-    label.new(bar_index, close, (sig == 1 ? "BUY " : "SELL ") + fmt(close), yloc = sig == 1 ? yloc.belowbar : yloc.abovebar, style = sig == 1 ? label.style_label_up : label.style_label_down, color = sig == 1 ? GREEN : RED, textcolor = color.white, size = size.small, tooltip = tip)
-    alert("FAIR PRICE " + (sig == 1 ? "BUY " : "SELL ") + setup + " at " + fmt(close) + " | SL " + fmt(pSL) + " | target " + fmt(pTP) + " | " + (lotsOk >= 1 ? "buy " + opt + ", " + str.tostring(lotsOk) + " lot(s)" : "SKIP: too big for your capital"), alert.freq_once_per_bar_close)
+    txt = (sig == 1 ? "BUY " : "SELL ") + fmt(close) + "\nSTOP " + fmt(pSL) + "\nTARGET " + fmt(pTP)
+    label.new(bar_index, close, txt, yloc = sig == 1 ? yloc.belowbar : yloc.abovebar, style = sig == 1 ? label.style_label_up : label.style_label_down, color = sig == 1 ? GREEN : RED, textcolor = color.white, size = size.normal)
+    alert("FPR " + syminfo.ticker + " " + (sig == 1 ? "BUY" : "SELL") + " at " + fmt(close) + " | STOP " + fmt(pSL) + " | TARGET " + fmt(pTP), alert.freq_once_per_bar_close)
 
-// ---------------- plan table ----------------
-var table tb = table.new(position.top_right, 2, 8, bgcolor = color.new(color.white, 8), border_color = color.new(color.gray, 70), border_width = 1)
-row(int r, string k, string v, color c) =>
-    table.cell(tb, 0, r, k, text_color = color.gray, text_size = size.small, text_halign = text.align_left)
-    table.cell(tb, 1, r, v, text_color = c, text_size = size.small, text_halign = text.align_left)
+// ---------------- status box ----------------
+var table tb = table.new(position.top_right, 1, 3, bgcolor = color.new(color.white, 5), border_color = color.new(GREY, 70), border_width = 1)
+putRow(int r, string v, color c, string sz) =>
+    table.cell(tb, 0, r, v, text_color = c, text_size = sz, text_halign = text.align_left)
 
-if showTable and barstate.islast
-    dist = close - fair
-    rl = SL * delta * lotSize + costLot
-    nl = math.floor(capital * riskPct / 100 / rl)
-    row(0, "Chart", timeframe.period == "1" ? idx + " 1-minute" : "Switch to the 1-minute chart", timeframe.period == "1" ? color.black : RED)
-    row(1, "Fair price", fmt(fair) + (manualFair > 0 ? " (manual)" : " (9:15 open)"), BLUE)
-    row(2, "Bias today", bias == 1 ? "LONGS (opened below yesterday's open)" : bias == -1 ? "SHORTS (opened above yesterday's open)" : "none", bias == 1 ? GREEN : bias == -1 ? RED : color.gray)
-    row(3, "Price vs fair", pts(dist) + " pts: " + (math.abs(dist) < minRoom * TP ? "too close, wait" : dist > 0 ? "look for SELL back to fair" : "look for BUY back to fair"), color.black)
-    row(4, "Window", inWin ? "OPEN until 10:45" : "closed: no new trades", inWin ? GREEN : color.gray)
-    row(5, "Trade", pos == 0 ? "none open" : (pos == 1 ? "BUY " : "SELL ") + fmt(pEntry) + "  SL " + fmt(pSL) + "  T " + fmt(pTP), pos == 1 ? GREEN : pos == -1 ? RED : color.gray)
-    row(6, "Today", str.tostring(nTr) + " trades, " + str.tostring(nWin) + " won, " + str.tostring(nLoss) + " lost, " + pts(dayPts) + " pts" + (stopped ? "  STOPPED" : ""), stopped ? RED : color.black)
-    row(7, "Size", "SL " + fmt(SL) + " / T " + fmt(TP) + " pts. Loss per lot ~Rs " + fmt(math.round(rl)) + " -> " + str.tostring(nl) + " lot(s)", nl >= 1 ? color.black : RED)
+if showBox and barstate.islast
+    string msg = ""
+    color nowC = GREY
+    if timeframe.period != "1"
+        msg := "Switch the chart to 1 minute"
+        nowC := RED
+    else if na(fair)
+        msg := "Waiting for the 9:15 open"
+    else if pos == 1
+        msg := "IN BUY from " + fmt(pEntry) + "   STOP " + fmt(pSL) + "   TARGET " + fmt(pTP)
+        nowC := GREEN
+    else if pos == -1
+        msg := "IN SELL from " + fmt(pEntry) + "   STOP " + fmt(pSL) + "   TARGET " + fmt(pTP)
+        nowC := RED
+    else if stopped
+        msg := "DONE FOR TODAY (" + str.tostring(lossRow) + " losses in a row)"
+    else if hm >= 1045 or hm < 915
+        msg := "No new trades now (signals 9:15-10:45 only)"
+    else if inBuyZone
+        msg := na(swHi) ? "BUY ZONE: wait for a swing high to form" : close > swHi ? "BUY ZONE: already above the last swing high, wait for a new one" : "BUY ZONE: BUY if a candle closes above " + fmt(swHi)
+        nowC := GREEN
+    else if inSellZone
+        msg := na(swLo) ? "SELL ZONE: wait for a swing low to form" : close < swLo ? "SELL ZONE: already below the last swing low, wait for a new one" : "SELL ZONE: SELL if a candle closes below " + fmt(swLo)
+        nowC := RED
+    else
+        msg := "WAIT: price " + pts(close - fair) + " from fair. BUY zone below " + fmt(fair - room) + ", SELL zone above " + fmt(fair + room)
+    putRow(0, msg, nowC, size.normal)
+    putRow(1, "Fair " + fmt(fair) + "   stop " + fmt(math.round(SL)) + " pts   target " + fmt(math.round(TP)) + " pts", color.black, size.small)
+    putRow(2, "Today: " + str.tostring(nTr) + " trade(s), " + str.tostring(nWin) + " won, " + str.tostring(nLoss) + " lost", color.black, size.small)

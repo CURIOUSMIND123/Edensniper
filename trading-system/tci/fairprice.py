@@ -26,6 +26,11 @@ over the next 90 minutes price tends to come back. So:
 
 Points are index points. Defaults are for Nifty; scale them for Sensex
 (about 3.1x). Everything here works on finished 1-minute candles.
+
+The defaults above are his rules as given. On 915 days of Nifty 1-minute data
+(2023-2026) they lose money after costs. `tested_params` is the version that
+held up: break-of-structure entries only, and only after a big move away from
+the open, with stop and target sized from the usual opening range.
 """
 from __future__ import annotations
 
@@ -53,6 +58,11 @@ class FPParams:
     use_bias: bool = True            # continuation must agree with the higher-timeframe bias
     use_displacement: bool = True
     use_bos: bool = True
+    swing_n: int = 1                 # a swing high/low needs this many candles on each side
+    be_at_r: float = 0.0             # move the stop to entry once price has gone this many R in favour (0 = off)
+    cont_stop: str = "fixed"         # opening trade stop: "fixed" (sl, doubled when big) or "candle" (other end of the 9:15 candle)
+    cont_rr: float = 1.5             # target = cont_rr x stop when cont_stop = "candle"
+    toward: bool = True              # True: trade back toward fair price (his rule); False: trade breaks away from it
 
 
 @dataclass
@@ -64,6 +74,7 @@ class FPTrade:
     sl: float
     tp: float
     size: float = 1.0                # 0.5 when the opening candle was big
+    risk0: float = 0.0               # the stop distance at entry
     closed: Optional[datetime] = None
     exit: Optional[float] = None
     reason: str = ""
@@ -78,7 +89,7 @@ class FPTrade:
 
     @property
     def risk(self) -> float:
-        return abs(self.entry - self.sl)
+        return self.risk0 or abs(self.entry - self.sl)
 
     @property
     def r(self) -> float:
@@ -133,19 +144,21 @@ class FairPriceDay:
         return self.swing_high is not None and b.c > self.swing_high >= pb.c
 
     def _update_swings(self):
-        """A swing low is a wick lower than the candle before and after it (needs the next candle)."""
-        if len(self.bars) < 3:
+        """A swing low is a wick lower than the swing_n candles before and after it (known swing_n candles later)."""
+        n = self.p.swing_n
+        if len(self.bars) < 2 * n + 1:
             return
-        a, m, z = self.bars[-3], self.bars[-2], self.bars[-1]
-        if m.l < a.l and m.l < z.l:
+        m = self.bars[-n - 1]
+        side = self.bars[-2 * n - 1:-n - 1] + self.bars[-n:]
+        if all(m.l < x.l for x in side):
             self.swing_low = m.l
-        if m.h > a.h and m.h > z.h:
+        if all(m.h > x.h for x in side):
             self.swing_high = m.h
 
     # ---- orders -----------------------------------------------------------------------
     def _open(self, t: datetime, side: str, setup: str, px: float, sl: float, tp: float, size: float = 1.0):
         s = 1 if side == "BUY" else -1
-        self.position = FPTrade(side, setup, t, px, px - s * sl, px + s * tp, size)
+        self.position = FPTrade(side, setup, t, px, px - s * sl, px + s * tp, size, risk0=sl)
         self.trades.append(self.position)
 
     def _close(self, t: datetime, px: float, reason: str):
@@ -164,9 +177,11 @@ class FairPriceDay:
         if tr is None:
             return
         if tr.sign * (px - tr.sl) <= 0:
-            self._close(t, tr.sl, "SL")
+            self._close(t, tr.sl, "BE" if tr.sl == tr.entry else "SL")
         elif tr.sign * (px - tr.tp) >= 0:
             self._close(t, tr.tp, "TP")
+        elif self.p.be_at_r and tr.sign * (px - tr.entry) >= self.p.be_at_r * tr.risk0 and tr.sign * (tr.sl - tr.entry) < 0:
+            tr.sl = tr.entry
 
     def on_bar_close(self, b: Bar):
         p = self.p
@@ -203,6 +218,10 @@ class FairPriceDay:
             return
         if p.use_bias and colour != self.bias:
             return
+        if p.cont_stop == "candle":
+            sl = max(abs(b.c - (b.l if colour > 0 else b.h)), 1.0)
+            self._open(b.t, "BUY" if colour > 0 else "SELL", "CONT", b.c, sl, p.cont_rr * sl)
+            return
         big = (b.h - b.l) > p.big_open
         sl, tp, size = (2 * p.sl, 2 * p.tp, 0.5) if big else (p.sl, p.tp, 1.0)
         self._open(b.t, "BUY" if colour > 0 else "SELL", "CONT", b.c, sl, tp, size)
@@ -210,7 +229,7 @@ class FairPriceDay:
     def _reversion(self, b: Bar):
         p = self.p
         gap = self.fair - b.c                   # >0 means fair price is above -> buy
-        d = 1 if gap > 0 else -1
+        d = (1 if gap > 0 else -1) * (1 if p.toward else -1)
         room = abs(gap)
         if p.target == "fair":
             if room < 1.5 * p.sl:               # still want at least 1 : 1.5 to fair price
@@ -242,3 +261,24 @@ def run_day(prev_day: List[Bar], today: List[Bar], p: Optional[FPParams] = None)
     if s.position is not None and today:
         s._close(today[-1].t, today[-1].c, "end")
     return s
+
+
+def usual_range(past_ranges: List[float], n: int = 20) -> Optional[float]:
+    """Median 9:15-10:45 high-low of the last n days (None with fewer than 3 days)."""
+    xs = sorted(past_ranges[-n:])
+    if len(xs) < 3:
+        return None
+    k = len(xs) // 2
+    return xs[k] if len(xs) % 2 else (xs[k - 1] + xs[k]) / 2
+
+
+def tested_params(rng: float) -> FPParams:
+    """The tested version for a day whose usual opening range is `rng` points.
+
+    Stop 0.4 x range, target 3 x stop, enter only 0.8 x target away from the open,
+    on a close beyond a 2-candle swing back toward it, 9:15-10:45, 2 losses in a row
+    ends the day. This is what tradingview/fair_price.pine draws.
+    """
+    sl = 0.4 * rng
+    return FPParams(sl=sl, tp=3.0 * sl, big_open=sl, min_room=0.8, end=time(10, 45), max_losses=2,
+                    use_continuation=False, use_displacement=False, use_bos=True, swing_n=2)
