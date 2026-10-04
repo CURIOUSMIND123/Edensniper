@@ -97,6 +97,11 @@ for one year would turn ₹30,000 into more money than exists. Treat any method 
 | Supertrend (24 variants) | About break-even after costs (+10R Nifty over 1,034 trades) |
 | EMA crossover (32 variants) | About break-even after costs |
 | His displacement entries, his afternoon session, the opening-candle trade | Lost money or broke even, so they're left out |
+| TCI + JJ combined (liquidity sweep back toward the open), 144 variants | Didn't hold up after the tuning period |
+| Machine learning on 26 TCI / JJ / momentum measurements, about 10 trades a day | Right 51-52% of the time; −25,200 Nifty points after costs over 680 days |
+| FII vs retail positioning (NSE participant open interest) | No help during the day; it made the model worse |
+
+Plain-language summary of all of this: [`research/WHAT_THE_TESTS_SHOW.md`](research/WHAT_THE_TESTS_SHOW.md).
 
 ## Trading it with options
 
