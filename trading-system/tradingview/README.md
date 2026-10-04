@@ -1,6 +1,19 @@
 # TCI indicators for TradingView: plain-language guide
 
-## Liquidity Trap (newest): Nifty 5-minute chart, high win rate
+## Breakout Retest (newest): Nifty 5-minute chart, 1-2 trades a day
+
+File: [`breakout_retest.pine`](breakout_retest.pine). A TradingView **strategy**: open the Strategy Tester tab for
+its results on your chart.
+
+- Dashed lines: the levels it watches (yesterday's high / low, opening range, today's swings).
+- **BUY / SELL** after a real breakout (an expanding candle through a level), a pullback to the level, and a
+  candle that closes past the previous one. The label shows the entry and **STOP** (about 29 Nifty points). The
+  red line follows the stop: to entry after +15 points, then trailing about 59 points behind the best close.
+- Tested on Nifty, Jan 2023 to Oct 2026: 1.6 trades a day, 25% won, wins +77 / losses −24 on average,
+  +1,621 points after costs, but 2025 lost and random directions did as well 1 time in 5. Details:
+  [`../research/WHAT_THE_TESTS_SHOW.md`](../research/WHAT_THE_TESTS_SHOW.md).
+
+## Liquidity Trap: Nifty 5-minute chart, high win rate
 
 File: [`liquidity_trap.pine`](liquidity_trap.pine). A TradingView **strategy** for the **NIFTY 5-minute chart**:
 open the Strategy Tester tab to see its win rate and profit on your own chart, after 4 points of costs per trade.

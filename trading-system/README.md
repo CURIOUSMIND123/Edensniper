@@ -1,6 +1,10 @@
 # TCI zone-breakout system for Groww: indicator, backtester, paper and live bot
 
-> **Newest: the Liquidity Trap strategy** for the Nifty 5-minute chart
+> **Newest: the Breakout Retest strategy** for the Nifty 5-minute chart
+> ([`tradingview/breakout_retest.pine`](tradingview/breakout_retest.pine)): breakout, pullback, reversal candle,
+> trailing stop; 1-2 trades a day, about 1 in 4 won, winners about 3× the losers.
+>
+> **Also: the Liquidity Trap strategy** for the Nifty 5-minute chart
 > ([`tradingview/liquidity_trap.pine`](tradingview/liquidity_trap.pine)): stop hunts at yesterday's high / low,
 > about 78% of trades won since 2023, with TradingView's Strategy Tester showing the results on your chart.
 > What every test found, in plain words: [`research/WHAT_THE_TESTS_SHOW.md`](research/WHAT_THE_TESTS_SHOW.md).
@@ -249,6 +253,7 @@ Start with `"max_lots": 1`.
 | `live.py` | Paper or live session for today, or `--replay` of a saved day |
 | `backtest.py` | Backtest on Groww historical index and option candles, with the random-direction check and `--stop-mults` |
 | `call_helper.py` | Follow a live call with a wider stop: your stop, break-even level, rupee risk and lots |
+| `tradingview/breakout_retest.pine` | **Breakout Retest** strategy (5-minute): real breakout, pullback, reversal candle, trailing stop, results box |
 | `tradingview/liquidity_trap.pine` | **Liquidity Trap** strategy (5-minute): stop hunts at yesterday's high / low, stop / target, results box, Strategy Tester |
 | `FAIR_PRICE_PLAYBOOK.md` | **Fair Price Reversal**: rules, how to read the indicator, the 915-day test, what was dropped |
 | `tradingview/fair_price.pine` | **Fair Price Reversal** indicator: fair price, buy / sell zones, BUY / SELL with stop and target, status box, alerts |

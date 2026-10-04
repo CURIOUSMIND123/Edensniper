@@ -79,6 +79,28 @@ about 8 points beyond the level and closes back inside; target about 25 points, 
 It's in `tradingview/liquidity_trap.pine` as a TradingView strategy, so TradingView's Strategy Tester shows the
 same numbers on your own chart.
 
+## Breakout, pullback, ride: trades every day
+
+I tested 960 versions of: a breakout through a level (yesterday's high / low, the opening range, today's
+swings), with or without a "real breakout" filter (a strong or expanding candle); a pullback to the level; a
+reversal candle (close past the previous candle, engulfing, or pin bar); then a fixed target, a trailing stop or
+holding to 3:15.
+
+- 448 of them traded at least 0.8 times a day in the last 90 days. 43 made money there, 7 also in the 90 days
+  before, 5 also over all 3¾ years, and 3 also on Sensex.
+- **Win rates were 20-40%, never 70-80%.** Riding a move means many small losses (stopped or scratched at
+  entry) and a few big wins. 11 versions won 70%+ in the last 90 days; none of them made money.
+- The best all-round version, **Breakout Retest**: real breakout (candle range at least 1.5× the last six),
+  pullback within about 12 points of the level, entry on a close past the previous candle, stop about 29
+  points, stop to entry after +15, then a trail about 59 points behind the best close.
+  - Nifty: 1,482 trades (1.6 a day), 25% won, average win +77 and loss −24, +1,621 points after costs.
+    Last 90 days +163, the 90 days before +975, but 2025 lost −1,546. About 2 days in 3 lost money.
+  - Sensex: +3,334 Sensex points over all years, but −154 in the last 90 days and −5,224 in 2025.
+  - **Random buy / sell directions with the same entries and exits did as well in about 1 run in 5.** The
+    profit comes mostly from cutting losers fast and riding the occasional trend, not from calling direction.
+
+It's in `tradingview/breakout_retest.pine` as a TradingView strategy.
+
 ## How to re-check all of this
 
 - `python research/fair_price_backtest.py` downloads the candles and re-runs the Fair Price test.
