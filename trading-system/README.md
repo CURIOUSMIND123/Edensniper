@@ -1,9 +1,13 @@
 # TCI zone-breakout system for Groww: indicator, backtester, paper and live bot
 
-> **Looking for the TradingView indicator?** Use **TCI Smart Money**
-> ([`tradingview/tci_smart_money.pine`](tradingview/tci_smart_money.pine)). It has a liquidity map above and below
-> price (also before the open), trap / retest signals, SL of at least 25, T1 of at least 50, a MAX target and a
-> trailing SL. Plain-language guide: [`tradingview/README.md`](tradingview/README.md).
+> **Newest: the Fair Price playbook** ([`FAIR_PRICE_PLAYBOOK.md`](FAIR_PRICE_PLAYBOOK.md)). It's JJ Simon's
+> fair-price method for the Nifty and Sensex 1-minute chart, with an indicator
+> ([`tradingview/fair_price.pine`](tradingview/fair_price.pine)), a screenshot calculator app
+> ([`app/fair-price-desk.html`](app/fair-price-desk.html)) and its test results.
+>
+> The earlier **TCI Smart Money** indicator ([`tradingview/tci_smart_money.pine`](tradingview/tci_smart_money.pine))
+> is for the 5-minute chart: liquidity map, trap / retest signals, SL / T1 / MAX. Guide:
+> [`tradingview/README.md`](tradingview/README.md).
 
 This folder turns the method described in [`docs/trading-cafe-analysis`](../docs/trading-cafe-analysis/README.md) into
 fixed rules that a computer can follow. It contains:
@@ -241,6 +245,10 @@ Start with `"max_lots": 1`.
 | `live.py` | Paper or live session for today, or `--replay` of a saved day |
 | `backtest.py` | Backtest on Groww historical index and option candles, with the random-direction check and `--stop-mults` |
 | `call_helper.py` | Follow a live call with a wider stop: your stop, break-even level, rupee risk and lots |
+| `FAIR_PRICE_PLAYBOOK.md` | **Fair Price** method for Nifty / Sensex 1-minute: rules, routine, ₹30k sizing, test results |
+| `tradingview/fair_price.pine` | **Fair Price** indicator: fair price line, opening-candle and break-of-structure signals, stop / target, plan table |
+| `tci/fairprice.py` | The Fair Price rules in Python (backtested; the reference for the indicator) |
+| `app/fair-price-desk.html` | **Fair Price Desk**: reads a chart screenshot, gives entry, stop, target, strike, lots; today's trade log |
 | `tradingview/tci_smart_money.pine` | **TCI Smart Money** indicator: liquidity map, trap / retest signals, SL / T1 / MAX ([guide](tradingview/README.md)) |
 | `tci/smartmoney.py` | The Smart Money rules in Python (backtested; the reference for the indicator) |
 | `tradingview/tci_all_in_one.pine` | **TCI All-in-One** indicator: his full method plus smart-money context ([guide](tradingview/README.md)) |

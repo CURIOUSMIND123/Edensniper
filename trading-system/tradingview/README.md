@@ -1,6 +1,25 @@
 # TCI indicators for TradingView: plain-language guide
 
-## TCI Smart Money (newest, use this one)
+## Fair Price (newest): JJ Simon's method, 1-minute chart
+
+File: [`fair_price.pine`](fair_price.pine). Made for the **NIFTY or SENSEX 1-minute chart**. The full rules, the
+morning routine, sizing for ₹30k and the test results are in the
+[Fair Price playbook](../FAIR_PRICE_PLAYBOOK.md). The Fair Price Desk app
+([`../app/fair-price-desk.html`](../app/fair-price-desk.html)) reads a screenshot of this chart and works out the
+trade, and it has a copy button for this code.
+
+![Fair Price](fair-price-preview.png)
+
+- **Blue line**: the fair price (the 9:15 open). Dotted lines: too close to it to trade.
+- **BUY / SELL CONT**: the opening-candle trade at 9:16, only when it agrees with the bias (the table says which).
+- **BUY / SELL BOS**: a candle closed beyond the latest swing, back toward the fair price.
+- **Red / green lines**: stop and target (Nifty 20 / 30, Sensex 60 / 90; the opening trade doubles them when the
+  9:15 candle is big). Hover a label for the option strike, lots and rupee risk.
+- **Table**: fair price, bias, distance to fair, whether the 9:15 to 10:45 window is open, the open trade, today's
+  results, and size. After 2 losses in a row it says STOP.
+- Settings: Index (NIFTY / SENSEX), manual fair price for news days, capital and risk.
+
+## TCI Smart Money (5-minute chart)
 
 File: [`tci_smart_money.pine`](tci_smart_money.pine). Copy it with the button on the copy page.
 Made for the **NIFTY 5-minute chart**.

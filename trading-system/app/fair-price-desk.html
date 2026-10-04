@@ -1,0 +1,794 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>[hidden]{display:none!important} body{margin:0} img{max-width:100%}</style>
+</head>
+<body>
+<title>Fair Price Desk</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Condensed:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+/* Layout: a trading-desk tool. Tabs on top; on wide screens inputs left, the trade plan right (sticky). */
+:root {
+  --bg: #f3f5f9; --panel: #ffffff; --ink: #121a2b; --muted: #5a6478; --line: #dde2ec;
+  --fair: #2962ff; --fair-soft: #e8eeff; --buy: #08876f; --buy-soft: #e3f4ef; --sell: #d92d3c; --sell-soft: #fde9eb;
+  --warn-bg: #fff3dc; --warn-fg: #7a4b00; --code-bg: #0f1424; --code-fg: #d6def0; --off: #8a93a6;
+  --display: "IBM Plex Sans Condensed", "Arial Narrow", system-ui, sans-serif;
+  --sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0d1220; --panel: #151b2b; --ink: #e6eaf3; --muted: #9aa4b8; --line: #263049;
+  --fair: #7b9bff; --fair-soft: #1b2546; --buy: #27c29b; --buy-soft: #12302a; --sell: #ff6b76; --sell-soft: #3a1a20;
+  --warn-bg: #2c230f; --warn-fg: #f3c877; --code-bg: #090d18; --code-fg: #cdd6ea; --off: #6f7891; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #0d1220; --panel: #151b2b; --ink: #e6eaf3; --muted: #9aa4b8; --line: #263049;
+  --fair: #7b9bff; --fair-soft: #1b2546; --buy: #27c29b; --buy-soft: #12302a; --sell: #ff6b76; --sell-soft: #3a1a20;
+  --warn-bg: #2c230f; --warn-fg: #f3c877; --code-bg: #090d18; --code-fg: #cdd6ea; --off: #6f7891; color-scheme: dark }
+body { background: var(--bg); color: var(--ink); font-family: var(--sans); font-size: 15px; line-height: 1.5; }
+.wrap { max-width: 1120px; margin: 0 auto; padding-inline: 16px; padding-block: 20px 56px; display: grid; gap: 18px; }
+header { display: grid; gap: 4px; }
+h1 { font: 700 2rem/1.1 var(--display); margin: 0; letter-spacing: 0.01em; text-wrap: balance; }
+h1 .line { display: inline-block; width: 36px; height: 3px; background: var(--fair); vertical-align: middle; margin-right: 10px; border-radius: 2px; }
+.sub { margin: 0; color: var(--muted); max-width: 70ch; }
+h2 { font: 700 1.2rem/1.2 var(--display); margin: 0; letter-spacing: 0.01em; }
+h3 { font: 600 0.78rem/1.2 var(--sans); margin: 0; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+p { margin: 0; }
+.tabs { display: flex; flex-wrap: wrap; gap: 6px; border-bottom: 1px solid var(--line); }
+.tab { font: 600 0.95rem var(--sans); background: none; border: 0; border-bottom: 3px solid transparent; color: var(--muted); padding: 10px 12px; cursor: pointer; }
+.tab[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--fair); }
+.tab:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 3px solid var(--fair); outline-offset: 2px; }
+.grid { display: grid; gap: 18px; grid-template-columns: minmax(0, 1fr); align-items: start; }
+@media (min-width: 900px) { .grid { grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); } .sticky { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 12px); } }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px; display: grid; gap: 14px; min-width: 0; }
+.drop { border: 2px dashed var(--line); border-radius: 10px; padding: 16px; display: grid; gap: 10px; justify-items: start; }
+.drop.over { border-color: var(--fair); background: var(--fair-soft); }
+.drop img { max-height: 220px; border-radius: 6px; border: 1px solid var(--line); }
+.row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.fields { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+label { display: grid; gap: 4px; font-size: 0.85rem; color: var(--muted); min-width: 0; }
+label.check { display: flex; gap: 8px; align-items: flex-start; color: var(--ink); font-size: 0.92rem; }
+label.check input { margin-top: 3px; }
+input, select { font: 500 1rem var(--mono); color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; width: 100%; box-sizing: border-box; min-width: 0; }
+input[type="checkbox"] { width: auto; }
+select { font-family: var(--sans); }
+input.filled { border-color: var(--fair); background: var(--fair-soft); }
+button { font: 600 0.95rem var(--sans); border-radius: 8px; padding: 10px 16px; cursor: pointer; border: 1px solid var(--line); background: var(--panel); color: var(--ink); }
+button.primary { background: var(--fair); border-color: var(--fair); color: #fff; }
+button:disabled { opacity: 0.55; cursor: default; }
+.small { font-size: 0.85rem; color: var(--muted); }
+.note { background: var(--warn-bg); color: var(--warn-fg); border-radius: 8px; padding: 10px 12px; font-size: 0.92rem; }
+.verdict { border-radius: 10px; padding: 14px 16px; display: grid; gap: 4px; background: var(--bg); border: 1px solid var(--line); }
+.verdict.buy { background: var(--buy-soft); border-color: var(--buy); }
+.verdict.sell { background: var(--sell-soft); border-color: var(--sell); }
+.verdict .big { font: 700 1.9rem/1.1 var(--display); letter-spacing: 0.01em; }
+.verdict.buy .big { color: var(--buy); } .verdict.sell .big { color: var(--sell); } .verdict.none .big { color: var(--off); }
+.levels { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.levels th, .levels td { text-align: left; padding: 7px 6px; border-bottom: 1px solid var(--line); }
+.levels th { font: 600 0.75rem var(--sans); text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+.levels td { font-family: var(--mono); }
+.levels td:first-child { font-family: var(--sans); color: var(--muted); }
+.sl { color: var(--sell); } .tp { color: var(--buy); } .fp { color: var(--fair); }
+.checks { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.checks li { display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 6px; }
+.checks .ok::before { content: "\2713"; color: var(--buy); font-weight: 700; }
+.checks .bad::before { content: "\2717"; color: var(--sell); font-weight: 700; }
+.checks .info::before { content: "\2022"; color: var(--muted); font-weight: 700; }
+.kpis { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(108px, 1fr)); }
+.kpi { background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; }
+.kpi b { display: block; font: 600 1.25rem var(--mono); font-variant-numeric: tabular-nums; }
+.stop { background: var(--sell-soft); color: var(--sell); border: 1px solid var(--sell); border-radius: 8px; padding: 10px 12px; font-weight: 600; }
+.trades { display: grid; gap: 8px; }
+.trade { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; display: grid; gap: 8px; }
+.trade .row { justify-content: space-between; }
+.mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.rules { display: grid; gap: 14px; max-width: 78ch; }
+.rules ol, .rules ul { margin: 0; padding-left: 1.3em; display: grid; gap: 6px; }
+.tablebox { overflow-x: auto; }
+.res { border-collapse: collapse; font-size: 0.9rem; font-variant-numeric: tabular-nums; min-width: 560px; }
+.res th, .res td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); }
+.res th { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
+.pos { color: var(--buy); } .neg { color: var(--sell); }
+textarea { width: 100%; box-sizing: border-box; height: 360px; resize: vertical; background: var(--code-bg); color: var(--code-fg); font: 0.8rem/1.45 var(--mono); border: 1px solid var(--line); border-radius: 8px; padding: 12px; }
+#thinking { color: var(--muted); }
+@media (prefers-reduced-motion: no-preference) { .verdict { transition: background-color .2s, border-color .2s; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <h1><span class="line" aria-hidden="true"></span>Fair Price Desk</h1>
+    <p class="sub">JJ Simon's fair-price method on the Nifty and Sensex 1-minute chart. Upload a chart screenshot or type the numbers, and it works out the trade, stop, target, option strike and lots for your capital.</p>
+  </header>
+
+  <nav class="tabs" role="tablist">
+    <button class="tab" role="tab" id="tab-plan" aria-selected="true" data-tab="plan">Plan a trade</button>
+    <button class="tab" role="tab" id="tab-today" aria-selected="false" data-tab="today">Today</button>
+    <button class="tab" role="tab" id="tab-rules" aria-selected="false" data-tab="rules">The rules</button>
+    <button class="tab" role="tab" id="tab-code" aria-selected="false" data-tab="code">TradingView indicator</button>
+  </nav>
+
+  <!-- ============ PLAN ============ -->
+  <section id="pane-plan" class="grid">
+    <div class="panel" style="gap:18px">
+      <div class="drop" id="drop">
+        <h3>1 · Chart screenshot</h3>
+        <p class="small">Take a screenshot of the 1-minute chart with the Fair Price indicator on it, then drop it here, paste it (Ctrl+V) or pick the file.</p>
+        <div class="row">
+          <input type="file" id="file" accept="image/png,image/jpeg,image/webp,image/gif" style="max-width:260px">
+          <button class="primary" id="read" disabled>Read my screenshot</button>
+          <button id="stopread" hidden>Stop</button>
+        </div>
+        <img id="preview" alt="Your chart screenshot" hidden>
+        <p id="thinking" class="small" hidden></p>
+        <p id="readnote" class="note" hidden></p>
+      </div>
+
+      <div style="display:grid;gap:12px">
+        <h3>2 · Check the numbers</h3>
+        <p class="small" id="examplenote">These are example numbers. Replace them with today's, or read them from a screenshot.</p>
+        <div class="fields">
+          <label>Index<select id="idx"><option value="NIFTY">Nifty 50</option><option value="SENSEX">Sensex</option></select></label>
+          <label>Setup<select id="setup">
+            <option value="BOS">Break of structure</option>
+            <option value="CONT">Opening candle (9:15)</option>
+            <option value="DISP">Displacement (weaker)</option>
+          </select></label>
+          <label>Fair price (9:15 open)<input id="fair" inputmode="decimal" value="22480"></label>
+          <label>Entry (close of the signal candle)<input id="entry" inputmode="decimal" value="22446"></label>
+          <label>Time now (IST)<input id="time" type="time" value="09:41"></label>
+          <label>Losses in a row today<input id="losses" type="number" min="0" max="9" value="0"></label>
+        </div>
+        <div class="fields" id="contfields">
+          <label>Today opened, versus yesterday's 9:15 open<select id="openvs">
+            <option value="below">Below it (bias: longs)</option>
+            <option value="above">Above it (bias: shorts)</option>
+          </select></label>
+          <label>9:15 candle colour<select id="ocolour"><option value="green">Green</option><option value="red">Red</option></select></label>
+          <label>9:15 candle size, high minus low (points)<input id="orange" inputmode="decimal" value="28"></label>
+        </div>
+        <div style="display:grid;gap:8px">
+          <label class="check"><input type="checkbox" id="closed" checked> The signal candle has closed (it is not still forming)</label>
+          <label class="check" id="boscheck"><input type="checkbox" id="bosok" checked> It closed beyond the latest swing high (for a buy) or swing low (for a sell)</label>
+          <label class="check" id="dispcheck" hidden><input type="checkbox" id="dispok"> Its body is bigger than the previous candle's, it closed beyond the previous candle's wick, and the previous candle was the opposite colour</label>
+        </div>
+      </div>
+
+      <div style="display:grid;gap:12px">
+        <h3>3 · Your money</h3>
+        <div class="fields">
+          <label>Capital (₹)<input id="capital" inputmode="decimal" value="30000"></label>
+          <label>Max loss per trade (% of capital)<input id="riskpct" inputmode="decimal" value="5"></label>
+          <label>Option premium now (₹)<input id="prem" inputmode="decimal" value="120"></label>
+          <label>Option delta<input id="delta" inputmode="decimal" value="0.5"></label>
+          <label>Charges + slippage per lot (₹)<input id="costs" inputmode="decimal" value="130"></label>
+          <label>Stop after this many losses in a row<input id="maxloss" type="number" min="1" max="5" value="2"></label>
+        </div>
+        <div class="fields">
+          <label>Stop (index points, blank = preset)<input id="slpts" inputmode="decimal" placeholder="Nifty 20 · Sensex 60"></label>
+          <label>Target (index points, blank = preset)<input id="tppts" inputmode="decimal" placeholder="Nifty 30 · Sensex 90"></label>
+        </div>
+      </div>
+    </div>
+
+    <div class="sticky" style="display:grid;gap:14px">
+      <div class="panel" id="plan">
+        <div class="verdict none" id="verdict"><span class="small" id="vsmall">Trade plan</span><span class="big" id="vbig">NO TRADE</span><span id="vwhy" class="small"></span></div>
+        <table class="levels" id="levels">
+          <thead><tr><th></th><th>Index</th><th>Option premium</th></tr></thead>
+          <tbody>
+            <tr><td>Entry</td><td id="l-entry">–</td><td id="o-entry">–</td></tr>
+            <tr><td class="sl">Stop</td><td id="l-sl" class="sl">–</td><td id="o-sl" class="sl">–</td></tr>
+            <tr><td class="tp">Target</td><td id="l-tp" class="tp">–</td><td id="o-tp" class="tp">–</td></tr>
+            <tr><td class="fp">Fair price</td><td id="l-fair" class="fp">–</td><td id="l-room" class="small">–</td></tr>
+          </tbody>
+        </table>
+        <div class="kpis">
+          <div class="kpi"><span class="small">Lots</span><b id="k-lots">–</b></div>
+          <div class="kpi"><span class="small">Loss if stopped</span><b id="k-loss" class="neg">–</b></div>
+          <div class="kpi"><span class="small">Profit at target</span><b id="k-win" class="pos">–</b></div>
+          <div class="kpi"><span class="small">Money needed</span><b id="k-cash">–</b></div>
+        </div>
+        <ul class="checks" id="checks"></ul>
+        <div class="row"><button class="primary" id="took" disabled>I took this trade</button><span class="small" id="tooknote"></span></div>
+      </div>
+      <p class="small">The page does the maths. Claude only reads numbers off your screenshot, and it can misread them, so check them before you trade. Nothing here is financial advice.</p>
+    </div>
+  </section>
+
+  <!-- ============ TODAY ============ -->
+  <section id="pane-today" hidden style="display:grid;gap:14px;max-width:760px">
+    <div class="panel">
+      <h2 id="todaytitle">Today</h2>
+      <div class="kpis">
+        <div class="kpi"><span class="small">Trades</span><b id="t-n">0</b></div>
+        <div class="kpi"><span class="small">Won / lost</span><b id="t-wl">0 / 0</b></div>
+        <div class="kpi"><span class="small">Losses in a row</span><b id="t-row">0</b></div>
+        <div class="kpi"><span class="small">Net today</span><b id="t-net">₹0</b></div>
+      </div>
+      <p id="t-stop" class="stop" hidden></p>
+      <div class="trades" id="t-list"></div>
+      <p class="small" id="t-empty">No trades yet today. When you take a trade from the plan, press "I took this trade" and it appears here. Mark it when the stop or target hits.</p>
+      <div class="row"><button id="t-clear">Clear today</button><span class="small">Saved only in this browser.</span></div>
+    </div>
+  </section>
+
+  <!-- ============ RULES ============ -->
+  <section id="pane-rules" hidden class="rules">
+    <div class="panel">
+      <h2>The method, in his words, for Nifty and Sensex</h2>
+      <p>Source: JJ Simon on Chart Fanatics (US Nasdaq futures, prop-firm accounts). He calls it fair pricing theory. The session's opening price is fair. The burst of orders at the open pushes price away from it, and price tends to come back. Everything is on the <b>1-minute chart</b>, and every signal waits for the candle to <b>close</b>.</p>
+      <ol>
+        <li><b>Fair price</b> = the 9:15 opening price. On a scheduled news day (RBI policy at 10:00, Budget) the fair price for after the news is the price just before it. After surprise news, it is where price settles and goes sideways after the spike.</li>
+        <li><b>Bias</b> = the opposite of the last session. If today opened above yesterday's 9:15 open, the bias is shorts. If it opened below, longs. He "inverts the previous 6 to 12 hours".</li>
+        <li><b>Trade 1, the opening candle</b>: at the close of the 9:15 candle, trade in its colour, but only if that agrees with the bias. If the candle is bigger than your stop, double the stop and target and use half the lots. On Nifty the first minute was bigger than 20 points on every test day, so this trade is normally 40 / 60 points (Sensex 120 / 180). That's about ₹1,400 of risk on one lot. It was the best part of the test, but it's also the biggest single risk of your day.</li>
+        <li><b>After that, only trades back toward the fair price.</b> Wait for price to move away (at least 80% of the target). Enter when a candle closes beyond the latest swing: for a buy, above the last swing high (a candle whose high is above the candles on each side). For a sell, below the last swing low. He calls this the stronger entry, and it's the only one he uses on his own money.</li>
+        <li><b>Displacement</b> (optional, weaker): a candle whose body is bigger than the previous one, closing beyond the previous candle's wick, and the previous candle was the opposite colour. It lost money in our test, so it's off by default.</li>
+        <li><b>Fixed stop and target, 1 : 1.5.</b> His 25 / 38 and 50 / 76 points on Nasdaq scale to about 10 / 15 and 20 / 30 Nifty points (Nasdaq moves about 2.4 times as many points in the first 90 minutes). The 10-point version lost money after charges, so use <b>Nifty 20 / 30</b> and <b>Sensex 60 / 90</b>.</li>
+        <li><b>Only the first 90 minutes</b>: new trades 9:15 to 10:45. A trade still open keeps its stop and target, and is closed by 3:15.</li>
+        <li><b>Stop for the day</b> after losses in a row. His rule is 3. Use 2 with ₹30k: it made no difference in the test and caps a bad day.</li>
+        <li>One trade at a time. He spreads trades over 45 prop accounts; you have one account, so you take the same signal once.</li>
+      </ol>
+    </div>
+
+    <div class="panel">
+      <h2>Morning routine</h2>
+      <ol>
+        <li><b>Before 9:15.</b> Note yesterday's 9:15 open. Check for news: an RBI policy day, the Budget, or a big overnight move in the US.</li>
+        <li><b>9:15.</b> The Fair Price indicator draws the fair price line, and its table shows the bias.</li>
+        <li><b>9:16.</b> The 9:15 candle has closed. If its colour matches the bias, that's trade 1. Buy the ATM call (green) or put (red).</li>
+        <li><b>9:16 to 10:45.</b> Let price run away from the fair price. When a BUY or SELL label prints, screenshot the chart, check the plan here, and enter.</li>
+        <li><b>Exit</b> only at the stop or target (or 3:15). Mark the result in Today. After 2 losses in a row, close the app for the day.</li>
+      </ol>
+      <p class="small">Trade the option, not futures: one Nifty futures lot needs well over ₹1 lakh of margin. One ATM option lot costs about ₹6,000 to ₹10,000. With charges, a stopped break-of-structure trade loses about ₹800 to ₹1,200, and a stopped opening trade about ₹1,400. A bad day (two losses, then stop) costs about ₹2,200, which is 7% of ₹30k.</p>
+    </div>
+
+    <div class="panel">
+      <h2>What the test showed</h2>
+      <p>These are his rules run on the last 19 trading days of real 1-minute Nifty and Sensex data (4 Sep to 1 Oct 2026). Every trade is one lot, stopping after 2 losses in a row. Option profit is estimated at delta 0.5 after ₹130 per lot of charges and slippage. "Random" is the share of 500 runs where coin-flip directions, with the same entries, stops and targets, did as well or better. Lower means the direction calls mattered.</p>
+      <div class="tablebox">
+        <table class="res">
+          <thead><tr><th>Version</th><th>Trades</th><th>Won</th><th>Per lot, 19 days</th><th>Random</th></tr></thead>
+          <tbody>
+            <tr><td><b>Nifty</b>: opening candle (40 / 60) + break of structure (20 / 30)</td><td>39</td><td>54%</td><td class="pos">+₹7,280</td><td>11%</td></tr>
+            <tr><td><b>Sensex</b>: opening candle (120 / 180) + break of structure (60 / 90)</td><td>33</td><td>58%</td><td class="pos">+₹9,735</td><td>6%</td></tr>
+            <tr><td>Nifty, break of structure only (skip the opening trade)</td><td>32</td><td>56%</td><td class="pos">+₹4,290</td><td>10%</td></tr>
+            <tr><td>Nifty, with displacement entries added</td><td>47</td><td>45%</td><td class="pos">+₹1,040</td><td>44%</td></tr>
+            <tr><td>Nifty 10 / 15 (his exact points, scaled)</td><td>58</td><td>50%</td><td class="neg">−₹228</td><td>5%</td></tr>
+            <tr><td>Nifty, adding an afternoon session (13:30 to 15:00)</td><td>83</td><td>47%</td><td class="pos">+₹561</td><td>21%</td></tr>
+            <tr><td>Same rules on 5-minute candles, Nifty, 59 days</td><td>43</td><td>40%</td><td class="neg">−₹7,756</td><td>44%</td></tr>
+            <tr><td>Same rules on 5-minute candles, Sensex, 59 days</td><td>47</td><td>28%</td><td class="neg">−₹18,435</td><td>91%</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <ul>
+        <li>Nifty days, with one lot: 11 up, 6 down, 2 flat. Worst day −₹1,560, best +₹4,355. The first two days of the test were both losing days. It does not make money every day.</li>
+        <li>The opening trade made most of the profit, but that's only 12 trades (7 won). A few bad mornings in a row would change the picture.</li>
+        <li>19 days is a short test. The same idea on 5-minute candles lost money, so the 1-minute result may not last.</li>
+        <li>His own profits come from prop firms: he risks about $100 per evaluation, not his own capital, and says this fixed-target version is tuned for prop-firm rules, not for a live account.</li>
+        <li>SEBI found that about 9 in 10 individual F&amp;O traders lose money. Paper-trade this for two to four weeks first. Then trade one lot, and only with money you can afford to lose.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ============ CODE ============ -->
+  <section id="pane-code" hidden style="display:grid;gap:14px;max-width:820px">
+    <div class="panel">
+      <h2>Fair Price indicator for TradingView</h2>
+      <ol style="margin:0;padding-left:1.3em;display:grid;gap:6px">
+        <li>Open a <b>NIFTY</b> or <b>SENSEX</b> chart and set it to <b>1 minute</b>.</li>
+        <li>Open the Pine Editor at the bottom, delete everything in it, and press <b>Copy the code</b> below. Paste, then <b>Add to chart</b>.</li>
+        <li>For Sensex, open the indicator settings and set Index to SENSEX.</li>
+        <li>To get alerts: Alerts, Create alert, Condition "Fair Price", "Any alert() function call".</li>
+      </ol>
+      <div class="note">The first two lines must stay: <code>// Fair Price ...</code> and <code>//@version=5</code>. If TradingView says "Pine v1", the second line was lost while pasting.</div>
+      <div class="row"><button class="primary" id="copy">Copy the code</button><span id="copystatus" class="small"></span></div>
+      <textarea id="code" readonly spellcheck="false">// Fair Price for TradingView. Select and copy EVERYTHING in this file, including the next line.
+//@version=5
+// ============================================================================
+// Fair Price: JJ Simon's "fair pricing theory" for NIFTY and SENSEX, 1-MINUTE chart only
+//
+// FAIR PRICE = the 9:15 opening price (blue line). The rush of orders at the open pushes price away
+// from it; for the first 90 minutes price tends to come back. On news days type the pre-news price.
+// BIAS = the opposite of the last session: opened above yesterday's open -&gt; shorts, below -&gt; longs.
+// TRADE 1 (CONT): the 9:15 candle's colour, at its close, only if it agrees with the bias.
+//   If that candle is bigger than the stop, stop and target double and you use half the lots.
+// THEN (BOS): only trades back toward the fair price, on a candle CLOSE beyond the latest swing
+//   (a wick higher / lower than the candle on each side). Displacement entries are optional and
+//   off: they lost money in the test.
+// Only when the fair price is at least 80% of the target away. Fixed stop and target (1 : 1.5):
+//   NIFTY 20 / 30 points, SENSEX 60 / 90 points. New entries 9:15-10:45 only. Anything open
+//   is closed at 3:15. Stop for the day after 2 losses in a row (his rule is 3; 2 suits Rs 30k).
+// Reference implementation (same rules, backtested): trading-system/tci/fairprice.py
+// ============================================================================
+indicator("Fair Price (Nifty / Sensex 1m)", "FAIR", overlay = true, max_lines_count = 500, max_labels_count = 500)
+
+// ---------------- inputs ----------------
+G0 = "Index"
+idx        = input.string("NIFTY", "Index", options = ["NIFTY", "SENSEX"], group = G0)
+G1 = "Entries"
+useCont    = input.bool(true, "Trade 1: opening candle continuation", group = G1)
+useBias    = input.bool(true, "Opening candle must agree with the bias", group = G1)
+useBOS     = input.bool(true, "Break of structure back toward fair price", group = G1)
+useDisp    = input.bool(false, "Displacement candle back toward fair price (lost money in the test)", group = G1)
+G2 = "Stop and target in index points (0 = preset: NIFTY 20 / 30, SENSEX 60 / 90)"
+slIn       = input.float(0, "Stop", minval = 0, group = G2)
+tpIn       = input.float(0, "Target", minval = 0, group = G2)
+tgtFair    = input.bool(false, "Target = the fair price itself (instead of the fixed target)", group = G2)
+minRoom    = input.float(0.8, "Room needed to fair price, as a share of the target", step = 0.1, group = G2)
+G3 = "Session"
+winSess    = input.session("0915-1045", "New entries only in (IST)", group = G3)
+maxLoss    = input.int(2, "Stop for the day after this many losses in a row (his rule: 3)", minval = 1, maxval = 5, group = G3)
+manualFair = input.float(0, "Manual fair price for today (0 = the 9:15 open). Use on news days", group = G3)
+G4 = "Your money"
+capital    = input.float(30000, "Capital (Rs)", group = G4)
+riskPct    = input.float(5.0, "Max loss per trade (% of capital)", step = 0.5, group = G4)
+delta      = input.float(0.5, "Option delta (at-the-money is about 0.5)", step = 0.05, group = G4)
+costLot    = input.float(130, "Charges + slippage per lot, buy and sell (Rs)", group = G4)
+showTable  = input.bool(true, "Show the plan table", group = G4)
+showBand   = input.bool(true, "Show the no-trade band around fair price", group = G4)
+
+// ---------------- presets ----------------
+isNifty = idx == "NIFTY"
+SL      = slIn &gt; 0 ? slIn : (isNifty ? 20.0 : 60.0)
+TP      = tpIn &gt; 0 ? tpIn : (isNifty ? 30.0 : 90.0)
+lotSize = isNifty ? 65 : 20
+step    = isNifty ? 50 : 100
+TZ      = "Asia/Kolkata"
+GREEN   = color.new(#089981, 0)
+RED     = color.new(#f23645, 0)
+BLUE    = color.new(#2962ff, 0)
+
+fmt(x) =&gt; str.tostring(x, "#,##0.##")
+pts(x) =&gt; str.tostring(x, "+#,##0.#;-#,##0.#")
+
+hm     = hour(time, TZ) * 100 + minute(time, TZ)
+newDay = dayofmonth(time, TZ) != dayofmonth(time[1], TZ)
+inWin  = not na(time(timeframe.period, winSess, TZ))
+
+// ---------------- state ----------------
+var float fair        = na
+var float dayOpen     = na
+var float prevDayOpen = na
+var int   bias        = 0
+var int   barsToday   = 0
+var float swHi        = na
+var float swLo        = na
+var int   pos         = 0
+var float pEntry      = na
+var float pSL         = na
+var float pTP         = na
+var int   pBar        = na
+var bool  pBig        = false
+var string pSetup     = ""
+var int   lossRow     = 0
+var bool  stopped     = false
+var int   nTr         = 0
+var int   nWin        = 0
+var int   nLoss       = 0
+var float dayPts      = 0.0
+var line  lFair       = na
+var line  lBandUp     = na
+var line  lBandDn     = na
+var label lbFair      = na
+var line  lSL         = na
+var line  lTP         = na
+
+if newDay
+    prevDayOpen := dayOpen
+    dayOpen := open
+    fair := manualFair &gt; 0 ? manualFair : open
+    bias := na(prevDayOpen) ? 0 : open &gt; prevDayOpen ? -1 : open &lt; prevDayOpen ? 1 : 0
+    barsToday := 0
+    swHi := na
+    swLo := na
+    pos := 0
+    lossRow := 0
+    stopped := false
+    nTr := 0
+    nWin := 0
+    nLoss := 0
+    dayPts := 0.0
+    lFair := line.new(bar_index, fair, bar_index + 1, fair, color = BLUE, width = 2)
+    if showBand
+        lBandUp := line.new(bar_index, fair + minRoom * TP, bar_index + 1, fair + minRoom * TP, color = color.new(BLUE, 70), style = line.style_dotted)
+        lBandDn := line.new(bar_index, fair - minRoom * TP, bar_index + 1, fair - minRoom * TP, color = color.new(BLUE, 70), style = line.style_dotted)
+    label.delete(lbFair)
+    lbFair := label.new(bar_index, fair, "FAIR " + fmt(fair), style = label.style_label_left, color = BLUE, textcolor = color.white, size = size.small)
+barsToday += 1
+
+// keep today's fair price line and label running to the latest candle
+line.set_x2(lFair, bar_index + 1)
+if showBand
+    line.set_x2(lBandUp, bar_index + 1)
+    line.set_x2(lBandDn, bar_index + 1)
+label.set_x(lbFair, bar_index + 3)
+
+// ---------------- exits (finished candles only) ----------------
+// Candle path: green goes open-low-high-close, red goes open-high-low-close.
+hitAt(float px, int side, float sl, float tp) =&gt; side * (px - sl) &lt;= 0 ? -1 : side * (px - tp) &gt;= 0 ? 1 : 0
+
+if barstate.isconfirmed and pos != 0 and bar_index &gt; pBar
+    g = close &gt;= open
+    h0 = hitAt(open, pos, pSL, pTP)
+    h1 = hitAt(g ? low : high, pos, pSL, pTP)
+    h2 = hitAt(g ? high : low, pos, pSL, pTP)
+    hit = h0 != 0 ? h0 : h1 != 0 ? h1 : h2
+    float exitPx = na
+    string why = ""
+    if hit != 0
+        exitPx := hit == 1 ? pTP : pSL
+        why := hit == 1 ? "TP" : "SL"
+    else if hm &gt;= 1515
+        exitPx := close
+        why := "3:15 exit"
+    if not na(exitPx)
+        p = pos * (exitPx - pEntry)
+        dayPts += p
+        if p &gt; 0
+            nWin += 1
+            lossRow := 0
+        else if p &lt; 0
+            nLoss += 1
+            lossRow += 1
+            if lossRow &gt;= maxLoss
+                stopped := true
+        label.new(bar_index, exitPx, why + " " + pts(p), style = label.style_none, textcolor = p &gt;= 0 ? GREEN : RED, size = size.small)
+        alert("FAIR PRICE exit " + (pos == 1 ? "BUY" : "SELL") + ": " + why + " at " + fmt(exitPx) + " (" + pts(p) + " pts)", alert.freq_once_per_bar_close)
+        line.set_x2(lSL, bar_index)
+        line.set_x2(lTP, bar_index)
+        pos := 0
+        if stopped
+            label.new(bar_index, close, "STOP for today: " + str.tostring(lossRow) + " losses in a row", yloc = yloc.abovebar, style = label.style_label_down, color = color.gray, textcolor = color.white, size = size.small)
+            alert("FAIR PRICE: " + str.tostring(lossRow) + " losses in a row. Stop trading for today.", alert.freq_once_per_bar_close)
+
+if pos != 0
+    line.set_x2(lSL, bar_index + 1)
+    line.set_x2(lTP, bar_index + 1)
+
+// ---------------- swings (a wick beyond the candle before and after it) ----------------
+if barstate.isconfirmed and barsToday &gt;= 3
+    if low[1] &lt; low[2] and low[1] &lt; low
+        swLo := low[1]
+    if high[1] &gt; high[2] and high[1] &gt; high
+        swHi := high[1]
+
+// ---------------- entries (on the candle close) ----------------
+int sig = 0
+string setup = ""
+float sl0 = SL
+float tp0 = TP
+bool big = false
+if barstate.isconfirmed and pos == 0
+    if barsToday == 1
+        col = close &gt; open ? 1 : close &lt; open ? -1 : 0
+        if useCont and col != 0 and (not useBias or col == bias)
+            big := high - low &gt; SL
+            sig := col
+            setup := "CONT"
+            sl0 := big ? 2 * SL : SL
+            tp0 := big ? 2 * TP : TP
+    else if not stopped and inWin
+        gap = fair - close
+        d = gap &gt; 0 ? 1 : -1
+        room = math.abs(gap)
+        roomOk = tgtFair ? room &gt;= 1.5 * SL : room &gt;= minRoom * TP
+        bos = d == 1 ? (not na(swHi) and close &gt; swHi and close[1] &lt;= swHi) : (not na(swLo) and close &lt; swLo and close[1] &gt;= swLo)
+        body = math.abs(close - open)
+        disp = d == 1 ? (close &gt; open and close[1] &lt; open[1] and body &gt; math.abs(close[1] - open[1]) and close &gt; high[1]) : (close &lt; open and close[1] &gt; open[1] and body &gt; math.abs(close[1] - open[1]) and close &lt; low[1])
+        if roomOk and useBOS and bos
+            sig := d
+            setup := "BOS"
+        else if roomOk and useDisp and disp
+            sig := d
+            setup := "DISP"
+        tp0 := tgtFair ? room : TP
+
+riskLot  = sl0 * delta * lotSize + costLot
+lotsOk   = math.floor(capital * riskPct / 100 / riskLot)
+atm      = math.round(close / step) * step
+
+if sig != 0
+    pos := sig
+    pEntry := close
+    pSL := close - sig * sl0
+    pTP := close + sig * tp0
+    pBar := bar_index
+    pBig := big
+    pSetup := setup
+    nTr += 1
+    lSL := line.new(bar_index, pSL, bar_index + 1, pSL, color = RED, width = 2)
+    lTP := line.new(bar_index, pTP, bar_index + 1, pTP, color = GREEN, width = 2)
+    opt = str.tostring(atm) + (sig == 1 ? " CE" : " PE")
+    sizeTxt = lotsOk &gt;= 1 ? "Buy " + opt + ", " + str.tostring(lotsOk) + " lot(s)\nLoss if SL hits about Rs " + fmt(math.round(riskLot * lotsOk)) : "SKIP: one lot would lose about Rs " + fmt(math.round(riskLot)) + ", more than your limit"
+    tip = setup + (big ? " (big opening candle: double stop, half size)" : "") + "\nEntry " + fmt(close) + "\nSL " + fmt(pSL) + " (" + fmt(sl0) + " pts)\nTarget " + fmt(pTP) + " (" + fmt(tp0) + " pts)\n" + sizeTxt
+    label.new(bar_index, close, (sig == 1 ? "BUY " : "SELL ") + fmt(close), yloc = sig == 1 ? yloc.belowbar : yloc.abovebar, style = sig == 1 ? label.style_label_up : label.style_label_down, color = sig == 1 ? GREEN : RED, textcolor = color.white, size = size.small, tooltip = tip)
+    alert("FAIR PRICE " + (sig == 1 ? "BUY " : "SELL ") + setup + " at " + fmt(close) + " | SL " + fmt(pSL) + " | target " + fmt(pTP) + " | " + (lotsOk &gt;= 1 ? "buy " + opt + ", " + str.tostring(lotsOk) + " lot(s)" : "SKIP: too big for your capital"), alert.freq_once_per_bar_close)
+
+// ---------------- plan table ----------------
+var table tb = table.new(position.top_right, 2, 8, bgcolor = color.new(color.white, 8), border_color = color.new(color.gray, 70), border_width = 1)
+row(int r, string k, string v, color c) =&gt;
+    table.cell(tb, 0, r, k, text_color = color.gray, text_size = size.small, text_halign = text.align_left)
+    table.cell(tb, 1, r, v, text_color = c, text_size = size.small, text_halign = text.align_left)
+
+if showTable and barstate.islast
+    dist = close - fair
+    rl = SL * delta * lotSize + costLot
+    nl = math.floor(capital * riskPct / 100 / rl)
+    row(0, "Chart", timeframe.period == "1" ? idx + " 1-minute" : "Switch to the 1-minute chart", timeframe.period == "1" ? color.black : RED)
+    row(1, "Fair price", fmt(fair) + (manualFair &gt; 0 ? " (manual)" : " (9:15 open)"), BLUE)
+    row(2, "Bias today", bias == 1 ? "LONGS (opened below yesterday's open)" : bias == -1 ? "SHORTS (opened above yesterday's open)" : "none", bias == 1 ? GREEN : bias == -1 ? RED : color.gray)
+    row(3, "Price vs fair", pts(dist) + " pts: " + (math.abs(dist) &lt; minRoom * TP ? "too close, wait" : dist &gt; 0 ? "look for SELL back to fair" : "look for BUY back to fair"), color.black)
+    row(4, "Window", inWin ? "OPEN until 10:45" : "closed: no new trades", inWin ? GREEN : color.gray)
+    row(5, "Trade", pos == 0 ? "none open" : (pos == 1 ? "BUY " : "SELL ") + fmt(pEntry) + "  SL " + fmt(pSL) + "  T " + fmt(pTP), pos == 1 ? GREEN : pos == -1 ? RED : color.gray)
+    row(6, "Today", str.tostring(nTr) + " trades, " + str.tostring(nWin) + " won, " + str.tostring(nLoss) + " lost, " + pts(dayPts) + " pts" + (stopped ? "  STOPPED" : ""), stopped ? RED : color.black)
+    row(7, "Size", "SL " + fmt(SL) + " / T " + fmt(TP) + " pts. Loss per lot ~Rs " + fmt(math.round(rl)) + " -&gt; " + str.tostring(nl) + " lot(s)", nl &gt;= 1 ? color.black : RED)
+</textarea>
+    </div>
+  </section>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  const $ = (id) => document.getElementById(id);
+  const PRESET = { NIFTY: { sl: 20, tp: 30, lot: 65, step: 50, costs: 130 }, SENSEX: { sl: 60, tp: 90, lot: 20, step: 100, costs: 130 } };
+  const inr = (x) => (x < 0 ? "−₹" : "₹") + Math.round(Math.abs(x)).toLocaleString("en-IN");
+  const num = (x, d = 2) => Number(x).toLocaleString("en-IN", { maximumFractionDigits: d });
+  const val = (id) => { const v = parseFloat(String($(id).value).replace(/,/g, "")); return Number.isFinite(v) ? v : NaN; };
+  const store = {
+    get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch (e) { return d; } },
+    set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* storage blocked: still works for this visit */ } },
+  };
+
+  // ---------------- tabs ----------------
+  const panes = ["plan", "today", "rules", "code"];
+  function showTab(name) {
+    if (!panes.includes(name)) name = "plan";
+    for (const p of panes) {
+      $("pane-" + p).hidden = p !== name;
+      $("tab-" + p).setAttribute("aria-selected", String(p === name));
+    }
+    store.set("fp-tab", name);
+  }
+  document.querySelectorAll(".tab").forEach((b) => b.addEventListener("click", () => showTab(b.dataset.tab)));
+  showTab((location.hash || "").slice(1) || store.get("fp-tab", "plan"));
+
+  // ---------------- the plan ----------------
+  function minutes(t) { const m = /^(\d{1,2}):(\d{2})/.exec(t || ""); return m ? +m[1] * 60 + +m[2] : NaN; }
+
+  function compute() {
+    const idx = $("idx").value, P = PRESET[idx];
+    const setup = $("setup").value;
+    const fair = val("fair"), entry = val("entry");
+    const sl0 = Number.isFinite(val("slpts")) && val("slpts") > 0 ? val("slpts") : P.sl;
+    const tp0 = Number.isFinite(val("tppts")) && val("tppts") > 0 ? val("tppts") : P.tp;
+    const t = minutes($("time").value);
+    const checks = [];
+    let side = 0, sl = sl0, tp = tp0, ok = true, big = false;
+    const add = (pass, text) => { checks.push([pass, text]); if (pass === false) ok = false; };
+
+    if (!Number.isFinite(fair) || !Number.isFinite(entry)) add(false, "Fill in the fair price and the entry price.");
+    if (setup === "CONT") {
+      const bias = $("openvs").value === "above" ? -1 : 1;
+      const colour = $("ocolour").value === "green" ? 1 : -1;
+      side = colour;
+      add(colour === bias, colour === bias ? "The 9:15 candle agrees with today's bias (" + (bias > 0 ? "longs" : "shorts") + ")." : "The 9:15 candle goes against today's bias (" + (bias > 0 ? "longs" : "shorts") + "): no opening trade today.");
+      add(Number.isFinite(t) && t >= 9 * 60 + 16 && t <= 9 * 60 + 20, "Enter right after the 9:15 candle closes (9:16, at the latest by 9:20).");
+      const rng = val("orange");
+      big = Number.isFinite(rng) && rng > sl0;
+      if (big) { sl = 2 * sl0; tp = 2 * tp0; checks.push([null, "The 9:15 candle (" + num(rng, 1) + " pts) is bigger than the stop, so stop and target double and the lot count halves."]); }
+    } else {
+      side = fair > entry ? 1 : -1;
+      const room = Math.abs(fair - entry);
+      add(Number.isFinite(t) && t >= 9 * 60 + 16 && t < 10 * 60 + 45, "Inside the first 90 minutes (new trades 9:16 to 10:45 only).");
+      add(room >= 0.8 * tp0, "Room to fair price: " + num(room, 1) + " pts (needs " + num(0.8 * tp0, 1) + ", which is 80% of the target).");
+      if (setup === "BOS") add($("bosok").checked, "The candle closed beyond the latest swing " + (side > 0 ? "high" : "low") + ".");
+      if (setup === "DISP") { add($("dispok").checked, "It's a real displacement candle (all three parts)."); checks.push([null, "Displacement entries lost money in the test. A break of structure is the stronger signal."]); }
+      checks.push([null, "Direction: back toward the fair price, so " + (side > 0 ? "BUY (price is below fair)." : "SELL (price is above fair).")]);
+    }
+    add($("closed").checked, "The signal candle has closed.");
+    const losses = val("losses") || 0, maxl = val("maxloss") || 2;
+    add(losses < maxl, losses < maxl ? "Losses in a row today: " + losses + " (you stop at " + maxl + ")." : losses + " losses in a row: stop for today.");
+
+    // money
+    const prem = val("prem"), delta = val("delta"), costs = val("costs"), cap = val("capital"), rp = val("riskpct");
+    const lossLot = sl * delta * P.lot + costs;
+    const winLot = tp * delta * P.lot - costs;
+    let lots = Math.floor((cap * rp / 100) / lossLot);
+    const cashLot = prem * P.lot;
+    if (Number.isFinite(cashLot) && cashLot > 0) lots = Math.min(lots, Math.floor(cap * 0.9 / cashLot));
+    if (!Number.isFinite(lots)) lots = 0;
+    add(lots >= 1, lots >= 1 ? "Size: " + lots + " lot(s). A stopped trade loses about " + inr(lossLot * lots) + " (" + num(100 * lossLot * lots / cap, 1) + "% of capital)." : "One lot would lose about " + inr(lossLot) + ", more than your " + num(rp, 1) + "% limit (" + inr(cap * rp / 100) + "). Skip it.");
+
+    const strike = Math.round(entry / P.step) * P.step;
+    return { idx, P, setup, side, fair, entry, sl, tp, ok, checks, lots, lossLot, winLot, prem, delta, cashLot, strike, big };
+  }
+
+  let current = null;
+  function render() {
+    const r = compute(); current = r;
+    $("contfields").hidden = r.setup !== "CONT";
+    $("boscheck").hidden = r.setup !== "BOS";
+    $("dispcheck").hidden = r.setup !== "DISP";
+    const v = $("verdict");
+    const opt = r.strike.toLocaleString("en-IN", { useGrouping: false }) + (r.side > 0 ? " CE" : " PE");
+    if (r.ok && r.side) {
+      v.className = "verdict " + (r.side > 0 ? "buy" : "sell");
+      $("vsmall").textContent = (r.side > 0 ? "BUY " : "SELL ") + r.idx + " · " + ({ BOS: "break of structure", CONT: "opening candle", DISP: "displacement" })[r.setup];
+      $("vbig").textContent = "Buy " + r.lots + " × " + r.idx + " " + opt;
+      $("vwhy").textContent = r.side > 0 ? "Index expected to rise toward the fair price, so buy the call." : "Index expected to fall, so buy the put.";
+    } else {
+      v.className = "verdict none";
+      $("vsmall").textContent = "Trade plan";
+      $("vbig").textContent = "NO TRADE";
+      const first = r.checks.find((c) => c[0] === false);
+      $("vwhy").textContent = first ? first[1] : "";
+    }
+    const s = r.side || 1, valid = Number.isFinite(r.entry);
+    $("l-entry").textContent = valid ? num(r.entry) : "–";
+    $("l-sl").textContent = valid ? num(r.entry - s * r.sl) + "  (" + num(r.sl, 1) + " pts)" : "–";
+    $("l-tp").textContent = valid ? num(r.entry + s * r.tp) + "  (" + num(r.tp, 1) + " pts)" : "–";
+    $("l-fair").textContent = Number.isFinite(r.fair) ? num(r.fair) : "–";
+    $("l-room").textContent = valid && Number.isFinite(r.fair) ? num(Math.abs(r.fair - r.entry), 1) + " pts away" : "–";
+    const pv = Number.isFinite(r.prem) && r.prem > 0;
+    $("o-entry").textContent = pv ? "₹" + num(r.prem) : "–";
+    $("o-sl").textContent = pv ? "≈ ₹" + num(Math.max(0.05, r.prem - r.delta * r.sl), 1) : "–";
+    $("o-tp").textContent = pv ? "≈ ₹" + num(r.prem + r.delta * r.tp, 1) : "–";
+    $("k-lots").textContent = r.lots >= 1 ? String(r.lots) : "0";
+    $("k-loss").textContent = r.lots >= 1 ? inr(-r.lossLot * r.lots) : inr(-r.lossLot);
+    $("k-win").textContent = r.lots >= 1 ? "+" + inr(r.winLot * r.lots) : "+" + inr(r.winLot);
+    $("k-cash").textContent = pv ? inr(r.cashLot * Math.max(1, r.lots)) : "–";
+    const ul = $("checks"); ul.textContent = "";
+    for (const [pass, text] of r.checks) {
+      const li = document.createElement("li"); li.className = pass === true ? "ok" : pass === false ? "bad" : "info";
+      const sp = document.createElement("span"); sp.textContent = text; li.append(sp); ul.append(li);
+    }
+    $("took").disabled = !(r.ok && r.side);
+    $("tooknote").textContent = "";
+  }
+  document.querySelectorAll("#pane-plan input, #pane-plan select").forEach((el) => {
+    el.addEventListener("input", () => { el.classList.remove("filled"); $("examplenote").hidden = true; if (el.id === "idx") presetCosts(); render(); });
+    el.addEventListener("change", render);
+  });
+  function presetCosts() { $("costs").value = PRESET[$("idx").value].costs; }
+
+  // ---------------- today ----------------
+  const dayKey = () => "fp-day-" + new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
+  function trades() { return store.get(dayKey(), []); }
+  function saveTrades(list) { store.set(dayKey(), list); renderToday(); }
+  function lossesInRow(list) { let n = 0; for (const t of list) { if (t.result === "open") continue; if (t.pnl < 0) n += 1; else if (t.pnl > 0) n = 0; } return n; }
+  function renderToday() {
+    const list = trades();
+    const done = list.filter((t) => t.result !== "open");
+    const net = done.reduce((a, t) => a + t.pnl, 0);
+    const row = lossesInRow(list), maxl = val("maxloss") || 2;
+    $("todaytitle").textContent = "Today, " + new Date().toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "short", timeZone: "Asia/Kolkata" });
+    $("t-n").textContent = String(list.length);
+    $("t-wl").textContent = done.filter((t) => t.pnl > 0).length + " / " + done.filter((t) => t.pnl < 0).length;
+    $("t-row").textContent = String(row);
+    $("t-net").textContent = (net > 0 ? "+" : "") + inr(net);
+    $("t-net").className = net > 0 ? "pos" : net < 0 ? "neg" : "";
+    $("t-stop").hidden = row < maxl;
+    $("t-stop").textContent = row + " losses in a row. That's the stop rule: no more trades today.";
+    $("t-empty").hidden = list.length > 0;
+    $("losses").value = String(row);
+    const box = $("t-list"); box.textContent = "";
+    list.forEach((t, i) => {
+      const d = document.createElement("div"); d.className = "trade";
+      const head = document.createElement("div"); head.className = "row";
+      const a = document.createElement("span"); a.className = "mono";
+      a.textContent = t.time + "  " + (t.side > 0 ? "BUY " : "SELL ") + t.idx + " " + t.opt + " × " + t.lots + "  at " + num(t.entry) + "  SL " + num(t.slpx) + "  T " + num(t.tppx);
+      const b = document.createElement("b"); b.className = t.result === "open" ? "" : t.pnl >= 0 ? "pos" : "neg";
+      b.textContent = t.result === "open" ? "open" : (t.pnl > 0 ? "+" : "") + inr(t.pnl);
+      head.append(a, b); d.append(head);
+      if (t.result === "open") {
+        const r = document.createElement("div"); r.className = "row";
+        const win = document.createElement("button"); win.textContent = "Target hit"; win.onclick = () => close(i, "target", t.winLot * t.lots);
+        const loss = document.createElement("button"); loss.textContent = "Stop hit"; loss.onclick = () => close(i, "stop", -t.lossLot * t.lots);
+        const inp = document.createElement("input"); inp.placeholder = "or P&L in ₹"; inp.inputMode = "decimal"; inp.style.maxWidth = "140px"; inp.id = "pnl-" + i; inp.setAttribute("aria-label", "Closed at this profit or loss in rupees");
+        const man = document.createElement("button"); man.textContent = "Closed"; man.onclick = () => { const v = parseFloat(inp.value); if (Number.isFinite(v)) close(i, "manual", v); else inp.focus(); };
+        r.append(win, loss, inp, man); d.append(r);
+      }
+      box.append(d);
+    });
+    render();
+  }
+  function close(i, how, pnl) { const list = trades(); list[i].result = how; list[i].pnl = Math.round(pnl); saveTrades(list); }
+  $("took").addEventListener("click", () => {
+    const r = current; if (!r || !r.ok) return;
+    const list = trades();
+    list.push({ time: $("time").value, idx: r.idx, side: r.side, setup: r.setup, opt: r.strike + (r.side > 0 ? " CE" : " PE"), lots: r.lots, entry: r.entry, slpx: r.entry - r.side * r.sl, tppx: r.entry + r.side * r.tp, lossLot: r.lossLot, winLot: r.winLot, result: "open", pnl: 0 });
+    saveTrades(list);
+    $("tooknote").textContent = "Added to Today. Mark it there when the stop or target hits.";
+  });
+  $("t-clear").addEventListener("click", () => { const btn = $("t-clear"); if (btn.dataset.armed) { saveTrades([]); btn.textContent = "Clear today"; delete btn.dataset.armed; } else { btn.dataset.armed = "1"; btn.textContent = "Press again to clear"; } });
+
+  // ---------------- screenshot reading ----------------
+  let file = null, sample = null, ctl = null;
+  function setFile(f) {
+    if (!f || !/^image\//.test(f.type)) return;
+    file = f;
+    const url = URL.createObjectURL(f); $("preview").src = url; $("preview").hidden = false;
+    $("read").disabled = !sample;
+    $("readnote").hidden = true;
+  }
+  $("file").addEventListener("change", (e) => setFile(e.target.files[0]));
+  const drop = $("drop");
+  drop.addEventListener("dragover", (e) => { e.preventDefault(); drop.classList.add("over"); });
+  drop.addEventListener("dragleave", () => drop.classList.remove("over"));
+  drop.addEventListener("drop", (e) => { e.preventDefault(); drop.classList.remove("over"); setFile(e.dataTransfer.files[0]); });
+  document.addEventListener("paste", (e) => { for (const it of Array.from((e.clipboardData && e.clipboardData.items) || [])) { if (it.type.startsWith("image/")) { setFile(it.getAsFile()); showTab("plan"); break; } } });
+
+  const PROMPT = `You are reading a screenshot of a TradingView chart of the NIFTY 50 or SENSEX index, usually the 1-minute chart. It may show an indicator called "Fair Price" (short name FAIR): a blue horizontal line labelled "FAIR <price>", green "BUY <price>" and red "SELL <price>" labels, a red stop line and a green target line after a signal, and a table at the top right with rows "Chart", "Fair price", "Bias today", "Price vs fair", "Window", "Trade", "Today", "Size". It may instead be an option chain or an option chart.
+Read only what is visible. Use null for anything you cannot read clearly. Never invent a number.
+Reply with only this JSON object:
+{"index": "NIFTY" or "SENSEX" or null,
+ "timeframe": "1m", "3m", "5m", "15m", "other" or null,
+ "time": "HH:MM" of the latest candle (IST) or null,
+ "current_price": number or null,
+ "fair_price": number or null (the FAIR line or table value; else the 9:15 opening price if you can read it),
+ "bias": "LONGS" or "SHORTS" or null (from the table row "Bias today"),
+ "last_signal": {"side": "BUY" or "SELL", "price": number, "stop": number or null, "target": number or null} or null (the latest BUY/SELL label),
+ "setup_seen": "OPENING", "BOS", "DISPLACEMENT" or "NONE" (your read of the latest closed candle; BOS means it closed beyond the latest swing high or low back toward the fair price),
+ "losses_in_row": number or null (only if the table shows it),
+ "option_premium": number or null (only if an option price for the right strike is visible),
+ "notes": "one or two short plain sentences on what the chart shows and anything you could not read"}`;
+
+  function fill(id, v) { if (v === null || v === undefined || v === "" || (typeof v === "number" && !Number.isFinite(v))) return false; $(id).value = String(v); $(id).classList.add("filled"); return true; }
+  $("read").addEventListener("click", async () => {
+    if (!sample || !file) return;
+    ctl = new AbortController();
+    $("read").disabled = true; $("stopread").hidden = false;
+    $("thinking").hidden = false; $("thinking").textContent = "Reading the chart. This takes 10 to 60 seconds...";
+    $("readnote").hidden = true;
+    try {
+      const d = await sample.json(PROMPT, { images: file, signal: ctl.signal, modelTier: "default" });
+      const got = [];
+      if (d && (d.index === "NIFTY" || d.index === "SENSEX")) { $("idx").value = d.index; presetCosts(); got.push("index"); }
+      if (fill("fair", typeof d.fair_price === "number" ? d.fair_price : null)) got.push("fair price");
+      const sig = d && d.last_signal && typeof d.last_signal.price === "number" ? d.last_signal : null;
+      if (fill("entry", sig ? sig.price : (typeof d.current_price === "number" ? d.current_price : null))) got.push(sig ? "signal price" : "current price");
+      if (typeof d.time === "string" && /^\d{1,2}:\d{2}$/.test(d.time)) { fill("time", d.time.padStart(5, "0")); got.push("time"); }
+      if (d.setup_seen === "BOS") $("setup").value = "BOS"; else if (d.setup_seen === "DISPLACEMENT") $("setup").value = "DISP"; else if (d.setup_seen === "OPENING") $("setup").value = "CONT";
+      if (d.bias === "LONGS") $("openvs").value = "below"; else if (d.bias === "SHORTS") $("openvs").value = "above";
+      if (fill("prem", typeof d.option_premium === "number" ? d.option_premium : null)) got.push("option premium");
+      if (typeof d.losses_in_row === "number") fill("losses", d.losses_in_row);
+      $("examplenote").hidden = true;
+      const tf = d.timeframe && d.timeframe !== "1m" ? " The chart looks like " + d.timeframe + ": the rules are for the 1-minute chart." : "";
+      $("readnote").textContent = (got.length ? "Filled in: " + got.join(", ") + " (highlighted in blue). Check them against your chart. " : "I couldn't read the numbers clearly. Type them in below. ") + (d.setup_seen ? "Setup seen: " + d.setup_seen + ". " : "") + (d.notes || "") + tf;
+      $("readnote").hidden = false;
+      render();
+    } catch (e) {
+      const msg = { cancelled: "", not_granted: "Screenshot reading needs your permission. Type the numbers in below instead.", images_unavailable: "Screenshot reading isn't available in this view. Type the numbers in below.", rate_limited: "Too many reads just now. Wait a minute and try again.", image_rejected: "That image couldn't be read. Try a PNG or JPG screenshot.", invalid_json: "The answer came back garbled. Press Read again." }[e && e.code];
+      $("readnote").textContent = msg === undefined ? "Reading failed. Press Read again, or type the numbers in below." : msg;
+      $("readnote").hidden = !$("readnote").textContent;
+    } finally {
+      $("thinking").hidden = true; $("stopread").hidden = true; $("read").disabled = !file;
+    }
+  });
+  $("stopread").addEventListener("click", () => ctl && ctl.abort());
+
+  (async () => {
+    try {
+      const s = window.claude && (await window.claude.use("sample"));
+      const lim = s ? await s.limits().catch(() => null) : null;
+      if (s && lim && lim.images) { sample = s; $("read").disabled = !file; }
+      else { $("read").hidden = true; const n = $("readnote"); n.textContent = "Screenshot reading isn't available in this view. Type the numbers in below; the plan works the same."; n.hidden = false; }
+    } catch (e) { $("read").hidden = true; }
+  })();
+
+  // ---------------- copy code ----------------
+  $("copy").addEventListener("click", async () => {
+    const ta = $("code");
+    try { await navigator.clipboard.writeText(ta.value); $("copystatus").textContent = "Copied. Paste it into the Pine Editor."; }
+    catch (e) { ta.focus(); ta.select(); $("copystatus").textContent = "Press Ctrl+C (Cmd+C on Mac) to copy the selected code."; }
+  });
+
+  renderToday();
+})();
+</script>
+
+</body>
+</html>
