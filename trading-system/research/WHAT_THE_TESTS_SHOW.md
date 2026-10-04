@@ -52,6 +52,33 @@ from 2023 to 2026. But:
 - In the 15 months it wasn't tuned on, it earned less (about 9 points per trade before costs, +2R in total),
   and June to September 2026 lost money.
 
+## "80% win rate" setups on the 5-minute chart
+
+![Win rate trap](win-rate-trap.png)
+
+I searched 1,820 five-minute setups (TCI liquidity traps at yesterday's high / low, the opening range, swings
+and the day's high / low; JJ's fair-price reversal; trend pullbacks) with small targets and wide stops, which is
+how you get a high win rate.
+
+- **523 of them won 80% or more in the last 90 days** (3 July to 1 October 2026). A high win rate is easy:
+  take profit after a few points and give the stop lots of room.
+- Only 16 of those 523 made money in those 90 days. Wins were small and losses big: a typical one won
+  +12 points and lost −55.
+- Only 1 also made money in the 90 days before that, and none did over the full 3¾ years.
+- The busiest one won 87.5% of 64 trades in the last 90 days (+223 points). Over 3¾ years it won 77.5% and
+  lost −4,895 points. That's the orange line above.
+
+One setup held up on Nifty: **Liquidity Trap**, a stop hunt at yesterday's high or low. A 5-minute candle trades
+about 8 points beyond the level and closes back inside; target about 25 points, stop about 59. Results:
+
+- Nifty: 105 trades in 3¾ years (about one every 9 days), 78% won, +520 points after costs. It lost a little in
+  2023 and made money in 2024, 2025 and 2026.
+- Last 90 days: 10 trades, 80% won, +20 points.
+- Sensex: the same rules lost −2,017 points. Treat the Nifty result as thin.
+
+It's in `tradingview/liquidity_trap.pine` as a TradingView strategy, so TradingView's Strategy Tester shows the
+same numbers on your own chart.
+
 ## How to re-check all of this
 
 - `python research/fair_price_backtest.py` downloads the candles and re-runs the Fair Price test.

@@ -14,3 +14,5 @@ Run from this folder. Data lives in `../.cache/` (not committed):
 | `alt.py` | Opening-range breakout, Supertrend and EMA crossovers |
 
 Costs: 4 Nifty points or 12 Sensex points per trade. `pip install pandas scikit-learn` first.
+| `liquidity_trap_test.py` | Reference for `tradingview/liquidity_trap.pine` (5-minute, TradingView fill rules); prints its results by period |
+| `high_win_search.py` | 1,820 five-minute setups: which win 80%+ in the last 90 days, and how they did before that |

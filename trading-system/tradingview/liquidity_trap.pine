@@ -1,0 +1,227 @@
+// Liquidity Trap for TradingView. Select and copy EVERYTHING in this file, including the next line.
+//@version=5
+// ============================================================================
+// Liquidity Trap (TCI-style stop hunt): NIFTY 5-MINUTE chart
+// This is a STRATEGY script: open TradingView's "Strategy Tester" tab under the chart to see its win
+// rate and profit on your own chart, after costs (4 index points per trade, set as 2 per order).
+//
+// LEVELS: yesterday's high and low, where stop-losses (liquidity) sit. Optional: today's opening range
+//   (first 15 minutes) high and low.
+// SIGNAL: a 5-minute candle that came from inside the level trades beyond it by at least 0.08 x the
+//   usual opening range (about 8 Nifty points) and CLOSES back inside. The stops were taken and price
+//   was rejected. Above yesterday's high -> SELL. Below yesterday's low -> BUY. Each level once a day.
+// TARGET = 0.25 x usual opening range (about 25 Nifty points). STOP = 0.6 x (about 59 points).
+//   The small target and wide stop give the high win rate; one loss costs about 2.4 wins.
+// "Usual opening range" = median 9:15-10:45 high-low of the last 20 days (about 98 Nifty points, Oct 2026).
+// New signals 9:30-14:30. One trade at a time. Anything open is closed at 3:15.
+// Tested on Nifty 5-minute candles, Jan 2023 - Oct 2026, 4 points cost per trade: 105 trades, 78% won,
+//   +520 points. Last 90 days before 1 Oct 2026: 10 trades, 80% won, +20 points. Sensex lost money.
+// Reference implementation (same rules): trading-system/research/quant/liquidity_trap_test.py
+// ============================================================================
+strategy("Liquidity Trap (Nifty 5m)", "LTRAP", overlay = true, process_orders_on_close = true, default_qty_type = strategy.fixed, default_qty_value = 1, commission_type = strategy.commission.cash_per_order, commission_value = 2, initial_capital = 100000, max_lines_count = 500, max_labels_count = 500)
+
+// ---------------- inputs ----------------
+G1 = "Rules (tested defaults)"
+sweepK   = input.float(0.08, "Sweep beyond the level, x usual opening range", step = 0.01, group = G1)
+tpK      = input.float(0.25, "Target, x usual opening range", step = 0.05, group = G1)
+slK      = input.float(0.6, "Stop, x usual opening range", step = 0.05, group = G1)
+useOR    = input.bool(false, "Also trade the opening-range high / low (more trades, weaker in the test)", group = G1)
+winSess  = input.session("0930-1430", "New signals only in (IST)", group = G1)
+nDays    = input.int(20, "Usual opening range: median of the last N days", minval = 3, maxval = 60, group = G1)
+fallback = input.float(0.45, "Under 3 days of chart history: range = this % of price", step = 0.05, group = G1)
+G2 = "Display"
+showLv   = input.bool(true, "Show yesterday's high / low", group = G2)
+showBox  = input.bool(true, "Show the status and results box", group = G2)
+
+TZ    = "Asia/Kolkata"
+GREEN = color.new(#089981, 0)
+RED   = color.new(#f23645, 0)
+GREY  = color.new(#787b86, 0)
+fmt(x) => str.tostring(x, "#,##0.##")
+pts(x) => str.tostring(x, "+#,##0;-#,##0")
+
+hm     = hour(time, TZ) * 100 + minute(time, TZ)
+newDay = dayofmonth(time, TZ) != dayofmonth(time[1], TZ)
+inWin  = not na(time(timeframe.period, winSess, TZ))
+
+// ---------------- day state ----------------
+var float[] ranges = array.new_float()
+var float amHi = na
+var float amLo = na
+var bool fullDay = false
+var float U = na
+var float dayHi = na
+var float dayLo = na
+var float pdh = na
+var float pdl = na
+var float orh = na
+var float orl = na
+var bool pdhUsed = false
+var bool pdlUsed = false
+var bool orhUsed = false
+var bool orlUsed = false
+var int barsToday = 0
+var line lPdh = na
+var line lPdl = na
+var label lbPdh = na
+var label lbPdl = na
+
+if newDay
+    if fullDay and not na(amHi)
+        array.push(ranges, amHi - amLo)
+        if array.size(ranges) > nDays
+            array.shift(ranges)
+    pdh := dayHi
+    pdl := dayLo
+    fullDay := hm == 915
+    amHi := na
+    amLo := na
+    U := array.size(ranges) >= 3 ? array.median(ranges) : open * fallback / 100
+    dayHi := high
+    dayLo := low
+    orh := na
+    orl := na
+    pdhUsed := false
+    pdlUsed := false
+    orhUsed := false
+    orlUsed := false
+    barsToday := 0
+    if showLv and not na(pdh)
+        lPdh := line.new(bar_index, pdh, bar_index + 1, pdh, color = color.new(RED, 30), width = 2)
+        lPdl := line.new(bar_index, pdl, bar_index + 1, pdl, color = color.new(GREEN, 30), width = 2)
+        label.delete(lbPdh)
+        label.delete(lbPdl)
+        lbPdh := label.new(bar_index, pdh, "YESTERDAY HIGH " + fmt(pdh), style = label.style_label_left, color = color.new(RED, 85), textcolor = RED, size = size.small)
+        lbPdl := label.new(bar_index, pdl, "YESTERDAY LOW " + fmt(pdl), style = label.style_label_left, color = color.new(GREEN, 85), textcolor = GREEN, size = size.small)
+barsToday += 1
+if showLv and not na(pdh)
+    line.set_x2(lPdh, bar_index + 1)
+    line.set_x2(lPdl, bar_index + 1)
+    label.set_x(lbPdh, bar_index + 3)
+    label.set_x(lbPdl, bar_index + 3)
+
+TP = tpK * U
+SL = slK * U
+SW = sweepK * U
+
+// ---------------- exits ----------------
+// Target and stop are strategy.exit orders placed at entry. Close anything still open at 3:15.
+if strategy.position_size != 0 and hm >= 1515
+    strategy.close_all(comment = "3:15")
+
+// result label for each finished trade
+var int seen = 0
+var line lSL = na
+var line lTP = na
+var float lastTP = na
+var float lastSL = na
+if strategy.closedtrades > seen
+    k = strategy.closedtrades - 1
+    p = strategy.closedtrades.profit(k)
+    px = strategy.closedtrades.exit_price(k)
+    txt = math.abs(px - lastTP) < 0.01 ? "TARGET HIT" : math.abs(px - lastSL) < 0.01 ? "STOP HIT" : "3:15 EXIT"
+    label.new(bar_index, px, txt + " " + pts(p) + " pts after costs", style = label.style_label_left, color = color.new(p >= 0 ? GREEN : RED, 85), textcolor = p >= 0 ? GREEN : RED, size = size.small)
+    alert("LTRAP " + syminfo.ticker + " EXIT: " + txt + " at " + fmt(px) + " (" + pts(p) + " pts after costs)", alert.freq_once_per_bar_close)
+    line.set_x2(lSL, bar_index)
+    line.set_x2(lTP, bar_index)
+    seen := strategy.closedtrades
+if strategy.position_size != 0
+    line.set_x2(lSL, bar_index + 1)
+    line.set_x2(lTP, bar_index + 1)
+
+// ---------------- signals ----------------
+int sig = 0
+string lvName = ""
+if barstate.isconfirmed and strategy.position_size == 0 and inWin and barsToday > 3 and not na(pdh)
+    if not pdhUsed and high > pdh + SW and close < pdh and close[1] <= pdh
+        sig := -1
+        pdhUsed := true
+        lvName := "yesterday's high"
+    else if not pdlUsed and low < pdl - SW and close > pdl and close[1] >= pdl
+        sig := 1
+        pdlUsed := true
+        lvName := "yesterday's low"
+    else if useOR and not orhUsed and not na(orh) and high > orh + SW and close < orh and close[1] <= orh
+        sig := -1
+        orhUsed := true
+        lvName := "opening-range high"
+    else if useOR and not orlUsed and not na(orl) and low < orl - SW and close > orl and close[1] >= orl
+        sig := 1
+        orlUsed := true
+        lvName := "opening-range low"
+
+if sig != 0
+    stopPx = close - sig * SL
+    tgtPx = close + sig * TP
+    if sig == 1
+        strategy.entry("BUY", strategy.long)
+        strategy.exit("BUY X", "BUY", limit = tgtPx, stop = stopPx)
+    else
+        strategy.entry("SELL", strategy.short)
+        strategy.exit("SELL X", "SELL", limit = tgtPx, stop = stopPx)
+    lastTP := tgtPx
+    lastSL := stopPx
+    lSL := line.new(bar_index, stopPx, bar_index + 1, stopPx, color = RED, width = 2)
+    lTP := line.new(bar_index, tgtPx, bar_index + 1, tgtPx, color = GREEN, width = 2)
+    txt = (sig == 1 ? "BUY " : "SELL ") + fmt(close) + "\nSTOP " + fmt(stopPx) + "\nTARGET " + fmt(tgtPx)
+    label.new(bar_index, close, txt, yloc = sig == 1 ? yloc.belowbar : yloc.abovebar, style = sig == 1 ? label.style_label_up : label.style_label_down, color = sig == 1 ? GREEN : RED, textcolor = color.white, size = size.normal, tooltip = "Stop hunt at " + lvName)
+    alert("LTRAP " + syminfo.ticker + " " + (sig == 1 ? "BUY" : "SELL") + " at " + fmt(close) + " | STOP " + fmt(stopPx) + " | TARGET " + fmt(tgtPx) + " | stop hunt at " + lvName, alert.freq_once_per_bar_close)
+
+// opening range = the first three 5-minute candles (9:15-9:30)
+if barsToday == 3
+    orh := math.max(high, math.max(high[1], high[2]))
+    orl := math.min(low, math.min(low[1], low[2]))
+
+// day high / low and the 9:15-10:45 range (for tomorrow)
+dayHi := math.max(dayHi, high)
+dayLo := math.min(dayLo, low)
+if hm >= 915 and hm < 1045
+    amHi := na(amHi) ? high : math.max(amHi, high)
+    amLo := na(amLo) ? low : math.min(amLo, low)
+
+// ---------------- status and results box ----------------
+var table tb = table.new(position.top_right, 2, 8, bgcolor = color.new(color.white, 5), border_color = color.new(GREY, 70), border_width = 1)
+putRow(int r, string k, string v, color c) =>
+    table.cell(tb, 0, r, k, text_color = GREY, text_size = size.small, text_halign = text.align_left)
+    table.cell(tb, 1, r, v, text_color = c, text_size = size.small, text_halign = text.align_left)
+
+if showBox and barstate.islast
+    string msg = ""
+    color nc = GREY
+    if timeframe.period != "5"
+        msg := "Switch the chart to 5 minutes"
+        nc := RED
+    else if strategy.position_size > 0
+        msg := "IN BUY. Stop and target are the red and green lines"
+        nc := GREEN
+    else if strategy.position_size < 0
+        msg := "IN SELL. Stop and target are the red and green lines"
+        nc := RED
+    else if not inWin
+        msg := "No new signals now (9:30-14:30 only)"
+    else
+        a = pdhUsed ? "high done today" : "SELL if a candle goes above " + fmt(pdh + SW) + " and closes below " + fmt(pdh)
+        b = pdlUsed ? "low done today" : "BUY if a candle goes below " + fmt(pdl - SW) + " and closes above " + fmt(pdl)
+        msg := a + "\n" + b
+    // results on this chart: all trades, and the last 90 days
+    n = strategy.closedtrades
+    w = strategy.wintrades
+    net = strategy.netprofit
+    float n90 = 0
+    float w90 = 0
+    float net90 = 0
+    cutoff = time - 90 * 86400000
+    if n > 0
+        for i = 0 to n - 1
+            if strategy.closedtrades.exit_time(i) >= cutoff
+                n90 += 1
+                pr = strategy.closedtrades.profit(i)
+                net90 += pr
+                if pr > 0
+                    w90 += 1
+    putRow(0, "Now", msg, nc)
+    putRow(1, "Target / stop", fmt(math.round(TP)) + " / " + fmt(math.round(SL)) + " pts (sweep " + fmt(math.round(SW)) + ")", color.black)
+    putRow(2, "On this chart", str.tostring(n) + " trades, " + (n > 0 ? str.tostring(math.round(100.0 * w / n)) : "0") + "% won", color.black)
+    putRow(3, "Net after costs", pts(net) + " pts", net >= 0 ? GREEN : RED)
+    putRow(4, "Last 90 days", str.tostring(n90) + " trades, " + (n90 > 0 ? str.tostring(math.round(100.0 * w90 / n90)) : "0") + "% won, " + pts(net90) + " pts", net90 >= 0 ? GREEN : RED)
+    putRow(5, "Avg win / avg loss", (w > 0 ? pts(strategy.grossprofit / w) : "-") + " / " + (strategy.losstrades > 0 ? pts(-strategy.grossloss / strategy.losstrades) : "-") + " pts", color.black)

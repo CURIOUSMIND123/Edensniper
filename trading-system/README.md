@@ -1,6 +1,11 @@
 # TCI zone-breakout system for Groww: indicator, backtester, paper and live bot
 
-> **Newest: the Fair Price Reversal indicator** for the Nifty 1-minute chart
+> **Newest: the Liquidity Trap strategy** for the Nifty 5-minute chart
+> ([`tradingview/liquidity_trap.pine`](tradingview/liquidity_trap.pine)): stop hunts at yesterday's high / low,
+> about 78% of trades won since 2023, with TradingView's Strategy Tester showing the results on your chart.
+> What every test found, in plain words: [`research/WHAT_THE_TESTS_SHOW.md`](research/WHAT_THE_TESTS_SHOW.md).
+>
+> **Also: the Fair Price Reversal indicator** for the Nifty 1-minute chart
 > ([`tradingview/fair_price.pine`](tradingview/fair_price.pine)): BUY / SELL with stop and target on the live
 > chart, tested on 915 days of 1-minute data. Rules and results: [`FAIR_PRICE_PLAYBOOK.md`](FAIR_PRICE_PLAYBOOK.md).
 >
@@ -244,6 +249,7 @@ Start with `"max_lots": 1`.
 | `live.py` | Paper or live session for today, or `--replay` of a saved day |
 | `backtest.py` | Backtest on Groww historical index and option candles, with the random-direction check and `--stop-mults` |
 | `call_helper.py` | Follow a live call with a wider stop: your stop, break-even level, rupee risk and lots |
+| `tradingview/liquidity_trap.pine` | **Liquidity Trap** strategy (5-minute): stop hunts at yesterday's high / low, stop / target, results box, Strategy Tester |
 | `FAIR_PRICE_PLAYBOOK.md` | **Fair Price Reversal**: rules, how to read the indicator, the 915-day test, what was dropped |
 | `tradingview/fair_price.pine` | **Fair Price Reversal** indicator: fair price, buy / sell zones, BUY / SELL with stop and target, status box, alerts |
 | `tci/fairprice.py` | The Fair Price rules in Python; `tested_params` is what the indicator draws |

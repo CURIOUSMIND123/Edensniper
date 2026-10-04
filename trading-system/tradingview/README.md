@@ -1,6 +1,20 @@
 # TCI indicators for TradingView: plain-language guide
 
-## Fair Price Reversal (newest): Nifty 1-minute chart
+## Liquidity Trap (newest): Nifty 5-minute chart, high win rate
+
+File: [`liquidity_trap.pine`](liquidity_trap.pine). A TradingView **strategy** for the **NIFTY 5-minute chart**:
+open the Strategy Tester tab to see its win rate and profit on your own chart, after 4 points of costs per trade.
+
+- Red and green lines mark **yesterday's high and low**, where stop-losses sit.
+- **SELL**: a candle goes about 8 points above yesterday's high and closes back below it. **BUY**: the same at
+  yesterday's low. The label shows the entry, **STOP** (about 59 points away) and **TARGET** (about 25 points away).
+- The box at the top right says exactly what would trigger a trade now, plus the results on your chart: all
+  trades and the last 90 days.
+- Tested on Nifty, Jan 2023 to Oct 2026: 105 trades, 78% won, +520 points; last 90 days 10 trades, 80% won,
+  +20 points. One loss costs about three wins. Sensex lost with the same rules. Why most 80% setups lose:
+  [`../research/WHAT_THE_TESTS_SHOW.md`](../research/WHAT_THE_TESTS_SHOW.md).
+
+## Fair Price Reversal: Nifty 1-minute chart
 
 File: [`fair_price.pine`](fair_price.pine). Made for the **NIFTY 1-minute chart**. Full rules, the 915-day test
 and what it means for your money: [Fair Price playbook](../FAIR_PRICE_PLAYBOOK.md).
