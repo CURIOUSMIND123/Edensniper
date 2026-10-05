@@ -116,10 +116,11 @@ finishDraw(int idx) =>
     p = array.get(tSide, idx) * (array.get(tExit, idx) - array.get(tEntry, idx)) - cost
     nm = array.get(NAMES, array.get(tStrat, idx))
     if tk == 1
-        label.new(bar_index, array.get(tExit, idx), nm + " EXIT " + pts(p) + " pts", style = label.style_label_left, color = color.new(p >= 0 ? GREEN : RED, 85), textcolor = p >= 0 ? GREEN : RED, size = size.small)
         endLine(array.get(tLS, idx), bar_index)
         endLine(array.get(tLT, idx), bar_index)
         alert("COMBO4 " + syminfo.ticker + " " + nm + " EXIT at " + fmt(array.get(tExit, idx)) + " (" + pts(p) + " pts after costs)", alert.freq_once_per_bar_close)
+    if tk == 1
+        label.new(bar_index, array.get(tExit, idx), nm + " EXIT " + pts(p) + " pts", style = label.style_label_left, color = color.new(p >= 0 ? GREEN : RED, 85), textcolor = p >= 0 ? GREEN : RED, size = size.small)
     else if tk == 0 and showSkip
         label.new(bar_index, array.get(tExit, idx), nm + " (skipped) " + pts(p), style = label.style_none, textcolor = GREY, size = size.tiny)
 
@@ -321,10 +322,9 @@ if barstate.isconfirmed and not na(U) and array.size(c1) > 0
                 fpIdx := -1
                 if g < 0
                     fpLossRow += 1
-                    if fpLossRow >= 2
-                        fpStopped := true
                 else if g > 0
                     fpLossRow := 0
+                fpStopped := fpStopped or fpLossRow >= 2
         if na(fpFair)
             fpFair := bo
         if fpIdx >= 0 and bm >= 915
@@ -333,10 +333,9 @@ if barstate.isconfirmed and not na(U) and array.size(c1) > 0
             fpIdx := -1
             if g < 0
                 fpLossRow += 1
-                if fpLossRow >= 2
-                    fpStopped := true
             else if g > 0
                 fpLossRow := 0
+            fpStopped := fpStopped or fpLossRow >= 2
         array.push(fpH, bh)
         array.push(fpL, bl)
         array.push(fpC, bc)
@@ -375,13 +374,16 @@ if barstate.isconfirmed and not na(U)
         s = array.get(tSide, brIdx)
         e = array.get(tEntry, brIdx)
         px = exit5(s, array.get(tStop, brIdx), na)
+        bool brDone = false
         if not na(px)
             closeTrade(brIdx, px)
-            brIdx := -1
+            brDone := true
         else if mins >= 915
             closeTrade(brIdx, close)
+            brDone := true
+        if brDone
             brIdx := -1
-        else
+        if not brDone
             brBest := math.max(brBest, s * (close - e))
             stp = array.get(tStop, brIdx)
             stp := s > 0 ? math.max(stp, e + brBest - 0.6 * U) : math.min(stp, e - brBest + 0.6 * U)
@@ -520,12 +522,13 @@ if barstate.isconfirmed and array.size(barNew) > 0
         stp = array.get(tStop, idx)
         tg = array.get(tTgt, idx)
         if not conflict
-            txt = nm + (s > 0 ? " BUY " : " SELL ") + fmt(e) + (st == 0 ? " (" + hhmm(m) + ")" : "") + "\nSTOP " + fmt(stp) + (na(tg) ? "\nthen trail" : "\nTARGET " + fmt(tg))
-            label.new(bar_index, close, txt, yloc = s > 0 ? yloc.belowbar : yloc.abovebar, style = s > 0 ? label.style_label_up : label.style_label_down, color = s > 0 ? GREEN : RED, textcolor = color.white, size = size.normal)
             array.set(tLS, idx, line.new(bar_index, stp, bar_index + 1, stp, color = RED, width = 2))
             if not na(tg)
                 array.set(tLT, idx, line.new(bar_index, tg, bar_index + 1, tg, color = GREEN, width = 2))
             alert("COMBO4 " + syminfo.ticker + " " + nm + (s > 0 ? " BUY" : " SELL") + " at " + fmt(e) + " | STOP " + fmt(stp) + (na(tg) ? " | trailing stop" : " | TARGET " + fmt(tg)), alert.freq_once_per_bar_close)
+        txt = nm + (s > 0 ? " BUY " : " SELL ") + fmt(e) + (st == 0 ? " (" + hhmm(m) + ")" : "") + "\nSTOP " + fmt(stp) + (na(tg) ? "\nthen trail" : "\nTARGET " + fmt(tg))
+        if not conflict
+            label.new(bar_index, close, txt, yloc = s > 0 ? yloc.belowbar : yloc.abovebar, style = s > 0 ? label.style_label_up : label.style_label_down, color = s > 0 ? GREEN : RED, textcolor = color.white, size = size.normal)
         else if showSkip
             label.new(bar_index, close, nm + (s > 0 ? " buy" : " sell") + " skipped: conflict", yloc = s > 0 ? yloc.belowbar : yloc.abovebar, style = label.style_none, textcolor = GREY, size = size.tiny)
         if array.get(tOpen, idx) == 0
@@ -580,7 +583,7 @@ if barstate.islast
                     if array.get(tExitT, i) >= dayStart
                         nT += 1
                         netT += p
-                else if array.get(tTake, i) == 0
+                if array.get(tTake, i) == 0
                     nSk += 1
                     netSk += p
     string openTxt = ""
