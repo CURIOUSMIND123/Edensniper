@@ -110,6 +110,13 @@ newTrade(int st, int side, int m, float e, float s, float tg) =>
     array.push(barNew, idx)
     idx
 
+// entry bar of a trade, or na when there is no trade (Pine v5 evaluates both sides of "and")
+barOf(int idx) =>
+    int r = na
+    if idx >= 0
+        r := array.get(tBar, idx)
+    r
+
 // result label for a finished trade (taken ones big, skipped ones small and grey)
 finishDraw(int idx) =>
     tk = array.get(tTake, idx)
@@ -362,7 +369,7 @@ if barstate.isconfirmed and not na(U) and array.size(c1) > 0
 // ================= the 5-minute strategies =================
 if barstate.isconfirmed and not na(U)
     // ----- manage open trades -----
-    if ltIdx >= 0 and array.get(tBar, ltIdx) < bar_index
+    if ltIdx >= 0 and barOf(ltIdx) < bar_index
         px = exit5(array.get(tSide, ltIdx), array.get(tStop, ltIdx), array.get(tTgt, ltIdx))
         if not na(px)
             closeTrade(ltIdx, px)
@@ -370,7 +377,7 @@ if barstate.isconfirmed and not na(U)
         else if mins >= 915
             closeTrade(ltIdx, close)
             ltIdx := -1
-    if brIdx >= 0 and array.get(tBar, brIdx) < bar_index
+    if brIdx >= 0 and barOf(brIdx) < bar_index
         s = array.get(tSide, brIdx)
         e = array.get(tEntry, brIdx)
         px = exit5(s, array.get(tStop, brIdx), na)
@@ -393,7 +400,7 @@ if barstate.isconfirmed and not na(U)
                 endLine(array.get(tLS, brIdx), bar_index)
                 array.set(tLS, brIdx, line.new(bar_index, stp, bar_index + 1, stp, color = RED, width = 2))
             array.set(tStop, brIdx, stp)
-    if lvIdx >= 0 and array.get(tBar, lvIdx) < bar_index
+    if lvIdx >= 0 and barOf(lvIdx) < bar_index
         px = exit5(array.get(tSide, lvIdx), array.get(tStop, lvIdx), array.get(tTgt, lvIdx))
         if not na(px)
             closeTrade(lvIdx, px)

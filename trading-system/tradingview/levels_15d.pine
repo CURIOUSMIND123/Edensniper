@@ -115,7 +115,10 @@ mergeInto(float[] cp, float[] cw, int[] ck, float tol, float[] outP, float[] out
             wt = array.get(cw, k)
             kd = array.get(ck, k)
             n = array.size(outP)
-            if n > 0 and p - array.get(outP, n - 1) <= tol
+            bool join = false
+            if n > 0
+                join := p - array.get(outP, n - 1) <= tol
+            if join
                 op = array.get(outP, n - 1)
                 ow = array.get(outW, n - 1)
                 array.set(outP, n - 1, (op * ow + p * wt) / (ow + wt))
@@ -148,9 +151,15 @@ if newDay
     array.push(dStart, bar_index)
     if array.size(dStart) > look + 1
         array.shift(dStart)
-    while array.size(consDay) > 0 and array.get(consDay, 0) < dayNo - look
-        array.shift(consDay)
-        array.shift(consP)
+    int nOld = 0
+    if array.size(consDay) > 0
+        for j = 0 to array.size(consDay) - 1
+            if array.get(consDay, j) < dayNo - look
+                nOld += 1
+    if nOld > 0
+        for j = 1 to nOld
+            array.shift(consDay)
+            array.shift(consP)
     barsToday := 0
     nTr := 0
     inCons := false
@@ -297,13 +306,13 @@ if barstate.islast or newDay
                 if hasKind(kd, 4)
                     tag := tag + (tag == "" ? "" : " + ") + "CONS"
                 col = not hasKind(kd, 1) ? PURPLE : below ? GREEN : RED
-                array.push(drawn, line.new(bar_index - 60, p, bar_index + 10, p, color = color.new(col, 35), width = math.min(4, math.max(1, int(math.round(wt / 1.5)))), style = line.style_dotted))
+                array.push(drawn, line.new(math.max(0, bar_index - 60), p, bar_index + 10, p, color = color.new(col, 35), width = math.min(4, math.max(1, int(math.round(wt / 1.5)))), style = line.style_dotted))
                 array.push(drawnLb, label.new(bar_index + 10, p, tag + " " + fmt(p), style = label.style_label_left, color = color.new(col, 85), textcolor = col, size = size.tiny))
     if array.size(aP) > 0
         for j = 0 to array.size(aP) - 1
             if math.abs(array.get(aP, j) - close) <= 6 * U
                 p = array.get(aP, j)
-                array.push(drawn, line.new(bar_index - 60, p, bar_index + 10, p, color = YELLOW, width = 2))
+                array.push(drawn, line.new(math.max(0, bar_index - 60), p, bar_index + 10, p, color = YELLOW, width = 2))
                 array.push(drawnLb, label.new(bar_index + 30, p, "TRADE LEVEL " + str.tostring(array.get(aS, j)) + " " + fmt(p), style = label.style_label_left, color = color.new(YELLOW, 80), textcolor = YELLOW, size = size.tiny))
 
 // ---------------- exits ----------------
