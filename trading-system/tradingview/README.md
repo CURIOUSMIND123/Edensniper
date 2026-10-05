@@ -1,6 +1,19 @@
 # TCI indicators for TradingView: plain-language guide
 
-## 15-Day Levels (newest): Nifty 5-minute chart
+## Combo 4 (newest): all four strategies on one Nifty 5-minute chart
+
+File: [`combo4.pine`](combo4.pine). Runs Fair Price Reversal (on 1-minute candles read inside each 5-minute
+candle), Liquidity Trap, Breakout Retest and 15-Day Levels together. A signal is **skipped** when a different
+strategy signalled the opposite direction in the last 30 minutes; otherwise it's a **TAKE** with a big BUY / SELL
+label, STOP and TARGET (Breakout Retest trails its stop instead of a target). The box keeps score of the taken
+trades: open trades, today, the whole chart, the last 90 days, and what the skipped signals would have made.
+
+It's an indicator, not a strategy, because the four can hold a BUY and a SELL at once, which the Strategy Tester
+can't. Tested on Nifty, Feb 2023 to Oct 2026: +7,403 points after costs, about 2.5 trades a day, every year
+positive (2025 only +79), last 90 days +168; 56% of days red; deepest fall −2,461 points.
+`research/quant/combo4_mirror.py` is a line-by-line Python copy that reproduces those numbers.
+
+## 15-Day Levels: Nifty 5-minute chart
 
 File: [`levels_15d.pine`](levels_15d.pine). A TradingView **strategy** (Strategy Tester shows its results).
 

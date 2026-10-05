@@ -1,6 +1,9 @@
 # TCI zone-breakout system for Groww: indicator, backtester, paper and live bot
 
-> **Newest: the 15-Day Levels strategy** for the Nifty 5-minute chart
+> **Newest: Combo 4** ([`tradingview/combo4.pine`](tradingview/combo4.pine)): all four tested strategies on one
+> Nifty 5-minute chart, skipping signals that another strategy contradicted in the last 30 minutes.
+>
+> **Also: the 15-Day Levels strategy** for the Nifty 5-minute chart
 > ([`tradingview/levels_15d.pine`](tradingview/levels_15d.pine)): 15-day highs / lows, volume-profile peaks and
 > consolidations merged into lines; trades strong breakouts through "double" daily levels.
 >
@@ -257,6 +260,7 @@ Start with `"max_lots": 1`.
 | `live.py` | Paper or live session for today, or `--replay` of a saved day |
 | `backtest.py` | Backtest on Groww historical index and option candles, with the random-direction check and `--stop-mults` |
 | `call_helper.py` | Follow a live call with a wider stop: your stop, break-even level, rupee risk and lots |
+| `tradingview/combo4.pine` | **Combo 4** indicator (5-minute): all four strategies together, conflicting signals skipped, score box |
 | `tradingview/levels_15d.pine` | **15-Day Levels** strategy (5-minute): 15D highs / lows, VOL, CONS lines; breakouts through double daily levels |
 | `tradingview/breakout_retest.pine` | **Breakout Retest** strategy (5-minute): real breakout, pullback, reversal candle, trailing stop, results box |
 | `tradingview/liquidity_trap.pine` | **Liquidity Trap** strategy (5-minute): stop hunts at yesterday's high / low, stop / target, results box, Strategy Tester |

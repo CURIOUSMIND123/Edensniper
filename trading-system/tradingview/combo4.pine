@@ -1,0 +1,596 @@
+// Combo 4 for TradingView. Select and copy EVERYTHING in this file, including the next line.
+//@version=5
+// ============================================================================
+// Combo 4: all four tested strategies on one NIFTY 5-MINUTE chart, skipping conflicts
+//
+//   FP  Fair Price Reversal (runs on 1-minute candles read inside each 5-minute candle)
+//   LT  Liquidity Trap (stop hunt at yesterday's high / low)
+//   BR  Breakout Retest (real breakout, pullback, candle past the previous one, trailing stop)
+//   LV  15-Day Levels (strong candle through a level where 2+ daily highs / lows of the last 15 days meet)
+//
+// Each strategy runs on its own, one trade at a time. A new signal is SKIPPED when a different strategy
+// signalled the opposite direction in the last 30 minutes; otherwise it is a TAKE. Only TAKE signals get
+// the big BUY / SELL label with stop and target. Skipped ones are shown small and grey.
+// The box at the top right keeps score of the TAKE trades (index points after costs).
+// Tested on Nifty, Feb 2023 - Oct 2026, one unit per trade, 4 points cost per trade: +7,403 points,
+// every year positive (2025 only +79), last 90 days +168, 2.5 trades a day, 56% of days red, deepest
+// fall -2,461 points (Jun - Dec 2025).
+// Fair Price signals are known when their 1-minute candle closes but are shown when the 5-minute candle
+// closes (up to 4 minutes later). For them on time, also run fair_price.pine on a 1-minute chart.
+// Reference implementation: trading-system/research/quant/combine_test.py
+// ============================================================================
+indicator("Combo 4 (Nifty 5m)", "COMBO4", overlay = true, max_lines_count = 500, max_labels_count = 500, max_bars_back = 1500)
+
+// ---------------- inputs ----------------
+G0 = "Combo"
+cost     = input.float(4.0, "Cost per trade (index points)", step = 0.5, group = G0)
+confWin  = input.int(30, "Skip if a different strategy signalled the other way within (minutes)", minval = 0, maxval = 120, group = G0)
+showSkip = input.bool(true, "Show skipped signals (small, grey)", group = G0)
+useFP    = input.bool(true, "FP: Fair Price Reversal", group = G0)
+useLT    = input.bool(true, "LT: Liquidity Trap", group = G0)
+useBR    = input.bool(true, "BR: Breakout Retest", group = G0)
+useLV    = input.bool(true, "LV: 15-Day Levels", group = G0)
+showLv   = input.bool(true, "Show LV trade levels", group = G0)
+nDays    = input.int(20, "Usual opening range: median of the last N days", minval = 3, maxval = 60, group = G0)
+fallback = input.float(0.45, "Under 3 days of chart history: range = this % of price", step = 0.05, group = G0)
+
+TZ     = "Asia/Kolkata"
+GREEN  = color.new(#089981, 0)
+RED    = color.new(#f23645, 0)
+GREY   = color.new(#787b86, 0)
+YELLOW = color.new(#f2a900, 0)
+fmt(x) => str.tostring(x, "#,##0.##")
+endLine(line ln, int x) =>
+    if not na(ln)
+        line.set_x2(ln, x)
+pts(x) => str.tostring(x, "+#,##0;-#,##0")
+minsOf(int t) => hour(t, TZ) * 60 + minute(t, TZ)
+hhmm(int m) => str.tostring(math.floor(m / 60)) + ":" + (m % 60 < 10 ? "0" : "") + str.tostring(m % 60)
+NAMES = array.from("FP", "LT", "BR", "LV")
+
+mins   = minsOf(time)
+newDay = dayofmonth(time, TZ) != dayofmonth(time[1], TZ)
+inWin  = mins >= 570 and mins < 870            // 9:30-14:30 for LT, BR, LV
+
+// 1-minute candles inside this 5-minute candle (for FP)
+[o1, h1, l1, c1, t1] = request.security_lower_tf(syminfo.tickerid, "1", [open, high, low, close, time])
+
+// ---------------- shared day state ----------------
+var float[] ranges = array.new_float()
+var float[] dHi = array.new_float()
+var float[] dLo = array.new_float()
+var float amHi = na
+var float amLo = na
+var bool fullDay = false
+var float U = na
+var float dayHi = na
+var float dayLo = na
+var float pdh = na
+var float pdl = na
+var int barsToday = 0
+
+// ---------------- the trade book (every signal of every strategy) ----------------
+var int[]   tStrat = array.new_int()
+var int[]   tSide  = array.new_int()
+var int[]   tMin   = array.new_int()
+var float[] tEntry = array.new_float()
+var float[] tStop  = array.new_float()
+var float[] tTgt   = array.new_float()
+var int[]   tOpen  = array.new_int()
+var float[] tExit  = array.new_float()
+var int[]   tExitT = array.new_int()
+var int[]   tTake  = array.new_int()      // -1 not decided yet, 0 skipped, 1 taken
+var int[]   tBar   = array.new_int()
+var line[]  tLS    = array.new_line()
+var line[]  tLT    = array.new_line()
+var int[]   barNew = array.new_int()      // trades opened during this 5-minute candle
+// today's signals, for the conflict check
+var int[] sgStrat = array.new_int()
+var int[] sgMin   = array.new_int()
+var int[] sgSide  = array.new_int()
+
+newTrade(int st, int side, int m, float e, float s, float tg) =>
+    array.push(tStrat, st)
+    array.push(tSide, side)
+    array.push(tMin, m)
+    array.push(tEntry, e)
+    array.push(tStop, s)
+    array.push(tTgt, tg)
+    array.push(tOpen, 1)
+    array.push(tExit, na)
+    array.push(tExitT, na)
+    array.push(tTake, -1)
+    array.push(tBar, bar_index)
+    array.push(tLS, na)
+    array.push(tLT, na)
+    array.push(sgStrat, st)
+    array.push(sgMin, m)
+    array.push(sgSide, side)
+    idx = array.size(tStrat) - 1
+    array.push(barNew, idx)
+    idx
+
+// result label for a finished trade (taken ones big, skipped ones small and grey)
+finishDraw(int idx) =>
+    tk = array.get(tTake, idx)
+    p = array.get(tSide, idx) * (array.get(tExit, idx) - array.get(tEntry, idx)) - cost
+    nm = array.get(NAMES, array.get(tStrat, idx))
+    if tk == 1
+        label.new(bar_index, array.get(tExit, idx), nm + " EXIT " + pts(p) + " pts", style = label.style_label_left, color = color.new(p >= 0 ? GREEN : RED, 85), textcolor = p >= 0 ? GREEN : RED, size = size.small)
+        endLine(array.get(tLS, idx), bar_index)
+        endLine(array.get(tLT, idx), bar_index)
+        alert("COMBO4 " + syminfo.ticker + " " + nm + " EXIT at " + fmt(array.get(tExit, idx)) + " (" + pts(p) + " pts after costs)", alert.freq_once_per_bar_close)
+    else if tk == 0 and showSkip
+        label.new(bar_index, array.get(tExit, idx), nm + " (skipped) " + pts(p), style = label.style_none, textcolor = GREY, size = size.tiny)
+
+closeTrade(int idx, float px) =>
+    array.set(tOpen, idx, 0)
+    array.set(tExit, idx, px)
+    array.set(tExitT, idx, time)
+    if array.get(tTake, idx) >= 0
+        finishDraw(idx)
+
+// stop / target hit on this 5-minute candle (TradingView path: open, nearer extreme, farther extreme, close)
+exit5(int side, float stp, float tgt) =>
+    bool hFirst = math.abs(high - open) < math.abs(open - low)
+    float a = hFirst ? high : low
+    float b = hFirst ? low : high
+    float px = na
+    if side * (open - stp) <= 0
+        px := stp
+    else if not na(tgt) and side * (open - tgt) >= 0
+        px := tgt
+    else if side * (a - stp) <= 0
+        px := stp
+    else if not na(tgt) and side * (a - tgt) >= 0
+        px := tgt
+    else if side * (b - stp) <= 0
+        px := stp
+    else if not na(tgt) and side * (b - tgt) >= 0
+        px := tgt
+    px
+
+// ---------------- FP state (1-minute) ----------------
+var float fpFair = na
+var int fpIdx = -1
+var int fpLossRow = 0
+var bool fpStopped = false
+var float fpSwH = na
+var float fpSwL = na
+var float[] fpH = array.new_float()
+var float[] fpL = array.new_float()
+var float[] fpC = array.new_float()
+// ---------------- LT state ----------------
+var int ltIdx = -1
+var bool ltHUsed = false
+var bool ltLUsed = false
+// ---------------- BR state ----------------
+var int brIdx = -1
+var int brN = 0
+var float brRisk = na
+var float brBest = 0.0
+var float[] lvlP = array.new_float()
+var int[] lvlD = array.new_int()
+var int[] lvlS = array.new_int()
+var int[] lvlR = array.new_int()
+// ---------------- LV state ----------------
+var int lvIdx = -1
+var int lvN = 0
+var float[] aP = array.new_float()
+var float[] aS = array.new_float()
+var int[] aUp = array.new_int()
+var int[] aDn = array.new_int()
+var line[] lvLines = array.new_line()
+
+// ================= new day =================
+if newDay and barstate.isconfirmed
+    if fullDay and not na(amHi)
+        array.push(ranges, amHi - amLo)
+        if array.size(ranges) > nDays
+            array.shift(ranges)
+    if not na(dayHi)
+        array.push(dHi, dayHi)
+        array.push(dLo, dayLo)
+        if array.size(dHi) > 15
+            array.shift(dHi)
+            array.shift(dLo)
+    pdh := dayHi
+    pdl := dayLo
+    U := array.size(ranges) >= 3 ? array.median(ranges) : open * fallback / 100
+    fullDay := mins == 555
+    amHi := na
+    amLo := na
+    dayHi := high
+    dayLo := low
+    barsToday := 0
+    array.clear(sgStrat)
+    array.clear(sgMin)
+    array.clear(sgSide)
+    // FP
+    fpFair := na
+    fpIdx := -1
+    fpLossRow := 0
+    fpStopped := false
+    fpSwH := na
+    fpSwL := na
+    array.clear(fpH)
+    array.clear(fpL)
+    array.clear(fpC)
+    // LT
+    ltIdx := -1
+    ltHUsed := false
+    ltLUsed := false
+    // BR
+    brIdx := -1
+    brN := 0
+    array.clear(lvlP)
+    array.clear(lvlD)
+    array.clear(lvlS)
+    array.clear(lvlR)
+    if not na(pdh)
+        array.push(lvlP, pdh)
+        array.push(lvlD, 1)
+        array.push(lvlS, 0)
+        array.push(lvlR, 0)
+        array.push(lvlP, pdl)
+        array.push(lvlD, -1)
+        array.push(lvlS, 0)
+        array.push(lvlR, 0)
+    // LV: merge the last 15 daily highs / lows; keep places where 2 or more meet
+    lvIdx := -1
+    lvN := 0
+    array.clear(aP)
+    array.clear(aS)
+    array.clear(aUp)
+    array.clear(aDn)
+    float[] cand = array.new_float()
+    if array.size(dHi) > 0
+        for j = 0 to array.size(dHi) - 1
+            array.push(cand, array.get(dHi, j))
+            array.push(cand, array.get(dLo, j))
+    array.sort(cand, order.ascending)
+    float cp = na
+    float cn = 0.0
+    if array.size(cand) > 0
+        for j = 0 to array.size(cand) - 1
+            p = array.get(cand, j)
+            if not na(cp) and p - cp <= 0.1 * U
+                cp := (cp * cn + p) / (cn + 1)
+                cn += 1
+            else
+                if not na(cp) and cn >= 2
+                    array.push(aP, cp)
+                    array.push(aS, cn)
+                    array.push(aUp, 0)
+                    array.push(aDn, 0)
+                cp := p
+                cn := 1
+        if not na(cp) and cn >= 2
+            array.push(aP, cp)
+            array.push(aS, cn)
+            array.push(aUp, 0)
+            array.push(aDn, 0)
+    for ln in lvLines
+        line.delete(ln)
+    array.clear(lvLines)
+    if showLv and useLV and array.size(aP) > 0
+        for j = 0 to array.size(aP) - 1
+            if math.abs(array.get(aP, j) - close) <= 5 * U
+                array.push(lvLines, line.new(bar_index, array.get(aP, j), bar_index + 1, array.get(aP, j), color = color.new(YELLOW, 30), width = 1))
+if barstate.isconfirmed
+    barsToday += 1
+    array.clear(barNew)
+for ln in lvLines
+    line.set_x2(ln, bar_index + 1)
+
+// ================= FP: replay this candle's 1-minute bars =================
+fpSL = 0.4 * U
+fpTP = 3.0 * fpSL
+if barstate.isconfirmed and not na(U) and array.size(c1) > 0
+    for k = 0 to array.size(c1) - 1
+        bo = array.get(o1, k)
+        bh = array.get(h1, k)
+        bl = array.get(l1, k)
+        bc = array.get(c1, k)
+        bm = minsOf(array.get(t1, k))
+        if bm < 555 or bm >= 930
+            continue
+        // manage an open FP trade (green candle: open-low-high-close, red: open-high-low-close)
+        if fpIdx >= 0
+            s = array.get(tSide, fpIdx)
+            stp = array.get(tStop, fpIdx)
+            tg = array.get(tTgt, fpIdx)
+            float hit = na
+            float p1 = bc >= bo ? bl : bh
+            float p2 = bc >= bo ? bh : bl
+            if s * (bo - stp) <= 0
+                hit := stp
+            else if s * (bo - tg) >= 0
+                hit := tg
+            else if s * (p1 - stp) <= 0
+                hit := stp
+            else if s * (p1 - tg) >= 0
+                hit := tg
+            else if s * (p2 - stp) <= 0
+                hit := stp
+            else if s * (p2 - tg) >= 0
+                hit := tg
+            if not na(hit)
+                g = s * (hit - array.get(tEntry, fpIdx))
+                closeTrade(fpIdx, hit)
+                fpIdx := -1
+                if g < 0
+                    fpLossRow += 1
+                    if fpLossRow >= 2
+                        fpStopped := true
+                else if g > 0
+                    fpLossRow := 0
+        if na(fpFair)
+            fpFair := bo
+        if fpIdx >= 0 and bm >= 915
+            g = array.get(tSide, fpIdx) * (bc - array.get(tEntry, fpIdx))
+            closeTrade(fpIdx, bc)
+            fpIdx := -1
+            if g < 0
+                fpLossRow += 1
+                if fpLossRow >= 2
+                    fpStopped := true
+            else if g > 0
+                fpLossRow := 0
+        array.push(fpH, bh)
+        array.push(fpL, bl)
+        array.push(fpC, bc)
+        n = array.size(fpC)
+        if n == 1
+            continue
+        if n >= 5
+            mh = array.get(fpH, n - 3)
+            ml = array.get(fpL, n - 3)
+            if ml < array.get(fpL, n - 5) and ml < array.get(fpL, n - 4) and ml < array.get(fpL, n - 2) and ml < array.get(fpL, n - 1)
+                fpSwL := ml
+            if mh > array.get(fpH, n - 5) and mh > array.get(fpH, n - 4) and mh > array.get(fpH, n - 2) and mh > array.get(fpH, n - 1)
+                fpSwH := mh
+        if fpIdx >= 0 or fpStopped or bm < 555 or bm >= 645 or not useFP
+            continue
+        gap = fpFair - bc
+        d = gap > 0 ? 1 : -1
+        if math.abs(gap) >= 0.8 * fpTP
+            pc = array.get(fpC, n - 2)
+            bool bos = d > 0 ? (not na(fpSwH) and bc > fpSwH and fpSwH >= pc) : (not na(fpSwL) and bc < fpSwL and fpSwL <= pc)
+            if bos
+                fpIdx := newTrade(0, d, bm, bc, bc - d * fpSL, bc + d * fpTP)
+
+// ================= the 5-minute strategies =================
+if barstate.isconfirmed and not na(U)
+    // ----- manage open trades -----
+    if ltIdx >= 0 and array.get(tBar, ltIdx) < bar_index
+        px = exit5(array.get(tSide, ltIdx), array.get(tStop, ltIdx), array.get(tTgt, ltIdx))
+        if not na(px)
+            closeTrade(ltIdx, px)
+            ltIdx := -1
+        else if mins >= 915
+            closeTrade(ltIdx, close)
+            ltIdx := -1
+    if brIdx >= 0 and array.get(tBar, brIdx) < bar_index
+        s = array.get(tSide, brIdx)
+        e = array.get(tEntry, brIdx)
+        px = exit5(s, array.get(tStop, brIdx), na)
+        if not na(px)
+            closeTrade(brIdx, px)
+            brIdx := -1
+        else if mins >= 915
+            closeTrade(brIdx, close)
+            brIdx := -1
+        else
+            brBest := math.max(brBest, s * (close - e))
+            stp = array.get(tStop, brIdx)
+            stp := s > 0 ? math.max(stp, e + brBest - 0.6 * U) : math.min(stp, e - brBest + 0.6 * U)
+            if brBest >= 0.5 * brRisk
+                stp := s > 0 ? math.max(stp, e) : math.min(stp, e)
+            if array.get(tTake, brIdx) == 1 and stp != array.get(tStop, brIdx)
+                endLine(array.get(tLS, brIdx), bar_index)
+                array.set(tLS, brIdx, line.new(bar_index, stp, bar_index + 1, stp, color = RED, width = 2))
+            array.set(tStop, brIdx, stp)
+    if lvIdx >= 0 and array.get(tBar, lvIdx) < bar_index
+        px = exit5(array.get(tSide, lvIdx), array.get(tStop, lvIdx), array.get(tTgt, lvIdx))
+        if not na(px)
+            closeTrade(lvIdx, px)
+            lvIdx := -1
+        else if mins >= 915
+            closeTrade(lvIdx, close)
+            lvIdx := -1
+
+    // ----- LT: stop hunt at yesterday's high / low -----
+    if useLT and ltIdx < 0 and inWin and barsToday > 3 and not na(pdh)
+        SW = 0.08 * U
+        int sig = 0
+        if not ltHUsed and high > pdh + SW and close < pdh and close[1] <= pdh
+            sig := -1
+            ltHUsed := true
+        else if not ltLUsed and low < pdl - SW and close > pdl and close[1] >= pdl
+            sig := 1
+            ltLUsed := true
+        if sig != 0
+            ltIdx := newTrade(1, sig, mins, close, close - sig * 0.6 * U, close + sig * 0.25 * U)
+
+    // ----- BR: levels, breakout, pullback, entry -----
+    if barsToday == 3
+        array.push(lvlP, math.max(high, math.max(high[1], high[2])))
+        array.push(lvlD, 1)
+        array.push(lvlS, 0)
+        array.push(lvlR, 0)
+        array.push(lvlP, math.min(low, math.min(low[1], low[2])))
+        array.push(lvlD, -1)
+        array.push(lvlS, 0)
+        array.push(lvlR, 0)
+    if barsToday >= 5
+        if high[2] > high[4] and high[2] > high[3] and high[2] > high[1] and high[2] > high
+            array.push(lvlP, high[2])
+            array.push(lvlD, 1)
+            array.push(lvlS, 0)
+            array.push(lvlR, 0)
+        if low[2] < low[4] and low[2] < low[3] and low[2] < low[1] and low[2] < low
+            array.push(lvlP, low[2])
+            array.push(lvlD, -1)
+            array.push(lvlS, 0)
+            array.push(lvlR, 0)
+    avgRange = (high[1] - low[1] + high[2] - low[2] + high[3] - low[3] + high[4] - low[4] + high[5] - low[5] + high[6] - low[6]) / 6
+    expandOK = barsToday > 6 and (high - low) >= 1.5 * avgRange
+    int brSig = 0
+    if array.size(lvlP) > 0
+        for j = 0 to array.size(lvlP) - 1
+            L = array.get(lvlP, j)
+            d = array.get(lvlD, j)
+            st = array.get(lvlS, j)
+            if st == 0
+                if (d > 0 ? close > L and close[1] <= L : close < L and close[1] >= L) and expandOK
+                    array.set(lvlS, j, 1)
+                    array.set(lvlR, j, 0)
+                continue
+            if st != 1
+                continue
+            if d > 0 ? close < L - 0.1 * U : close > L + 0.1 * U
+                array.set(lvlS, j, 2)
+                continue
+            if d > 0 ? low <= L + 0.12 * U : high >= L - 0.12 * U
+                array.set(lvlR, j, 1)
+            if array.get(lvlR, j) == 1 and brSig == 0 and (d > 0 ? close > L and close > high[1] : close < L and close < low[1])
+                brSig := d
+                array.set(lvlR, j, 0)
+    if useBR and brSig != 0 and brIdx < 0 and inWin and brN < 3
+        brN += 1
+        brRisk := 0.3 * U
+        brBest := 0.0
+        brIdx := newTrade(2, brSig, mins, close, close - brSig * brRisk, na)
+
+    // ----- LV: strong candle through a 15-day trade level -----
+    rngB = high - low
+    strongUp = close > open and rngB > 0 and (close - open) >= 0.6 * rngB and (close - low) >= 0.75 * rngB
+    strongDn = close < open and rngB > 0 and (open - close) >= 0.6 * rngB and (high - close) >= 0.75 * rngB
+    if useLV and lvIdx < 0 and inWin and lvN < 3 and barsToday > 1 and array.size(aP) > 0
+        int best = -1
+        float bestS = -1.0
+        int bestD = 0
+        for j = 0 to array.size(aP) - 1
+            sc = array.get(aS, j)
+            if sc > bestS
+                p = array.get(aP, j)
+                if array.get(aUp, j) == 0 and close[1] <= p and close > p + 0.03 * U and strongUp
+                    best := j
+                    bestS := sc
+                    bestD := 1
+                else if array.get(aDn, j) == 0 and close[1] >= p and close < p - 0.03 * U and strongDn
+                    best := j
+                    bestS := sc
+                    bestD := -1
+        if best >= 0
+            lvl = array.get(aP, best)
+            if bestD > 0
+                array.set(aUp, best, 1)
+            else
+                array.set(aDn, best, 1)
+            stopPx = lvl - bestD * 0.12 * U
+            risk = bestD * (close - stopPx)
+            if risk >= 0.05 * U and risk <= 0.8 * U
+                float tgtPx = close + bestD * 2.0 * risk
+                float bq = na
+                for j = 0 to array.size(aP) - 1
+                    q = array.get(aP, j)
+                    if bestD * (q - close) >= 2.0 * risk and (na(bq) or math.abs(q - close) < math.abs(bq - close))
+                        bq := q
+                if not na(bq)
+                    tgtPx := bq
+                lvN += 1
+                lvIdx := newTrade(3, bestD, mins, close, stopPx, tgtPx)
+
+// ================= decide TAKE / SKIP for this candle's new signals =================
+if barstate.isconfirmed and array.size(barNew) > 0
+    for idx in barNew
+        st = array.get(tStrat, idx)
+        m = array.get(tMin, idx)
+        s = array.get(tSide, idx)
+        bool conflict = false
+        for j = 0 to array.size(sgStrat) - 1
+            dm = m - array.get(sgMin, j)
+            if array.get(sgStrat, j) != st and dm >= 0 and dm <= confWin and array.get(sgSide, j) != s
+                conflict := true
+        array.set(tTake, idx, conflict ? 0 : 1)
+        nm = array.get(NAMES, st)
+        e = array.get(tEntry, idx)
+        stp = array.get(tStop, idx)
+        tg = array.get(tTgt, idx)
+        if not conflict
+            txt = nm + (s > 0 ? " BUY " : " SELL ") + fmt(e) + (st == 0 ? " (" + hhmm(m) + ")" : "") + "\nSTOP " + fmt(stp) + (na(tg) ? "\nthen trail" : "\nTARGET " + fmt(tg))
+            label.new(bar_index, close, txt, yloc = s > 0 ? yloc.belowbar : yloc.abovebar, style = s > 0 ? label.style_label_up : label.style_label_down, color = s > 0 ? GREEN : RED, textcolor = color.white, size = size.normal)
+            array.set(tLS, idx, line.new(bar_index, stp, bar_index + 1, stp, color = RED, width = 2))
+            if not na(tg)
+                array.set(tLT, idx, line.new(bar_index, tg, bar_index + 1, tg, color = GREEN, width = 2))
+            alert("COMBO4 " + syminfo.ticker + " " + nm + (s > 0 ? " BUY" : " SELL") + " at " + fmt(e) + " | STOP " + fmt(stp) + (na(tg) ? " | trailing stop" : " | TARGET " + fmt(tg)), alert.freq_once_per_bar_close)
+        else if showSkip
+            label.new(bar_index, close, nm + (s > 0 ? " buy" : " sell") + " skipped: conflict", yloc = s > 0 ? yloc.belowbar : yloc.abovebar, style = label.style_none, textcolor = GREY, size = size.tiny)
+        if array.get(tOpen, idx) == 0
+            finishDraw(idx)
+
+// keep the lines of open taken trades running
+if array.size(tStrat) > 0
+    for idx in array.from(fpIdx, ltIdx, brIdx, lvIdx)
+        if idx >= 0
+            if array.get(tTake, idx) == 1
+                endLine(array.get(tLS, idx), bar_index + 1)
+                endLine(array.get(tLT, idx), bar_index + 1)
+
+// day high / low and the 9:15-10:45 range
+if barstate.isconfirmed
+    dayHi := na(dayHi) ? high : math.max(dayHi, high)
+    dayLo := na(dayLo) ? low : math.min(dayLo, low)
+    if mins >= 555 and mins < 645
+        amHi := na(amHi) ? high : math.max(amHi, high)
+        amLo := na(amLo) ? low : math.min(amLo, low)
+
+// ================= score box (taken trades) =================
+var table tb = table.new(position.top_right, 2, 7, bgcolor = color.new(color.white, 5), border_color = color.new(GREY, 70), border_width = 1)
+putRow(int r, string k, string v, color c) =>
+    table.cell(tb, 0, r, k, text_color = GREY, text_size = size.small, text_halign = text.align_left)
+    table.cell(tb, 1, r, v, text_color = c, text_size = size.small, text_halign = text.align_left)
+
+if barstate.islast
+    float nAll = 0
+    float wAll = 0
+    float netAll = 0
+    float n90 = 0
+    float net90 = 0
+    float nT = 0
+    float netT = 0
+    float nSk = 0
+    float netSk = 0
+    cutoff = time - 90 * 86400000
+    dayStart = time - (mins - 555) * 60000
+    if array.size(tStrat) > 0
+        for i = 0 to array.size(tStrat) - 1
+            if array.get(tOpen, i) == 0
+                p = array.get(tSide, i) * (array.get(tExit, i) - array.get(tEntry, i)) - cost
+                if array.get(tTake, i) == 1
+                    nAll += 1
+                    netAll += p
+                    if p > 0
+                        wAll += 1
+                    if array.get(tExitT, i) >= cutoff
+                        n90 += 1
+                        net90 += p
+                    if array.get(tExitT, i) >= dayStart
+                        nT += 1
+                        netT += p
+                else if array.get(tTake, i) == 0
+                    nSk += 1
+                    netSk += p
+    string openTxt = ""
+    for idx in array.from(fpIdx, ltIdx, brIdx, lvIdx)
+        if idx >= 0
+            if array.get(tTake, idx) == 1
+                openTxt := openTxt + (openTxt == "" ? "" : "\n") + array.get(NAMES, array.get(tStrat, idx)) + (array.get(tSide, idx) > 0 ? " BUY " : " SELL ") + fmt(array.get(tEntry, idx)) + "  stop " + fmt(array.get(tStop, idx)) + (na(array.get(tTgt, idx)) ? "" : "  target " + fmt(array.get(tTgt, idx)))
+    putRow(0, "Open now", timeframe.period != "5" ? "Switch the chart to 5 minutes" : openTxt == "" ? "none" : openTxt, timeframe.period != "5" ? RED : color.black)
+    putRow(1, "Today", str.tostring(nT) + " closed, " + pts(netT) + " pts", netT >= 0 ? GREEN : RED)
+    putRow(2, "On this chart", str.tostring(nAll) + " taken, " + (nAll > 0 ? str.tostring(math.round(100 * wAll / nAll)) : "0") + "% won, " + pts(netAll) + " pts", netAll >= 0 ? GREEN : RED)
+    putRow(3, "Last 90 days", str.tostring(n90) + " taken, " + pts(net90) + " pts", net90 >= 0 ? GREEN : RED)
+    putRow(4, "Skipped (conflicts)", str.tostring(nSk) + " signals, would have made " + pts(netSk) + " pts", GREY)
+    putRow(5, "Usual range / costs", fmt(math.round(U)) + " pts / " + fmt(cost) + " pts a trade", color.black)

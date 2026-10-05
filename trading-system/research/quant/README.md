@@ -21,3 +21,4 @@ Costs: 4 Nifty points or 12 Sensex points per trade. `pip install pandas scikit-
 | `levels15_build.py` | Rolling 15-day levels for every day: daily highs / lows, time-at-price profile peaks, consolidation boxes, merged |
 | `levels15_test.py` | Reference for `tradingview/levels_15d.pine` (`--default`) and the 1,296-version search of rejection and breakout signals at those levels |
 | `combine_test.py` | All four strategies together on Nifty, their correlation, and trading only without (or with) a second strategy's agreement |
+| `combo4_mirror.py` | Line-by-line Python copy of `tradingview/combo4.pine`; reproduces `combine_test.py` (+7,403 points) |
