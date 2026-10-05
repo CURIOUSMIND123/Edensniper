@@ -20,3 +20,4 @@ Costs: 4 Nifty points or 12 Sensex points per trade. `pip install pandas scikit-
 | `breakout_search.py` | 960 breakout / pullback / reversal-candle / ride versions on Nifty and Sensex, last 90 days vs before |
 | `levels15_build.py` | Rolling 15-day levels for every day: daily highs / lows, time-at-price profile peaks, consolidation boxes, merged |
 | `levels15_test.py` | Reference for `tradingview/levels_15d.pine` (`--default`) and the 1,296-version search of rejection and breakout signals at those levels |
+| `combine_test.py` | All four strategies together on Nifty, their correlation, and trading only without (or with) a second strategy's agreement |

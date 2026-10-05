@@ -129,6 +129,25 @@ level or a fixed multiple.
 It's in `tradingview/levels_15d.pine`. It draws all the lines (15-day highs / lows, VOL, CONS, merged) and
 trades only the tested breakouts unless you switch that off.
 
+## All four strategies together
+
+Fair Price Reversal, Liquidity Trap, Breakout Retest and 15-Day Levels on Nifty, one unit each, February 2023 to
+1 October 2026 (901 days), after 4 points cost per trade. Their daily results are almost unrelated (correlations
+between −0.10 and +0.21), so they don't all lose on the same days.
+
+| Version | 2023 | 2024 | 2025 | 2026 | Last 90 days | All | Trades a day | Red days |
+|---|---|---|---|---|---|---|---|---|
+| All four | +1,963 | +2,218 | −554 | +2,354 | −13 | +5,981 | 2.7 | 56% |
+| All four, skip a trade when another strategy signalled the opposite way in the last 30 minutes | +1,853 | +2,720 | +79 | +2,750 | +168 | **+7,403** | 2.5 | 56% |
+| Only trades a second strategy confirmed within 30 minutes | +146 | +910 | +100 | +1,050 | +153 | +2,206 | 0.3 | 13% |
+
+- Trades that another strategy contradicted lost on average for all four strategies (−2 to −23 points each),
+  so skipping them is the one combination rule that helped everywhere. I found it after seeing these results, so
+  treat it as promising, not proven.
+- Even with that rule: more days lose than win (56% red), 16 of 45 months lost, the longest losing run was 10
+  days, and the deepest fall was −2,461 points (June to December 2025). On one Nifty option lot (delta 0.5)
+  that's about −₹80,000.
+
 ## How to re-check all of this
 
 - `python research/fair_price_backtest.py` downloads the candles and re-runs the Fair Price test.
