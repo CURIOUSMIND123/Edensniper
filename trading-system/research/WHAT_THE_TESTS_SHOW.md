@@ -101,6 +101,34 @@ holding to 3:15.
 
 It's in `tradingview/breakout_retest.pine` as a TradingView strategy.
 
+## 15-day levels, volume profile and consolidations
+
+Levels rebuilt every morning from the last 15 days: every daily high and low, profile peaks (prices where the
+most trading happened), and consolidations (an hour or more inside a narrow band). Lines within about 10 Nifty
+points are merged into one. The Nifty index has no volume, so this test uses time spent at each price (the
+classic market profile); the TradingView indicator can use Nifty futures volume instead.
+
+I tested 1,296 versions: rejection candles at the levels (pin bar or engulfing, then trade back), or strong
+breakout candles through them; which levels to use; how close counts as a touch; stop size; target at the next
+level or a fixed multiple.
+
+- 774 versions traded at least 0.8 times a day in the last 90 days. 24 made money there; none of those also made
+  money in the 90 days before.
+- **Rejection candles at the levels lost money**: −3,161 Nifty points and −27,882 Sensex points over 3¾ years
+  using all the lines.
+- **Adding profile peaks and consolidations to the trade levels made results worse** (Nifty −1,964 with them,
+  +1,863 without).
+- What held up: a **strong breakout candle through a "double" daily level**, where two or more of the last 15
+  daily highs / lows sit within about 10 points. Stop about 12 points back across the level, target the next
+  such level at least 2× the stop away.
+  - Nifty: 719 trades (0.8 a day), 36% won, average win +72 and loss −36, +1,863 points after costs, positive
+    in each of 2023, 2024, 2025 and 2026. Last 90 days −132, the 90 days before +138.
+  - Random buy / sell directions with the same entries, stops and targets did as well in only 2% of runs.
+  - Sensex: +3,304 Sensex points, but it lost in 2023 and 2026.
+
+It's in `tradingview/levels_15d.pine`. It draws all the lines (15-day highs / lows, VOL, CONS, merged) and
+trades only the tested breakouts unless you switch that off.
+
 ## How to re-check all of this
 
 - `python research/fair_price_backtest.py` downloads the candles and re-runs the Fair Price test.

@@ -1,0 +1,445 @@
+// 15-Day Levels for TradingView. Select and copy EVERYTHING in this file, including the next line.
+//@version=5
+// ============================================================================
+// 15-Day Levels: NIFTY 5-MINUTE chart. A STRATEGY script: the "Strategy Tester" tab shows its results.
+//
+// LINES (rebuilt every morning from the last 15 days, so old levels drop off):
+//   - every daily high and low of the last 15 days,
+//   - VOL: volume-profile peaks (prices where the most volume traded). The Nifty index has no volume on
+//     TradingView, so volume comes from Nifty futures (NSE:NIFTY1!) and is spread over each candle's range.
+//     If no volume is available, time spent at each price is used instead.
+//   - CONS: consolidations, an hour or more (12 candles) inside 0.3 x the usual opening range.
+//   Lines closer than 0.1 x the usual opening range (about 10 Nifty points) are merged into one line; the
+//   more things a line combines, the thicker it is.
+// TRADE LEVELS (solid yellow): places where 2 or more of the last 15 daily highs / lows line up.
+// SIGNAL: a strong candle (body at least 60% of the candle, closing in its top / bottom quarter) closes
+//   through a trade level by at least 0.03 x range, coming from the other side. BUY above, SELL below.
+// STOP: 0.12 x range (about 12 points) back on the other side of the level.
+// TARGET: the next trade level at least 2 x the stop away, else 2 x the stop.
+// Up to 3 trades a day, one at a time, entries 9:30-14:30, exit by 3:15.
+// Tested on Nifty 5-minute, Jan 2023 - Oct 2026 (time at price, 4 points cost per trade): 719 trades
+//   (0.8 a day), 36% won, average win +72 / loss -36, +1,863 points; positive every year; last 90 days
+//   -132. Trading the VOL and CONS lines too, or rejection candles, lost money in the same test.
+// Reference implementation: trading-system/research/quant/levels15_test.py
+// ============================================================================
+strategy("15-Day Levels (Nifty 5m)", "LVL15", overlay = true, process_orders_on_close = true, default_qty_type = strategy.fixed, default_qty_value = 1, commission_type = strategy.commission.cash_per_order, commission_value = 2, initial_capital = 100000, max_lines_count = 500, max_labels_count = 500, max_bars_back = 1500)
+
+// ---------------- inputs ----------------
+G1 = "Levels"
+look     = input.int(15, "Days of history", minval = 5, maxval = 20, group = G1)
+mergeK   = input.float(0.1, "Merge lines closer than this x usual range", step = 0.01, group = G1)
+volMode  = input.string("Futures volume", "Volume profile from", options = ["Futures volume", "Chart volume", "Time at price"], group = G1)
+volSym   = input.symbol("NSE:NIFTY1!", "Futures symbol for volume (SENSEX: BSE:SENSEX1!)", group = G1)
+binK     = input.float(0.05, "Profile bin size, x usual range", step = 0.01, group = G1)
+hvnPct   = input.int(70, "Volume peak: at least this percentile", minval = 50, maxval = 95, group = G1)
+consBars = input.int(12, "Consolidation: at least this many candles", minval = 6, maxval = 36, group = G1)
+consK    = input.float(0.3, "Consolidation: range at most this x usual range", step = 0.05, group = G1)
+showN    = input.int(6, "Lines to show above and below price", minval = 2, maxval = 15, group = G1)
+G2 = "Signals (tested defaults)"
+tradeAll = input.bool(false, "Trade all merged lines (15D + VOL + CONS, strength 2+) instead (lost money in the test)", group = G2)
+minHits  = input.int(2, "Trade level: at least this many daily highs / lows", minval = 1, maxval = 5, group = G2)
+brkK     = input.float(0.03, "Close beyond the level by, x usual range", step = 0.01, group = G2)
+slK      = input.float(0.12, "Stop beyond the level, x usual range", step = 0.01, group = G2)
+rr       = input.float(2.0, "Target at least this x the stop", step = 0.5, group = G2)
+maxTr    = input.int(3, "Max trades a day", minval = 1, maxval = 10, group = G2)
+winSess  = input.session("0930-1430", "New entries only in (IST)", group = G2)
+nDays    = input.int(20, "Usual opening range: median of the last N days", minval = 3, maxval = 60, group = G2)
+fallback = input.float(0.45, "Under 3 days of chart history: range = this % of price", step = 0.05, group = G2)
+showBox  = input.bool(true, "Show the status and results box", group = G2)
+
+TZ     = "Asia/Kolkata"
+GREEN  = color.new(#089981, 0)
+RED    = color.new(#f23645, 0)
+GREY   = color.new(#787b86, 0)
+YELLOW = color.new(#f2a900, 0)
+PURPLE = color.new(#7e57c2, 0)
+fmt(x) => str.tostring(x, "#,##0.##")
+pts(x) => str.tostring(x, "+#,##0;-#,##0")
+
+hm     = hour(time, TZ) * 100 + minute(time, TZ)
+newDay = dayofmonth(time, TZ) != dayofmonth(time[1], TZ)
+inWin  = not na(time(timeframe.period, winSess, TZ))
+
+// volume weight for each candle
+fv = request.security(volSym, timeframe.period, volume, lookahead = barmerge.lookahead_off)
+float wRaw = volMode == "Futures volume" ? fv : volMode == "Chart volume" ? volume : 1.0
+float w = na(wRaw) or wRaw <= 0 ? 1.0 : wRaw
+
+// ---------------- history kept for the levels ----------------
+var float[] ranges  = array.new_float()
+var float[] dHi     = array.new_float()
+var float[] dLo     = array.new_float()
+var int[]   dStart  = array.new_int()
+var float[] consP   = array.new_float()
+var int[]   consDay = array.new_int()
+var float amHi = na
+var float amLo = na
+var bool fullDay = false
+var float U = na
+var float dayHi = na
+var float dayLo = na
+var int dayNo = 0
+var int barsToday = 0
+var int nTr = 0
+var float cHi = na
+var float cLo = na
+var int cEnd = -1
+var bool inCons = false
+
+// today's levels: trade levels (price, count) and display lines (price, weight, kinds bitmask 1=D 2=VOL 4=CONS)
+var float[] tP = array.new_float()
+var int[]   tN = array.new_int()
+var float[] aP = array.new_float()
+var float[] aS = array.new_float()
+var int[]   aUp = array.new_int()
+var int[]   aDn = array.new_int()
+var float[] sP = array.new_float()
+var float[] sW = array.new_float()
+var int[]   sK = array.new_int()
+var line[]  drawn = array.new_line()
+var label[] drawnLb = array.new_label()
+
+hasKind(int x, int b) => math.floor(x / b) % 2 == 1
+addKind(int x, int b) => hasKind(x, b) ? x : x + b
+
+// greedy merge of sorted candidates
+mergeInto(float[] cp, float[] cw, int[] ck, float tol, float[] outP, float[] outW, int[] outK) =>
+    array.clear(outP)
+    array.clear(outW)
+    array.clear(outK)
+    if array.size(cp) > 0
+        idx = array.sort_indices(cp, order.ascending)
+        for j = 0 to array.size(idx) - 1
+            k = array.get(idx, j)
+            p = array.get(cp, k)
+            wt = array.get(cw, k)
+            kd = array.get(ck, k)
+            n = array.size(outP)
+            if n > 0 and p - array.get(outP, n - 1) <= tol
+                op = array.get(outP, n - 1)
+                ow = array.get(outW, n - 1)
+                array.set(outP, n - 1, (op * ow + p * wt) / (ow + wt))
+                array.set(outW, n - 1, ow + wt)
+                array.set(outK, n - 1, addKind(array.get(outK, n - 1), kd))
+            else
+                array.push(outP, p)
+                array.push(outW, wt)
+                array.push(outK, kd)
+
+if newDay
+    // close out yesterday
+    if fullDay and not na(amHi)
+        array.push(ranges, amHi - amLo)
+        if array.size(ranges) > nDays
+            array.shift(ranges)
+    if not na(dayHi)
+        array.push(dHi, dayHi)
+        array.push(dLo, dayLo)
+        if array.size(dHi) > look
+            array.shift(dHi)
+            array.shift(dLo)
+    U := array.size(ranges) >= 3 ? array.median(ranges) : open * fallback / 100
+    fullDay := hm == 915
+    amHi := na
+    amLo := na
+    dayHi := high
+    dayLo := low
+    dayNo += 1
+    array.push(dStart, bar_index)
+    if array.size(dStart) > look + 1
+        array.shift(dStart)
+    while array.size(consDay) > 0 and array.get(consDay, 0) < dayNo - look
+        array.shift(consDay)
+        array.shift(consP)
+    barsToday := 0
+    nTr := 0
+    inCons := false
+    cEnd := -1
+    float tol = mergeK * U
+    // 1. trade levels: daily highs / lows that line up
+    float[] cp = array.new_float()
+    float[] cw = array.new_float()
+    int[] ck = array.new_int()
+    if array.size(dHi) > 0
+        for j = 0 to array.size(dHi) - 1
+            array.push(cp, array.get(dHi, j))
+            array.push(cw, 1.0)
+            array.push(ck, 1)
+            array.push(cp, array.get(dLo, j))
+            array.push(cw, 1.0)
+            array.push(ck, 1)
+    float[] mp = array.new_float()
+    float[] mw = array.new_float()
+    int[] mk = array.new_int()
+    mergeInto(cp, cw, ck, tol, mp, mw, mk)
+    array.clear(tP)
+    array.clear(tN)
+    if array.size(mp) > 0
+        for j = 0 to array.size(mp) - 1
+            array.push(tP, array.get(mp, j))
+            array.push(tN, int(math.round(array.get(mw, j))))
+    // 2. volume profile of the last days (bars before today)
+    if array.size(dStart) > 1 and not na(U)
+        first = array.get(dStart, 0)
+        nb = bar_index - first
+        if nb > 10 and nb < 1500
+            float lo0 = low[1]
+            float hi0 = high[1]
+            for i = 1 to nb
+                lo0 := math.min(lo0, low[i])
+                hi0 := math.max(hi0, high[i])
+            bin = math.max(binK * U, syminfo.mintick)
+            nbin = int((hi0 - lo0) / bin) + 2
+            if nbin < 2000
+                float[] hist = array.new_float(nbin, 0.0)
+                for i = 1 to nb
+                    a = int((low[i] - lo0) / bin)
+                    z = int((high[i] - lo0) / bin)
+                    share = w[i] / (z - a + 1)
+                    for b = a to z
+                        array.set(hist, b, array.get(hist, b) + share)
+                float[] sm = array.new_float(nbin, 0.0)
+                float[] nz = array.new_float()
+                for b = 0 to nbin - 1
+                    v = (array.get(hist, math.max(0, b - 1)) + array.get(hist, b) + array.get(hist, math.min(nbin - 1, b + 1))) / 3
+                    array.set(sm, b, v)
+                    if v > 0
+                        array.push(nz, v)
+                thr = array.size(nz) > 0 ? array.percentile_nearest_rank(nz, hvnPct) : 0.0
+                kk = math.max(1, int(math.round(0.15 * U / bin)))
+                for b = 0 to nbin - 1
+                    v = array.get(sm, b)
+                    if v >= thr and v > 0
+                        bool peak = true
+                        for q = math.max(0, b - kk) to math.min(nbin - 1, b + kk)
+                            if array.get(sm, q) > v
+                                peak := false
+                        if peak
+                            array.push(cp, lo0 + (b + 0.5) * bin)
+                            array.push(cw, 2.0)
+                            array.push(ck, 2)
+    // 3. consolidations
+    if array.size(consP) > 0
+        for j = 0 to array.size(consP) - 1
+            array.push(cp, array.get(consP, j))
+            array.push(cw, 1.5)
+            array.push(ck, 4)
+    mergeInto(cp, cw, ck, tol, sP, sW, sK)
+    // the levels that can trigger trades today
+    array.clear(aP)
+    array.clear(aS)
+    array.clear(aUp)
+    array.clear(aDn)
+    if tradeAll
+        if array.size(sP) > 0
+            for j = 0 to array.size(sP) - 1
+                if array.get(sW, j) >= 2
+                    array.push(aP, array.get(sP, j))
+                    array.push(aS, array.get(sW, j))
+                    array.push(aUp, 0)
+                    array.push(aDn, 0)
+    else
+        if array.size(tP) > 0
+            for j = 0 to array.size(tP) - 1
+                if array.get(tN, j) >= minHits
+                    array.push(aP, array.get(tP, j))
+                    array.push(aS, array.get(tN, j))
+                    array.push(aUp, 0)
+                    array.push(aDn, 0)
+barsToday += 1
+
+// consolidation tracking (an hour or more inside 0.3 x range, today's candles only)
+hh = ta.highest(high, consBars)
+ll = ta.lowest(low, consBars)
+if barsToday >= consBars and not na(U) and hh - ll <= consK * U
+    if inCons and bar_index - consBars + 1 <= cEnd
+        cHi := math.max(cHi, hh)
+        cLo := math.min(cLo, ll)
+        array.set(consP, array.size(consP) - 1, (cHi + cLo) / 2)
+    else
+        cHi := hh
+        cLo := ll
+        array.push(consP, (cHi + cLo) / 2)
+        array.push(consDay, dayNo)
+    inCons := true
+    cEnd := bar_index
+
+// ---------------- draw today's lines (nearest ones above and below) ----------------
+if barstate.islast or newDay
+    for ln in drawn
+        line.delete(ln)
+    for lb in drawnLb
+        label.delete(lb)
+    array.clear(drawn)
+    array.clear(drawnLb)
+    int nAbove = 0
+    int nBelow = 0
+    if array.size(sP) > 0
+        idx = array.sort_indices(sP, order.ascending)
+        // below price: walk down from the nearest; above: walk up
+        int split = 0
+        for j = 0 to array.size(idx) - 1
+            if array.get(sP, array.get(idx, j)) <= close
+                split := j + 1
+        for j = 0 to array.size(idx) - 1
+            int k = array.get(idx, j)
+            bool below = j < split
+            int rank = below ? split - j : j - split + 1
+            if rank <= showN
+                p = array.get(sP, k)
+                wt = array.get(sW, k)
+                kd = array.get(sK, k)
+                string tag = ""
+                if hasKind(kd, 1)
+                    tag := "15D"
+                if hasKind(kd, 2)
+                    tag := tag + (tag == "" ? "" : " + ") + "VOL"
+                if hasKind(kd, 4)
+                    tag := tag + (tag == "" ? "" : " + ") + "CONS"
+                col = not hasKind(kd, 1) ? PURPLE : below ? GREEN : RED
+                array.push(drawn, line.new(bar_index - 60, p, bar_index + 10, p, color = color.new(col, 35), width = math.min(4, math.max(1, int(math.round(wt / 1.5)))), style = line.style_dotted))
+                array.push(drawnLb, label.new(bar_index + 10, p, tag + " " + fmt(p), style = label.style_label_left, color = color.new(col, 85), textcolor = col, size = size.tiny))
+    if array.size(aP) > 0
+        for j = 0 to array.size(aP) - 1
+            if math.abs(array.get(aP, j) - close) <= 6 * U
+                p = array.get(aP, j)
+                array.push(drawn, line.new(bar_index - 60, p, bar_index + 10, p, color = YELLOW, width = 2))
+                array.push(drawnLb, label.new(bar_index + 30, p, "TRADE LEVEL " + str.tostring(array.get(aS, j)) + " " + fmt(p), style = label.style_label_left, color = color.new(YELLOW, 80), textcolor = YELLOW, size = size.tiny))
+
+// ---------------- exits ----------------
+var float lastTP = na
+var float lastSL = na
+var int seen = 0
+var line lSL = na
+var line lTP = na
+if strategy.position_size != 0 and hm >= 1515
+    strategy.close_all(comment = "3:15")
+if strategy.closedtrades > seen
+    k = strategy.closedtrades - 1
+    p = strategy.closedtrades.profit(k)
+    px = strategy.closedtrades.exit_price(k)
+    txt = math.abs(px - lastTP) < 0.01 ? "TARGET HIT" : math.abs(px - lastSL) < 0.01 ? "STOP HIT" : "3:15 EXIT"
+    label.new(bar_index, px, txt + " " + pts(p) + " pts", style = label.style_label_left, color = color.new(p >= 0 ? GREEN : RED, 85), textcolor = p >= 0 ? GREEN : RED, size = size.small)
+    alert("LVL15 " + syminfo.ticker + " EXIT: " + txt + " at " + fmt(px) + " (" + pts(p) + " pts after costs)", alert.freq_once_per_bar_close)
+    line.set_x2(lSL, bar_index)
+    line.set_x2(lTP, bar_index)
+    seen := strategy.closedtrades
+if strategy.position_size != 0
+    line.set_x2(lSL, bar_index + 1)
+    line.set_x2(lTP, bar_index + 1)
+
+// ---------------- signals: strong candle through a trade level ----------------
+rngB = high - low
+strongUp = close > open and rngB > 0 and (close - open) >= 0.6 * rngB and (close - low) >= 0.75 * rngB
+strongDn = close < open and rngB > 0 and (open - close) >= 0.6 * rngB and (high - close) >= 0.75 * rngB
+int sig = 0
+float lvl = na
+if barstate.isconfirmed and strategy.position_size == 0 and inWin and nTr < maxTr and barsToday > 1 and array.size(aP) > 0
+    int best = -1
+    float bestS = -1.0
+    int bestD = 0
+    // pick the strongest level that breaks on this candle (ties: the lower price)
+    for j = 0 to array.size(aP) - 1
+        n = array.get(aS, j)
+        if n > bestS
+            p = array.get(aP, j)
+            if array.get(aUp, j) == 0 and close[1] <= p and close > p + brkK * U and strongUp
+                best := j
+                bestS := n
+                bestD := 1
+            else if array.get(aDn, j) == 0 and close[1] >= p and close < p - brkK * U and strongDn
+                best := j
+                bestS := n
+                bestD := -1
+    if best >= 0
+        lvl := array.get(aP, best)
+        if bestD > 0
+            array.set(aUp, best, 1)
+        else
+            array.set(aDn, best, 1)
+        risk = bestD * (close - (lvl - bestD * slK * U))
+        if risk >= 0.05 * U and risk <= 0.8 * U
+            sig := bestD
+
+if sig != 0
+    stopPx = lvl - sig * slK * U
+    risk = sig * (close - stopPx)
+    float tgtPx = close + sig * rr * risk
+    float bestQ = na
+    for j = 0 to array.size(aP) - 1
+        q = array.get(aP, j)
+        if sig * (q - close) >= rr * risk and (na(bestQ) or math.abs(q - close) < math.abs(bestQ - close))
+            bestQ := q
+    if not na(bestQ)
+        tgtPx := bestQ
+    nTr += 1
+    lastTP := tgtPx
+    lastSL := stopPx
+    if sig > 0
+        strategy.entry("BUY", strategy.long)
+        strategy.exit("BUY X", "BUY", limit = tgtPx, stop = stopPx)
+    else
+        strategy.entry("SELL", strategy.short)
+        strategy.exit("SELL X", "SELL", limit = tgtPx, stop = stopPx)
+    lSL := line.new(bar_index, stopPx, bar_index + 1, stopPx, color = RED, width = 2)
+    lTP := line.new(bar_index, tgtPx, bar_index + 1, tgtPx, color = GREEN, width = 2)
+    txt = (sig > 0 ? "BUY " : "SELL ") + fmt(close) + "\nSTOP " + fmt(stopPx) + "\nTARGET " + fmt(tgtPx)
+    label.new(bar_index, close, txt, yloc = sig > 0 ? yloc.belowbar : yloc.abovebar, style = sig > 0 ? label.style_label_up : label.style_label_down, color = sig > 0 ? GREEN : RED, textcolor = color.white, size = size.normal, tooltip = "Strong candle through the level at " + fmt(lvl))
+    alert("LVL15 " + syminfo.ticker + " " + (sig > 0 ? "BUY" : "SELL") + " at " + fmt(close) + " | STOP " + fmt(stopPx) + " | TARGET " + fmt(tgtPx) + " | broke " + fmt(lvl), alert.freq_once_per_bar_close)
+
+// day high / low and the 9:15-10:45 range
+dayHi := math.max(dayHi, high)
+dayLo := math.min(dayLo, low)
+if hm >= 915 and hm < 1045
+    amHi := na(amHi) ? high : math.max(amHi, high)
+    amLo := na(amLo) ? low : math.min(amLo, low)
+
+// ---------------- status and results box ----------------
+var table tb = table.new(position.top_right, 2, 7, bgcolor = color.new(color.white, 5), border_color = color.new(GREY, 70), border_width = 1)
+putRow(int r, string k, string v, color c) =>
+    table.cell(tb, 0, r, k, text_color = GREY, text_size = size.small, text_halign = text.align_left)
+    table.cell(tb, 1, r, v, text_color = c, text_size = size.small, text_halign = text.align_left)
+
+if showBox and barstate.islast
+    float upL = na
+    float dnL = na
+    if array.size(aP) > 0
+        for j = 0 to array.size(aP) - 1
+            p = array.get(aP, j)
+            if p > close and (na(upL) or p < upL)
+                upL := p
+            if p <= close and (na(dnL) or p > dnL)
+                dnL := p
+    string msg = ""
+    color mc = GREY
+    if timeframe.period != "5"
+        msg := "Switch the chart to 5 minutes"
+        mc := RED
+    else if strategy.position_size != 0
+        msg := (strategy.position_size > 0 ? "IN BUY" : "IN SELL") + ": stop " + fmt(lastSL) + ", target " + fmt(lastTP)
+        mc := strategy.position_size > 0 ? GREEN : RED
+    else if nTr >= maxTr
+        msg := "Done for today (" + str.tostring(maxTr) + " trades)"
+    else if not inWin
+        msg := "No new entries now (9:30-14:30 only)"
+    else
+        msg := (na(upL) ? "No trade level above" : "BUY on a strong green candle closing above " + fmt(upL + brkK * U)) + "\n" + (na(dnL) ? "No trade level below" : "SELL on a strong red candle closing below " + fmt(dnL - brkK * U))
+    m = strategy.closedtrades
+    float n90 = 0
+    float w90 = 0
+    float net90 = 0
+    cutoff = time - 90 * 86400000
+    if m > 0
+        for i = 0 to m - 1
+            if strategy.closedtrades.exit_time(i) >= cutoff
+                n90 += 1
+                pr = strategy.closedtrades.profit(i)
+                net90 += pr
+                if pr > 0
+                    w90 += 1
+    putRow(0, "Now", msg, mc)
+    putRow(1, "Volume from", volMode == "Futures volume" ? (na(fv) ? "futures volume not available: time at price" : volSym) : volMode, color.black)
+    putRow(2, "On this chart", str.tostring(m) + " trades, " + (m > 0 ? str.tostring(math.round(100.0 * strategy.wintrades / m)) : "0") + "% won", color.black)
+    putRow(3, "Net after costs", pts(strategy.netprofit) + " pts", strategy.netprofit >= 0 ? GREEN : RED)
+    putRow(4, "Last 90 days", str.tostring(n90) + " trades, " + (n90 > 0 ? str.tostring(math.round(100.0 * w90 / n90)) : "0") + "% won, " + pts(net90) + " pts", net90 >= 0 ? GREEN : RED)
+    putRow(5, "Avg win / avg loss", (strategy.wintrades > 0 ? pts(strategy.grossprofit / strategy.wintrades) : "-") + " / " + (strategy.losstrades > 0 ? pts(-strategy.grossloss / strategy.losstrades) : "-") + " pts", color.black)

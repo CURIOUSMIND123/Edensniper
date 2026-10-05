@@ -1,6 +1,23 @@
 # TCI indicators for TradingView: plain-language guide
 
-## Breakout Retest (newest): Nifty 5-minute chart, 1-2 trades a day
+## 15-Day Levels (newest): Nifty 5-minute chart
+
+File: [`levels_15d.pine`](levels_15d.pine). A TradingView **strategy** (Strategy Tester shows its results).
+
+![15-Day Levels](levels-15d-preview.png)
+
+- **Dotted lines**, rebuilt every morning from the last 15 days: daily highs and lows (15D), volume-profile
+  peaks (VOL) and consolidations (CONS). Lines within about 10 points are merged; thicker means more things line
+  up there. Volume comes from Nifty futures (`NSE:NIFTY1!`), since the index has none; if it isn't available it
+  uses time at price. The nearest 6 above and 6 below are shown.
+- **Yellow TRADE LEVELS**: two or more of the last 15 daily highs / lows within about 10 points.
+- **BUY / SELL** when a strong candle (body 60%+ of the candle, closing in its top / bottom quarter) closes
+  through a trade level. **STOP** about 12 points back across the level; **TARGET** the next trade level at
+  least 2× the stop away.
+- Tested on Nifty, Jan 2023 to Oct 2026 (time at price): 0.8 trades a day, 36% won, wins +72 / losses −36,
+  +1,863 points after costs, positive every year; last 90 days −132. Random directions did as well 2% of the time.
+
+## Breakout Retest: Nifty 5-minute chart, 1-2 trades a day
 
 File: [`breakout_retest.pine`](breakout_retest.pine). A TradingView **strategy**: open the Strategy Tester tab for
 its results on your chart.
