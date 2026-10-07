@@ -161,6 +161,10 @@ The indicator counts how often, in the chart's history, the next candle went abo
 - 30 minutes after the call: +7.7 points on average when it was right, −14.0 when it was wrong.
 - Trading every call for 30 minutes lost −2,180 Nifty points after costs; entering only when the level broke
   lost −773. Sensex was similar (−4,731 and −906 Sensex points).
+- On 3-minute candles it was the same: about 69% after a green candle and 67% after a red one, never 70%.
+  Its 2,409 strongest Nifty calls were right 68% of the time, but 30 minutes later price was only +3.9 points
+  ahead when right and −5.3 behind when wrong. Trading them lost −7,456 points (−4,696 entering only on the
+  break); Sensex lost −22,491 and −10,201 points.
 
 ## How to re-check all of this
 

@@ -1,6 +1,6 @@
 """Breakout Probability (Expo) replica on 15-minute candles, then a check of its strong calls over the last 30 days.
 
-    python breakout_probability_test.py nifty 65      (index, probability threshold in %)
+    python breakout_probability_test.py nifty 65 15   (index, probability threshold in %, candle minutes)
 
 The indicator shows, for each line, how often the next candle reached it in the chart's history, split by the
 colour of the current candle. Line 0 is the candle's own high / low; lines step 0.1% of price beyond it.
@@ -9,6 +9,8 @@ import json, collections, statistics as st, sys
 name = sys.argv[1] if len(sys.argv) > 1 else 'nifty'
 COST = {'nifty': 4.0, 'sensex': 12.0}[name]
 THR = float(sys.argv[2]) if len(sys.argv) > 2 else 70.0
+TF = int(sys.argv[3]) if len(sys.argv) > 3 else 15     # candle size in minutes
+H = 30 // TF                                          # candles in the 30 minutes after a call
 STEP_PCT, NLINES, HISTORY = 0.1, 5, 5000          # indicator defaults; ~5,000 bars of chart history
 raw = json.load(open(f'../.cache/{name}_1m.json'))
 by = collections.defaultdict(list)
@@ -19,14 +21,15 @@ bars = []                                          # (day, minute, o, h, l, c)
 for d in sorted(by):
     if len(by[d]) < 300: continue
     g = collections.OrderedDict()
-    for m, o, h, l, c in by[d]: g.setdefault((m - 555) // 15, []).append((m, o, h, l, c))
+    for m, o, h, l, c in by[d]: g.setdefault((m - 555) // TF, []).append((m, o, h, l, c))
     for k, ch in g.items():
-        bars.append((d, 555 + 15 * k, ch[0][1], max(x[2] for x in ch), min(x[3] for x in ch), ch[-1][4]))
-bars = bars[-(HISTORY + 600):]                     # chart history before and through the test window
+        bars.append((d, 555 + TF * k, ch[0][1], max(x[2] for x in ch), min(x[3] for x in ch), ch[-1][4]))
+bars = bars[-(HISTORY + 25 * 15 // TF * 24):]                     # chart history before and through the test window
 START, END = '2026-09-07', '2026-10-07'            # last 30 days
 tot = {1: 0, -1: 0}; up = {1: [0] * NLINES, -1: [0] * NLINES}; dn = {1: [0] * NLINES, -1: [0] * NLINES}
 calls = []
-for t in range(1, len(bars) - 2):
+P = []
+for t in range(1, len(bars) - H):
     d, m, o, h, l, c = bars[t]
     # 1. learn from the finished pair (t-1 -> t)
     pd_, pm, po, ph, pl, pc = bars[t - 1]
@@ -42,15 +45,17 @@ for t in range(1, len(bars) - 2):
     if not col or tot[col] < 50 or not (START <= d <= END): continue
     stp = c * STEP_PCT / 100
     nd, nm, no, nh, nl, nc = bars[t + 1]
-    d2, m2, _, h2, l2, c2 = bars[t + 2]
+    d2, m2, _, h2, l2, c2 = bars[t + H]
+    hiH = max(x[3] for x in bars[t + 1:t + H + 1]); loH = min(x[4] for x in bars[t + 1:t + H + 1])
     same_day = nd == d and d2 == d
     for i in range(NLINES):
         for side, hits, lvl in ((1, up[col][i], h + stp * i), (-1, dn[col][i], l - stp * i)):
             p = 100 * hits / tot[col]
+            P.append((i, side, col, p))
             if p < THR: continue
             right = (nh >= lvl) if side > 0 else (nl <= lvl)
             move30 = side * (c2 - c)                                  # from the signal close to 30 minutes later
-            best = side * ((max(nh, h2) if side > 0 else min(nl, l2)) - c)  # best point within those 30 minutes
+            best = side * ((hiH if side > 0 else loH) - c)                 # best point within those 30 minutes
             # entry with a stop order at the level (only if the next candle breaks it), exit 30 minutes after the signal
             fill = (max(no, lvl) if side > 0 else min(no, lvl)) if right else None
             stopTrade = side * (c2 - fill) if right else None
@@ -65,10 +70,17 @@ def show(cs, label):
     b = [x['stopTrade'] - COST for x in r]
     print(f"     trade A, enter at the signal close, exit 30 min later: {len(a)} trades, won {100*sum(v > 0 for v in a)/len(a):.0f}%, total {sum(a):+,.0f} pts after {COST:g} pts cost each")
     print(f"     trade B, buy/sell only when the level breaks, exit 30 min after the signal: {len(b)} trades, won {100*sum(v > 0 for v in b)/max(1,len(b)):.0f}%, total {sum(b):+,.0f} pts after costs")
-print(f"{name.upper()} 15-minute, {START} to {END}; step {STEP_PCT}% (about {bars[-1][5]*STEP_PCT/100:.0f} pts), probabilities learned from {HISTORY:,} bars of history")
+print(f"{name.upper()} {TF}-minute, {START} to {END}; step {STEP_PCT}% (about {bars[-1][5]*STEP_PCT/100:.0f} pts), probabilities learned from {HISTORY:,} bars of history")
 allc = [x for x in calls if x['same']]
 print(f"lines at or above the threshold: by line {collections.Counter(x['line'] for x in calls)}; dropped {len(calls)-len(allc)} late-day calls whose 30 minutes run past the close")
 show(allc, f"ALL {THR:g}%+ calls")
 show([x for x in allc if x['side'] > 0], 'calls for a NEW HIGH (bullish)')
 show([x for x in allc if x['side'] < 0], 'calls for a NEW LOW (bearish)')
 
+
+print('probabilities shown (line 0 = the candle\'s own high / low):')
+for i in range(2):
+    for side in (1, -1):
+        for col in (1, -1):
+            xs = [p for (li, sd, c_, p) in P if li == i and sd == side and c_ == col]
+            if xs: print(f"   line {i} {'new high' if side > 0 else 'new low '} after a {'green' if col > 0 else 'red  '} candle: {min(xs):.1f}% to {max(xs):.1f}%")
