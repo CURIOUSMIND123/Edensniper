@@ -166,6 +166,26 @@ The indicator counts how often, in the chart's history, the next candle went abo
   ahead when right and −5.3 behind when wrong. Trading them lost −7,456 points (−4,696 entering only on the
   break); Sensex lost −22,491 and −10,201 points.
 
+### Scalping its calls at 1 : 2
+
+Same calls, but each one traded as a quick scalp: stop X points, target 2X, out at whichever comes first (checked
+minute by minute), one trade at a time. Two entries: at the call candle's close, or only if the next candle
+breaks the level. Stops of 5, 10, 15 and 20 Nifty points (Sensex scaled to its price).
+
+- At 65% the indicator calls **every candle**: its line hardly moves, so there's always a 65%+ number on one side.
+  That's about 120 calls a day on 3-minute candles and 24 on 15-minute.
+- The target was hit before the stop 29-41% of the time. A coin toss hits a 2X target before an X stop about 33%
+  of the time, so the calls add little. After costs you need 60% (stop 5), 47% (stop 10), 42% (stop 15) or
+  40% (stop 20).
+- Nifty 3-minute, last 30 days: every version lost, from −6,349 points (enter at close, stop 5) to −338 points
+  (enter on the break, stop 20 / target 40, 8 of 21 days green). The 12 months before: all lost, from −83,100 to
+  −11,828.
+- Sensex 3-minute, last 30 days: all lost (best −69 Sensex points, enter on the break, stop 20); the 12 months
+  before lost −35,438 to −260,529.
+- 15-minute candles: Nifty lost in every version (best −379 in 30 days; −6,767 or worse in the 12 months before).
+  The only profit in the whole test was Sensex 15-minute, enter on the break, stop 20 / target 40: +550 Sensex
+  points in the last 30 days, but −19,039 over the 12 months before.
+
 ## How to re-check all of this
 
 - `python research/fair_price_backtest.py` downloads the candles and re-runs the Fair Price test.
