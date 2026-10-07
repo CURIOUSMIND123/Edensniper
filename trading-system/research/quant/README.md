@@ -24,3 +24,4 @@ Costs: 4 Nifty points or 12 Sensex points per trade. `pip install pandas scikit-
 | `combo4_mirror.py` | Line-by-line Python copy of `tradingview/combo4.pine`; reproduces `combine_test.py` (+7,403 points) |
 | `breakout_probability_test.py` | Rebuild of "Breakout Probability (Expo)" on any candle size (e.g. `nifty 65 3`); scores its strong calls over the last 30 days |
 | `breakout_probability_scalp.py` | Trades the same calls as 1:2 scalps (stop X, target 2X, whichever comes first) on any candle size (e.g. `nifty 3`); last 30 days and the 12 months before |
+| `breakout_probability_peak.py` | Its highest readings on every candle since 2023 (e.g. `nifty 5`): did it ever show 90%, and did its top readings pay? Also a 50-candle-memory version that does reach 90% |

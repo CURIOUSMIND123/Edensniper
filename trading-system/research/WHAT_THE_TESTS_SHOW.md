@@ -186,6 +186,20 @@ breaks the level. Stops of 5, 10, 15 and 20 Nifty points (Sensex scaled to its p
   The only profit in the whole test was Sensex 15-minute, enter on the break, stop 20 / target 40: +550 Sensex
   points in the last 30 days, but −19,039 over the 12 months before.
 
+### Did it ever show 90%?
+
+Every 3- and 5-minute candle from early 2023 to 7 October 2026, with the numbers worked out from the last 5,000
+candles, as a live chart would show them.
+
+- **It never showed 90%, or even 75%.** Highest ever: Nifty 72.5% (3-minute) and 73.6% (5-minute), Sensex 71.1%
+  and 73.3%. It counts thousands of candles, so one new candle barely moves the number.
+- Its highest 1% of readings (about 71-74%) lost on every test: Nifty −2,122 (3-minute) and −1,786 (5-minute)
+  points scalping at 1 : 2, worse when held 30 minutes. Sensex lost too.
+- With a short memory (only the last 50 candles), it does show 90%+, about once every 2-3 days. Those calls were
+  mixed: Nifty 5-minute held 30 minutes made +1,203 points over 471 trades (about +2.6 a trade after costs), but
+  Nifty 3-minute lost −847 with the same rule and Sensex 5-minute lost −4,124. 4 of 12 combinations made money,
+  about what luck gives.
+
 ## How to re-check all of this
 
 - `python research/fair_price_backtest.py` downloads the candles and re-runs the Fair Price test.
