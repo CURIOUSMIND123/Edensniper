@@ -148,6 +148,20 @@ between −0.10 and +0.21), so they don't all lose on the same days.
   days, and the deepest fall was −2,461 points (June to December 2025). On one Nifty option lot (delta 0.5)
   that's about −₹80,000.
 
+## "Breakout Probability (Expo)" on 15-minute candles
+
+The indicator counts how often, in the chart's history, the next candle went above the current candle's high
+(or below its low), split by whether the current candle is green or red, plus four more lines 0.1% further out.
+
+- On Nifty 15-minute it shows almost the same numbers on every candle: after a green candle about 67% for a new
+  high, after a red candle about 68% for a new low. In the 30 days to 7 October 2026 it never reached 70%.
+  The further lines were 17% or less.
+- Its strongest calls (65%+, 483 of them) were right 62% of the time by its own measure: the next candle
+  touched the level, even by a fraction of a point.
+- 30 minutes after the call: +7.7 points on average when it was right, −14.0 when it was wrong.
+- Trading every call for 30 minutes lost −2,180 Nifty points after costs; entering only when the level broke
+  lost −773. Sensex was similar (−4,731 and −906 Sensex points).
+
 ## How to re-check all of this
 
 - `python research/fair_price_backtest.py` downloads the candles and re-runs the Fair Price test.
