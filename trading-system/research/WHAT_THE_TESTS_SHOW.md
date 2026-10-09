@@ -200,6 +200,57 @@ candles, as a live chart would show them.
   Nifty 3-minute lost −847 with the same rule and Sensex 5-minute lost −4,124. 4 of 12 combinations made money,
   about what luck gives.
 
+## CPR and pivots
+
+![CPR magnet](cpr-magnet.png)
+
+CPR (central pivot range) from the previous day's high, low and close: pivot P = (H + L + C) / 3, BC = (H + L) / 2,
+TC = 2P − BC. "Narrow" means today's CPR is among the narrowest third of the last 20 days.
+
+**What repeated (last 60 sessions, 16 July to 9 October 2026, and every day since 2023):**
+
+- **A narrow CPR did not bring bigger days.** Nifty's narrow-CPR days moved 0.69% high to low on average in the
+  last 60 sessions; wide-CPR days moved 0.82%. Since 2023: 0.87% vs 0.98%, and a 1%+ day happened 30% of the time
+  on narrow days and 34% on wide ones. Sensex was the same. The CPR's width is just two-thirds of the distance between
+  yesterday's close and the middle of yesterday's range (close near the middle = narrow), so it doesn't measure
+  a squeeze.
+- **When the day opens above the CPR, price comes back to it about two times in three** (Nifty 63%, Sensex 66%
+  since 2023), and the same when it opens below. Days that opened above it closed lower slightly more often than
+  not (53-56%).
+- In the last 60 sessions, Sensex days that opened above a CPR that wasn't narrow closed lower 12 times in 16.
+  Since 2023 that happened only about half the time (54%).
+
+**What I tested:** 576 rule versions in five families: fade the open back to the CPR; opening-range breakout,
+with or without the narrow-CPR filter; a 5-minute close through the CPR; a poke through R1 / S1 that closes back;
+and holding all day for or against the CPR. Entries and exits on 1-minute candles, after costs.
+
+- **The best versions in the last 60 sessions were luck.** On Nifty they were opening-range breakouts (best
+  +585 points); on Sensex, holding all day in the open's direction on narrow-CPR days (best +2,238 Sensex
+  points). All 15 best on each index lost in the 30 sessions before. Since 2023, 12 of the Nifty 15 and 10 of the
+  Sensex 15 lost, and each of the rest had at least one losing year.
+- **Picked on February 2023 to June 2025 only**, the top 3 versions (hold all day against the CPR on narrow
+  days) lost afterwards on both indices. The next 7 included 5 "fade back to the CPR on normal or wide days"
+  versions, and all 5 made money afterwards on both.
+
+**What held up: CPR Magnet.** Skip narrow-CPR days. If the 9:15 one-minute candle opens above the CPR and closes
+at least 0.2% above it, sell at that close (9:16); if it opens below and closes 0.2% below, buy. Target the near
+edge of the CPR, stop 0.3% of price (about 68 Nifty points), out by 3:15.
+
+| | Trades | Won | Total after costs | Per trade | Last 90 sessions | Deepest fall |
+|---|---|---|---|---|---|---|
+| Nifty | 313 (1.7 a week) | 50% | +2,253 pts | +7.2 | 26 trades, +5 | −673 |
+| Sensex | 294 | 49% | +6,198 pts | +21.1 | 25 trades, +1,055 | −3,139 |
+| Nifty, same rule on narrow days | 142 | 37% | −2,636 | −18.6 | | |
+
+- Same entries, stop and target distance, but a coin toss for the direction: as good in only 2 of 300 runs, on
+  both indices.
+- Weak spots: both lost in 2023 (Nifty −180, Sensex −2,444). Nifty lost −282 in the last 60 sessions, when the
+  market kept falling and the buys back toward the CPR were stopped out. About half the profit came from two
+  months (May and June 2026 on Nifty). Not every nearby setting works: about half of the "fade on normal days"
+  versions made money on Nifty since 2023.
+
+It's in `tradingview/cpr_magnet.pine`.
+
 ## How to re-check all of this
 
 - `python research/fair_price_backtest.py` downloads the candles and re-runs the Fair Price test.

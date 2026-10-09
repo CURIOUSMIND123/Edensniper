@@ -1,6 +1,23 @@
 # TCI indicators for TradingView: plain-language guide
 
-## Combo 4 (newest): all four strategies on one Nifty 5-minute chart
+## CPR Magnet (newest): Nifty or Sensex, any 1 to 15-minute chart, at most one trade a day
+
+File: [`cpr_magnet.pine`](cpr_magnet.pine). An indicator. It reads 1-minute candles underneath, so it works on a
+1, 3, 5 or 15-minute chart.
+
+- **Blue band**: today's CPR (from yesterday's high, low and close), with the pivot line inside. **Orange band**:
+  a narrow CPR (narrowest third of the last 20 days), meaning no trade today. Red lines R1-R3, green S1-S3.
+- **SELL** at 9:16 when the 9:15 one-minute candle opens above the CPR and closes at least 0.2% above it;
+  **BUY** when it opens below and closes at least 0.2% below. **TARGET** the near edge of the CPR, **STOP** 0.3%
+  of price (about 68 Nifty points), out by 3:15. The label shows all three; dashed lines show target and stop.
+- The box shows today's trigger prices (SELL at or above / BUY at or below), so you can use them on a live chart
+  even though free TradingView is 15 minutes late, plus the next session's levels after 3:30 and the score on
+  the chart's history.
+- Tested Feb 2023 to 9 Oct 2026 after costs: Nifty 313 trades, 50% won, +2,253 points (last 90 sessions +5);
+  Sensex 294 trades, 49% won, +6,198 points (last 90 sessions +1,055). Both lost in 2023. Random directions did
+  as well in 2 of 300 runs. `research/quant/cpr_magnet_check.py` has the same rules in Python.
+
+## Combo 4: all four strategies on one Nifty 5-minute chart
 
 File: [`combo4.pine`](combo4.pine). Runs Fair Price Reversal (on 1-minute candles read inside each 5-minute
 candle), Liquidity Trap, Breakout Retest and 15-Day Levels together. A signal is **skipped** when a different

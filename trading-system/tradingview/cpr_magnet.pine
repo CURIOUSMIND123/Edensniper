@@ -1,0 +1,196 @@
+// CPR Magnet for TradingView. Select and copy EVERYTHING in this file, including the next line.
+//@version=5
+// ============================================================================
+// CPR Magnet: NIFTY or SENSEX, any chart from 1 to 15 minutes (1-minute data is read underneath)
+// Plots the CPR (central pivot range) and the floor pivots, and gives at most ONE trade a day at 9:16.
+//
+// CPR from yesterday's high (H), low (L) and close (C): pivot P = (H + L + C) / 3, BC = (H + L) / 2,
+//   TC = 2P - BC. The band between TC and BC is the CPR. R1 = 2P - L, S1 = 2P - H, R2 = P + (H - L),
+//   S2 = P - (H - L), R3 = H + 2(P - L), S3 = L - 2(H - P).
+// NARROW CPR: today's width is among the narrowest third of the last 20 days. No trade on those days:
+//   in the test, price did NOT come back to a narrow CPR (the trade lost on those days).
+// SELL: the 9:15 one-minute candle opens above the CPR and closes at least 0.2% above its top.
+// BUY:  the 9:15 one-minute candle opens below the CPR and closes at least 0.2% below its bottom.
+// Entry at that close (9:16). TARGET = the near edge of the CPR. STOP = 0.3% of price (about 68 Nifty
+//   points). Anything still open is closed at 3:15. The plan box shows today's trigger prices before 9:15.
+// Tested on 1-minute candles, Feb 2023 - 9 Oct 2026, after costs (4 Nifty / 12 Sensex points a trade):
+//   Nifty  313 trades (about 1.7 a week), 50% won, +2,253 points. Last 90 sessions: 26 trades, +5.
+//   Sensex 294 trades, 49% won, +6,198 points. Last 90 sessions: 25 trades, +1,055.
+//   Both lost in 2023. Trading the same entries in a random direction did as well in 2 of 300 runs.
+// Reference implementation (same rules): trading-system/research/quant/cpr_magnet_check.py
+// TradingView's daily close can differ a few points from the last 1-minute close used in the test.
+// ============================================================================
+indicator("CPR Magnet", "CPRM", overlay = true, max_lines_count = 500, max_labels_count = 500)
+
+// ---------------- inputs ----------------
+G1 = "Rules (tested defaults)"
+gapPct  = input.float(0.2, "Trade only if the 9:15 candle closes at least this % beyond the CPR", step = 0.05, group = G1)
+stopPct = input.float(0.3, "Stop, % of price", step = 0.05, group = G1)
+tgtMode = input.string("CPR near edge", "Target", options = ["CPR near edge", "Pivot (middle of the CPR)"], group = G1)
+skipNar = input.bool(true, "No trade when the CPR is among the narrowest third of the last 20 days", group = G1)
+costIn  = input.float(0, "Cost per trade in index points (0 = auto: Nifty 4, Sensex 12)", step = 1, group = G1)
+G2 = "Display"
+showPiv = input.bool(true, "Show pivots R1-R3 and S1-S3", group = G2)
+showBox = input.bool(true, "Show the plan and results box", group = G2)
+
+TZ     = "Asia/Kolkata"
+GREEN  = color.new(#089981, 0)
+RED    = color.new(#f23645, 0)
+GREY   = color.new(#787b86, 0)
+BLUE   = color.new(#2962ff, 0)
+ORANGE = color.new(#f57c00, 0)
+fmt(x) => str.tostring(x, "#,##0.##")
+pts(x) => str.tostring(x, "+#,##0;-#,##0")
+minsOf(int t) => hour(t, TZ) * 60 + minute(t, TZ)
+cost = costIn > 0 ? costIn : close > 50000 ? 12.0 : 4.0
+
+// ---------------- yesterday's high / low / close -> today's CPR and pivots ----------------
+cprWidth(float h, float l, float c) =>
+    float p = (h + l + c) / 3
+    float bc = (h + l) / 2
+    math.abs(2 * p - 2 * bc) / p * 100
+dayInfo() =>
+    float w = cprWidth(high[1], low[1], close[1])          // today's CPR width
+    float wN = cprWidth(high, low, close)                  // next session's (final after 3:30)
+    int narrower = 0
+    int narrowerN = 0
+    for i = 1 to 20
+        if w[i] < w
+            narrower += 1
+        if w[i - 1] < wN
+            narrowerN += 1
+    [high[1], low[1], close[1], w, narrower, high, low, close, wN, narrowerN]
+[pH, pL, pC, wid, nNar, tH, tL, tC, widN, nNarN] = request.security(syminfo.tickerid, "D", dayInfo(), lookahead = barmerge.lookahead_on)
+
+P   = (pH + pL + pC) / 3
+BC  = (pH + pL) / 2
+TC  = 2 * P - BC
+top = math.max(TC, BC)
+bot = math.min(TC, BC)
+R1  = 2 * P - pL
+S1  = 2 * P - pH
+R2  = P + (pH - pL)
+S2  = P - (pH - pL)
+R3  = pH + 2 * (P - pL)
+S3  = pL - 2 * (pH - P)
+narrow  = nNar * 3 < 20
+sellLvl = top / (1 - gapPct / 100)       // a 9:15 close at or above this -> SELL
+buyLvl  = bot / (1 + gapPct / 100)       // a 9:15 close at or below this -> BUY
+
+// ---------------- plots ----------------
+intra  = timeframe.isintraday and timeframe.in_seconds() <= 900
+newDay = dayofmonth(time, TZ) != dayofmonth(time[1], TZ)
+lc(color col) => newDay ? na : col
+cprCol = narrow ? ORANGE : BLUE
+pTop = plot(intra ? top : na, "CPR top", color = lc(cprCol), linewidth = 2)
+pBot = plot(intra ? bot : na, "CPR bottom", color = lc(cprCol), linewidth = 2)
+plot(intra ? P : na, "Pivot", color = lc(color.new(cprCol, 50)), linewidth = 1)
+fill(pTop, pBot, color = newDay ? na : color.new(cprCol, 82), title = "CPR band (orange = narrow)")
+plot(intra and showPiv ? R1 : na, "R1", color = lc(color.new(RED, 35)))
+plot(intra and showPiv ? R2 : na, "R2", color = lc(color.new(RED, 55)))
+plot(intra and showPiv ? R3 : na, "R3", color = lc(color.new(RED, 75)))
+plot(intra and showPiv ? S1 : na, "S1", color = lc(color.new(GREEN, 35)))
+plot(intra and showPiv ? S2 : na, "S2", color = lc(color.new(GREEN, 55)))
+plot(intra and showPiv ? S3 : na, "S3", color = lc(color.new(GREEN, 75)))
+
+// ---------------- the one trade a day ----------------
+[o1, h1, l1, c1, t1] = request.security_lower_tf(syminfo.tickerid, "1", [open, high, low, close, time])
+
+var int    side    = 0          // +1 bought, -1 sold
+var bool   live    = false
+var bool   decided = false
+var float  e       = na
+var float  stp     = na
+var float  tgt     = na
+var line   lnT     = na
+var line   lnS     = na
+var string todayMsg = ""
+var int    nTr     = 0
+var int    nWon    = 0
+var float  totPts  = 0.0
+
+// 1 = stop hit at price px, 2 = target hit, 0 = neither
+hitAt(float px, int sd, float s, float t) =>
+    sd * (px - s) <= 0 ? 1 : sd * (px - t) >= 0 ? 2 : 0
+
+if newDay
+    side := 0
+    live := false
+    decided := false
+    todayMsg := narrow and skipNar ? "No trade: the CPR is narrow today" : "Waiting for the 9:15 candle"
+
+n1 = array.size(c1)
+if intra and n1 > 0
+    for k = 0 to n1 - 1
+        mk = minsOf(array.get(t1, k))
+        ok = array.get(o1, k)
+        hk = array.get(h1, k)
+        lk = array.get(l1, k)
+        ck = array.get(c1, k)
+        complete = k < n1 - 1 or barstate.isconfirmed
+        if mk == 555 and not decided and complete
+            decided := true
+            if not (narrow and skipNar)
+                int s = ok > top and ck >= sellLvl ? -1 : ok < bot and ck <= buyLvl ? 1 : 0
+                if s == 0
+                    todayMsg := "No trade: the 9:15 candle did not close 0.2% beyond the CPR"
+                else
+                    side := s
+                    live := true
+                    e := ck
+                    stp := ck - s * stopPct / 100 * ck
+                    tgt := tgtMode == "CPR near edge" ? (s < 0 ? top : bot) : P
+                    txt = (s > 0 ? "BUY " : "SELL ") + fmt(e) + "\ntarget " + fmt(tgt) + "\nstop " + fmt(stp)
+                    label.new(bar_index, e, txt, style = s > 0 ? label.style_label_up : label.style_label_down, color = s > 0 ? GREEN : RED, textcolor = color.white, size = size.small)
+                    lnT := line.new(bar_index, tgt, bar_index + 1, tgt, color = GREEN, style = line.style_dashed, extend = extend.right)
+                    lnS := line.new(bar_index, stp, bar_index + 1, stp, color = RED, style = line.style_dashed, extend = extend.right)
+                    todayMsg := (s > 0 ? "BUY at " : "SELL at ") + fmt(e) + ", target " + fmt(tgt) + ", stop " + fmt(stp)
+                    alert("CPRM " + syminfo.ticker + (s > 0 ? " BUY at " : " SELL at ") + fmt(e) + " | TARGET " + fmt(tgt) + " | STOP " + fmt(stp), alert.freq_once_per_bar)
+        else if live and mk >= 556
+            // order of prices inside a 1-minute candle: green open-low-high-close, red open-high-low-close
+            float a1 = ck >= ok ? lk : hk
+            float a2 = ck >= ok ? hk : lk
+            int r = hitAt(ok, side, stp, tgt)
+            if r == 0
+                r := hitAt(a1, side, stp, tgt)
+            if r == 0
+                r := hitAt(a2, side, stp, tgt)
+            if r == 0
+                r := hitAt(ck, side, stp, tgt)
+            if r > 0 or (mk >= 915 and complete)
+                float ex = r == 1 ? stp : r == 2 ? tgt : ck
+                float g = side * (ex - e) - cost
+                live := false
+                nTr += 1
+                nWon += g > 0 ? 1 : 0
+                totPts += g
+                why = r == 1 ? "STOP" : r == 2 ? "TARGET" : "3:15 EXIT"
+                label.new(bar_index, ex, why + " " + pts(g) + " pts", style = label.style_label_left, color = color.new(g > 0 ? GREEN : RED, 80), textcolor = g > 0 ? GREEN : RED, size = size.small)
+                line.set_extend(lnT, extend.none)
+                line.set_extend(lnS, extend.none)
+                line.set_x2(lnT, bar_index)
+                line.set_x2(lnS, bar_index)
+                todayMsg := why + " at " + fmt(ex) + ": " + pts(g) + " points after costs"
+                alert("CPRM " + syminfo.ticker + " " + why + " at " + fmt(ex) + " (" + pts(g) + " pts after costs)", alert.freq_once_per_bar)
+
+// ---------------- plan and results box ----------------
+var table tbl = table.new(position.top_right, 2, 9, bgcolor = color.new(chart.bg_color, 5), border_width = 1, border_color = color.new(GREY, 60), frame_width = 1, frame_color = GREY)
+cell(int r, string a, string b, color tc) =>
+    table.cell(tbl, 0, r, a, text_color = GREY, text_size = size.small, text_halign = text.align_left)
+    table.cell(tbl, 1, r, b, text_color = tc, text_size = size.small, text_halign = text.align_left)
+if barstate.islast and showBox
+    pN = (tH + tL + tC) / 3
+    bcN = (tH + tL) / 2
+    tcN = 2 * pN - bcN
+    topN = math.max(tcN, bcN)
+    botN = math.min(tcN, bcN)
+    narN = nNarN * 3 < 20
+    cell(0, "CPR Magnet", intra ? syminfo.ticker : "Use a 1 to 15 minute chart", intra ? chart.fg_color : RED)
+    cell(1, "Today's CPR", fmt(bot) + " - " + fmt(top) + "  (width " + str.tostring(wid, "0.000") + "%)", chart.fg_color)
+    cell(2, "Narrow?", narrow ? "YES, narrowest third of 20 days: no trade" : "No: trade allowed", narrow ? ORANGE : chart.fg_color)
+    cell(3, "SELL if 9:15 closes at or above", narrow and skipNar ? "-" : fmt(sellLvl), RED)
+    cell(4, "BUY if 9:15 closes at or below", narrow and skipNar ? "-" : fmt(buyLvl), GREEN)
+    cell(5, "Today", todayMsg, chart.fg_color)
+    cell(6, "Next session (final after 3:30)", "CPR " + fmt(botN) + " - " + fmt(topN) + (narN ? ", NARROW: no trade" : ", SELL >= " + fmt(topN / (1 - gapPct / 100)) + ", BUY <= " + fmt(botN / (1 + gapPct / 100))), chart.fg_color)
+    cell(7, "On this chart's history", str.tostring(nTr) + " trades, " + (nTr > 0 ? str.tostring(100.0 * nWon / nTr, "0") : "0") + "% won, " + pts(totPts) + " pts after costs", totPts >= 0 ? GREEN : RED)
+    cell(8, "Free TradingView is 15 min late", "Use the SELL / BUY prices above on a live chart (Groww)", GREY)

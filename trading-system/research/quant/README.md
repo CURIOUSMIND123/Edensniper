@@ -25,3 +25,7 @@ Costs: 4 Nifty points or 12 Sensex points per trade. `pip install pandas scikit-
 | `breakout_probability_test.py` | Rebuild of "Breakout Probability (Expo)" on any candle size (e.g. `nifty 65 3`); scores its strong calls over the last 30 days |
 | `breakout_probability_scalp.py` | Trades the same calls as 1:2 scalps (stop X, target 2X, whichever comes first) on any candle size (e.g. `nifty 3`); last 30 days and the 12 months before |
 | `breakout_probability_peak.py` | Its highest readings on every candle since 2023 (e.g. `nifty 5`): did it ever show 90%, and did its top readings pay? Also a 50-candle-memory version that does reach 90% |
+| `cpr_study.py` | CPR width and where the day opens vs the CPR: what the day did next (e.g. `nifty`); last 60 sessions, the 30 before, all since 2023 |
+| `cpr_backtest.py` | 576 CPR + pivot rule versions (fade to the CPR, opening-range breakout, CPR break, R1 / S1 rejection, all-day bias), picked on the last 60 sessions |
+| `cpr_walkforward.py` | Picks the best versions on Feb 2023 - Jun 2025 only and shows what they did afterwards (run `cpr_backtest.py` for both indices first) |
+| `cpr_magnet_check.py` | The CPR Magnet rule in detail: narrow vs other days, random-direction baseline, drawdown, every trade in the last 90 sessions |
