@@ -759,6 +759,19 @@ together, 1 January to 9 October 2026 (`y2026_money.py`):
 
 TCI lost money on both indices, made nothing on 9 October, and cut the indicator's profit when added.
 
+**PCR** (put-call ratio from the NSE and BSE daily F&O files, `fetch_pcr.py`), known after the close and used for the
+next session. Above its usual level = bullish, below = bearish, using the next expiry, all expiries, or the day's
+fresh puts vs fresh calls:
+- It didn't say which way the next day would go: right 44-52% of the time on Nifty and 43-49% on Sensex (a coin toss
+  is 50%).
+- The evening before 9 October it read bearish on both (Nifty 0.62, Sensex 0.87), and the market rallied.
+- Dropping the indicator's trades that went against PCR cut the profit in every version: Nifty +851 to +1,654
+  instead of +2,274; Sensex +1,443 to +4,374 instead of +8,102.
+- As the direction for the 9:30 breakout (no other filter): Nifty −47 to +629, Sensex +547 to +2,212, all below
+  the indicator. A 9:20 trade in its direction made about nothing on Nifty and lost from July to October on Sensex.
+
+So neither TCI nor PCR would have caught 9 October, and both made 2026 worse.
+
 ## How to re-check all of this
 
 - `python research/fair_price_backtest.py` downloads the candles and re-runs the Fair Price test.
