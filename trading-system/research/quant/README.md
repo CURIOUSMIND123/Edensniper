@@ -55,3 +55,4 @@ Costs: 4 Nifty points or 12 Sensex points per trade. `pip install pandas scikit-
 | `y2026_combo.py` | 2026 only: the CPR daily plan plus 3-day volume-line trades, side by side or one trade at a time, with rupees at 2 lots (e.g. `nifty`) |
 | `y2026_trades.py` | 2026 only: every trade of the indicator one by one: calls vs puts, how far winners kept going after we booked, whether losers were in profit first |
 | `y2026_improve.py` | 2026 only: exit changes from that review (magnet rest to the far edge / trail / hold, breakout trail 1.5R / 2R / hold, volume-line breakeven stop and line-to-line ladder), alone and in all 64 combinations |
+| `alerts_check.py` | Checks that `alerts/cprb_alerts.py` (live alerts) takes exactly the backtest's 2026 trades, also minute by minute as it runs live |

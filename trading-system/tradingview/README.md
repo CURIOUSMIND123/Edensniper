@@ -27,6 +27,8 @@ File: [`cpr_breakout.pine`](cpr_breakout.pine). An indicator; reads 1-minute can
     rest to the line after. 2026: Sensex net +8,612 (instead of +7,894), Nifty +2,373 (instead of +2,454); all of
     the gain came in January-June.
 - Every filter is in Settings. `research/quant/y2026_combo.py` has the same plan in Python.
+- **No live data on free TradingView?** [`alerts/cprb_alerts.py`](../alerts/cprb_alerts.py) runs the same rules on
+  free live data and sends the alerts to your phone through Telegram. Setup: [`alerts/README.md`](../alerts/README.md).
 
 ## CPR Magnet: Nifty or Sensex, any 1 to 15-minute chart, at most one trade a day
 

@@ -6,3 +6,4 @@ backtest_trades.csv
 STOP
 __pycache__/
 research/.cache/
+alerts/cprb_cache.json
