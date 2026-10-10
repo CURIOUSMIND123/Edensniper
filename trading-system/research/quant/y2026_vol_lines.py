@@ -31,7 +31,7 @@ LINES = {(d, n): lines(d, n) for d in D26 for n in (3, 7, 15)}
 
 def path(o, h, l, c): return (o, l, h, c) if c >= o else (o, h, l, c)
 
-def day(d, n, stop_kind, rr, times=False):
+def day(d, n, stop_kind, rr, times=False, detail=False):
     lv = LINES[(d, n)]; b5 = five[d]; out = []; free = 0
     for j in range(1, len(b5)):
         m0, o, h, l, c = b5[j]; pc = b5[j - 1][4]
@@ -59,7 +59,10 @@ def day(d, n, stop_kind, rr, times=False):
                 if pnl is None and m >= 915: pnl, mx = side * (cc - e), m
                 if pnl is not None: break
             if pnl is None: pnl, mx = side * (one[d][-1][4] - e), one[d][-1][0]
-            out.append((d, pnl - COST, m0 + 5, mx) if times else (d, pnl - COST)); free = mx + 1
+            if detail: out.append(dict(d=d, src='VOL', side=side, m=m0 + 5, e=e, stp=stp, tgt=tgt, mx=mx, pnl=pnl - COST,
+                                       why='target' if abs(side * (tgt - e) - pnl) < 1e-6 else 'stop' if abs(side * (stp - e) - pnl) < 1e-6 else '3:15'))
+            else: out.append((d, pnl - COST, m0 + 5, mx) if times else (d, pnl - COST))
+            free = mx + 1
             break
     return out
 

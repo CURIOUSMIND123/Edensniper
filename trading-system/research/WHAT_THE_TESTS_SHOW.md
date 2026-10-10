@@ -603,6 +603,40 @@ In rupees, 2 lots a trade on both indices (delta 0.5, lots 65 / 20): Rs 30,000 -
 positive, lowest Rs 27,144, biggest fall from a high Rs 32,328. The same trades in random order fell below Rs 15,000
 4.7% of the time and below zero 0.3%. The volume-line part was chosen on 2026 itself, like the other adjustments.
 
+## 2026: every trade of the indicator, and better exits?
+
+Both directions are traded: BUY = call, SELL = put.
+
+| 2026 | Calls (buys) | Puts (sells) | CPR Magnet | CPR Breakout | 3-day volume lines |
+|---|---|---|---|---|---|
+| Nifty | 34 trades, 27 won, +860 | 65 trades, 52 won, +1,593 | 23, 19 won, +147 | 40, 37 won, +1,045 | 36, 23 won, +1,262 |
+| Sensex (points / 3.2) | 51 trades, 36 won, +2,797 | 65 trades, 51 won, +5,097 | 29, 25 won, +690 | 37, 37 won, +2,907 | 50, 25 won, +4,297 |
+
+- **Magnet and Breakout winners** usually kept going after we booked: after a magnet exit price went on another ~90
+  points our way (median), after a breakout exit ~40.
+- **Volume-line winners** booked at the next line rarely had more to give; many closed at 3:15 below their best.
+- **Magnet and Breakout losers** went wrong at once (most stopped within 15 minutes, almost never in profit first).
+- **Volume-line losers** were mostly in profit first: about 3 in 4 were up 20+ points before being stopped.
+
+Changes tested on the whole indicator (one at a time, then all 64 combinations):
+
+| 2026, net points | Nifty | Sensex |
+|---|---|---|
+| As now | +2,454 (20 losses) | +7,894 (29 losses) |
+| Volume lines: stop to entry once halfway to the target | +1,620 | +4,761 |
+| Volume lines: at the target book half, ride the rest to the following line | +2,373 | +8,612 |
+| Magnet: rest to the far edge of the CPR | +2,524 | +7,656 |
+| Magnet: trail the rest 1R behind the best price | +2,435 | +7,940 |
+| Breakout: trail 2R instead of 1R | +2,507 | +7,706 |
+| Breakout: hold the rest to 3:15 | +2,537 | +7,696 |
+
+- Moving the volume-line stop to entry cut the losses but cut the wins more: many winners first dipped back to the
+  entry before reaching the next line.
+- Letting winners run gained on some trades and gave back on others; each change helped one index and hurt the
+  other. None of the 64 combinations was better in both halves of 2026 on both indices; the best gained 2-7%.
+- So the exits stay as they are. The remaining losses are mostly trades that are wrong from the first minutes,
+  which only a better entry filter (like the POC rule) can remove.
+
 ## How to re-check all of this
 
 - `python research/fair_price_backtest.py` downloads the candles and re-runs the Fair Price test.
