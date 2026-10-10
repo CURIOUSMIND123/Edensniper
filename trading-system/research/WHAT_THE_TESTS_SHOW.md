@@ -773,6 +773,27 @@ fresh puts vs fresh calls:
 
 So neither TCI nor PCR would have caught 9 October, and both made 2026 worse.
 
+## 2026: small stops and short trades (out within 30 minutes)
+
+The same signals (daily plan + 3-day volume lines, one trade at a time), but every stop at most 100 / 150 Sensex
+points (30 / 45 Nifty, about the same % of price), no trailing stop, and every trade closed after 15 / 30 / 60
+minutes at the latest (`y2026_short.py`, 200 versions per index).
+
+| 2026 | Nifty | Sensex |
+|---|---|---|
+| Indicator now (stops 0.3% / the 15-minute range / the previous volume line; average hold about 2 hours) | 101 trades, 78% won, **net +2,274**; worst trade −105, worst fall −352 | 114 trades, 75% won, **net +8,102**; worst trade −471, worst fall −1,438 |
+| Stop at most 45 / 150, out within 30 minutes, all at the target | 169 trades, 51% won, net +341; worst trade −49, worst fall −241 | 196 trades, 51% won, net +1,386; worst trade −162, worst fall −1,499 |
+| Stop at most 30 / 100, out within 30 minutes, all at the target | 224 trades, 42% won, net −714 | 246 trades, 46% won, net +1,371; worst fall −1,370 |
+| Stop at most 45 / 150, out within 60 minutes, all at the target | 159 trades, 53% won, net +781; worst fall −299 | 179 trades, 54% won, net +4,919; worst fall −1,134 |
+
+- Smaller stops cut each loss (Sensex worst trade −162 instead of −471) but get hit by normal back-and-forth much
+  more often: the win rate falls from about 75% to about 50%, and the worst fall from a high is about the same.
+- Most trades need more than 30 minutes to reach their target: with a 30-minute limit, 138 of the 196 Sensex trades
+  closed on time, not at the target or stop.
+- Booking half early with a small stop lost money in almost every version.
+- Taking the breakout again after a stop-out (same filters, until 10:00) made it worse.
+- In 2026 the profit came from the trades that were allowed to run: the biggest results held 1-3 hours.
+
 ## How to re-check all of this
 
 - `python research/fair_price_backtest.py` downloads the candles and re-runs the Fair Price test.
