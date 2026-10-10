@@ -454,6 +454,26 @@ stop, most within 15 minutes of the open. I tested changes to the magnet part on
   breakout, which often doesn't trigger, so there are fewer trades (about 7 a month instead of 10).
 - Every part of each version was positive in January-June and July-October, but these were picked on 2026 itself.
 
+## 2026 in rupees: Rs 30,000 in options
+
+Rough conversion: an at-the-money option moves about half as much as the index, so with lots of 65 (Nifty) and
+20 (Sensex), one index point is worth about Rs 32.5 (Nifty) or Rs 10 (Sensex) per lot. Two lots per trade (the plan
+books half), costs included, no compounding. Time decay and the extra brokerage of booking half are left out.
+
+| 2026 (1 Jan - 9 Oct), Rs 30,000 start | Trades | Won / lost | End value | Biggest fall from a high | Biggest single loss |
+|---|---|---|---|---|---|
+| Nifty, indicator default | 63 (6.8 a month) | 56 / 7 | Rs 1,07,468 | Rs 9,552 | Rs 5,288 |
+| Sensex, indicator default | 66 (7.1 a month) | 62 / 4 | Rs 1,01,945 | Rs 4,891 | Rs 4,891 |
+| **Both indices, indicator default** | 129 on 76 days (13.9 a month) | 118 / 11 | **Rs 1,79,413** | Rs 13,857 | Rs 5,288 |
+| Both indices, earlier plan (more trades) | 197 on 111 days (21.2 a month) | 166 / 31 | Rs 1,40,408 | Rs 39,145 | Rs 5,288 |
+
+- Trading Nifty and Sensex together gives a trade on about 2 days in 5. The earlier plan traded more often (about
+  3 days in 5) but made less and fell much further: its worst fall, Rs 39,145, is more than the whole starting
+  capital.
+- One full loss on 2 lots is about Rs 5,000, about a sixth of Rs 30,000. Two in a row at the start would take a
+  third of the account.
+- These settings were chosen on 2026 itself, so live trading will very likely do worse than this.
+
 ## How to re-check all of this
 
 - `python research/fair_price_backtest.py` downloads the candles and re-runs the Fair Price test.

@@ -43,3 +43,4 @@ Costs: 4 Nifty points or 12 Sensex points per trade. `pip install pandas scikit-
 | `y2026_levels.py` | 2026 only: scalps taken at the volume zones and Fibonacci levels themselves |
 | `y2026_daily.py` | 2026 only: the daily plan (CPR Breakout on narrow days; CPR Magnet or the breakout on other days), with and without half booking, by half-year and month |
 | `y2026_losses.py` | 2026 only: every losing trade of the daily plan, and which CPR Magnet changes (stop size, time stop, gap size, open inside yesterday's range, confirmation, POC side, volatility) cut losses |
+| `y2026_rupees.py` | 2026 only: the daily plan in rupees for Rs 30,000 with 2 at-the-money option lots (delta 0.5, lots 65 / 20), by month, with drawdowns |
