@@ -1,6 +1,21 @@
 # TCI indicators for TradingView: plain-language guide
 
-## CPR Magnet (newest): Nifty or Sensex, any 1 to 15-minute chart, at most one trade a day
+## CPR Breakout (newest): Nifty or Sensex, 5-minute chart, trades on narrow-CPR days
+
+File: [`cpr_breakout.pine`](cpr_breakout.pine). An indicator; reads 1-minute candles underneath for exits.
+
+- Draws the CPR (orange = narrow), the pivot, the first 15-minute candle's high and low, the 15-day point of
+  control (purple, the price traded most in 15 days) with its value area, and the 5-minute EMA 50.
+- Default rules (the version that held up): only on narrow-CPR days; no sells when today's CPR is wholly above
+  yesterday's, no buys when wholly below; BUY / SELL when price touches the 15-minute high / low between 9:30 and
+  1:00; stop at the other side of that range; once +1R the stop trails 1R behind the best price; out by 3:15.
+  If the first trade loses, it takes the break of the other side once.
+- Every filter you asked about is in Settings (open vs CPR direction, POC / value area, EMA, 1:3 target, ride).
+- Tested after costs: Nifty last 90 sessions 34 trades, 20 won / 14 lost, net +262 points; since 2023 +1,896.
+  Sensex last 90 sessions 31 trades, 22 won / 9 lost, net +1,998; since 2023 +7,296. Both lost in 2023 and 2025.
+  `research/quant/cpr_orb_lastn.py` lists the trades.
+
+## CPR Magnet: Nifty or Sensex, any 1 to 15-minute chart, at most one trade a day
 
 File: [`cpr_magnet.pine`](cpr_magnet.pine). An indicator. It reads 1-minute candles underneath, so it works on a
 1, 3, 5 or 15-minute chart.

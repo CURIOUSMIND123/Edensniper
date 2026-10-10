@@ -251,6 +251,53 @@ edge of the CPR, stop 0.3% of price (about 68 Nifty points), out by 3:15.
 
 It's in `tradingview/cpr_magnet.pine`.
 
+## Open vs the CPR, the 15-minute break, and the 15-day profile
+
+Your ideas, checked on the last 90 sessions (3 June to 9 October 2026) and on every day since 2023:
+
+| Idea | Last 90 sessions | Since 2023 |
+|---|---|---|
+| Opens above the CPR, so the day goes up: closed higher than the open | Nifty 47%, Sensex 37% | Nifty 47%, Sensex 44% |
+| Opens below the CPR, so the day goes down: closed lower than the open | Nifty 49%, Sensex 52% | Nifty 50%, Sensex 49% |
+| Opens above the CPR: still above the CPR at the close | Nifty 69%, Sensex 60% | Nifty 70%, Sensex 66% |
+| First 5-minute close beyond the 15-minute high / low: still that way at the close | Nifty 48%, Sensex 54% | Nifty 51%, Sensex 51% |
+| Same break: reached 1R before the stop at the other side of the range | Nifty 33%, Sensex 28% | Nifty 36%, Sensex 34% |
+| Same break: reached 3R (a 1:3 target) before the stop | Nifty 2%, Sensex 0% | Nifty 5%, Sensex 4% |
+
+So neither idea is right much more than half the time on its own. The CPR does tend to hold as a floor or
+ceiling by the close (about two days in three).
+
+I tested 3,888 combinations: open-vs-CPR direction, the 15-day point of control (POC, the price traded most in 15
+days; time at price, since the index has no volume) and its value area, the 5-minute EMA 50, today's CPR vs
+yesterday's, CPR width, entry on a 5-minute close or a touch, three stops, a 1:3 target / ride / trail, and an
+optional reversal trade after a failed break.
+
+- **None won 80% of its trades** in the last 90 sessions (10+ trades). Best: Sensex 77% of 13 trades; Nifty 63% of 30.
+- 216 made money in the last 90 sessions and since 2023 on both indices; none made money every year on both.
+- Picked on February 2023 to June 2025 only, 2 of the top 50 made money afterwards. 50 of those 50 used the
+  open-vs-CPR filter, which stopped working after mid-2025.
+- What held up best: **breakouts on narrow-CPR days.** Trade only when today's CPR is among the narrowest third of
+  the last 20 days. Don't sell when today's CPR is wholly above yesterday's, or buy when it's wholly below. Enter
+  on a touch of the 15-minute high or low, with the stop at the other side of the range. After +1R, trail the stop
+  1R behind the best price. If the first trade loses, take the break of the other side once.
+
+| | Last 90 sessions | Since 2023 | By year 2023 / 2024 / 2025 / 2026 |
+|---|---|---|---|
+| Nifty | 34 trades, 20 won / 14 lost, +1,068 / −807, **net +262** | 276 trades, 51% won, +1,896 | −181 / +1,277 / −118 / +918 |
+| Sensex | 31 trades, 22 won / 9 lost, +3,985 / −1,986, **net +1,998** | 272 trades, 53% won, +7,296 | −50 / +4,340 / −1,394 / +4,401 |
+| Nifty, same rules on days that are not narrow | 51 trades, −518 | 593 trades, −2,300 | |
+
+- With the reversal trade, narrow days beat other days on both indices in both halves of the data (before and
+  after July 2025), for every exit style. Without the reversal trade they were not better before July 2025. It's
+  your friend's narrow-CPR idea in breakout form, and the one pattern here that looks real.
+- Average win about +53 and loss −58 Nifty points: 1:3 targets were rarely reached, so the fixed 1:3 version made
+  less (Nifty last 90 +86, since 2023 +866).
+- The open-vs-CPR filter cut trades and profit (Nifty since 2023 +1,570, Sensex +2,306). The POC filter lowered
+  it too (+1,433 and +3,828); the value-area filter turned Sensex into a loss (−1,023).
+- I chose these settings after seeing all the results, so treat them as promising, not proven.
+
+It's in `tradingview/cpr_breakout.pine`.
+
 ## How to re-check all of this
 
 - `python research/fair_price_backtest.py` downloads the candles and re-runs the Fair Price test.

@@ -1,0 +1,339 @@
+// CPR Breakout for TradingView. Select and copy EVERYTHING in this file, including the next line.
+//@version=5
+// ============================================================================
+// CPR Breakout: NIFTY or SENSEX, 5-MINUTE chart (1-minute data is read underneath for exits)
+// Your two ideas plus filters, all switchable in Settings:
+//   1. The day's bias: open above the CPR -> buys only; open below -> sells only (inside -> no trade).
+//   2. The trigger: price breaks the high or low of the first 15 minutes (9:15-9:30).
+//   3. 15-day profile: the price traded most in the last 15 days (POC) and the value area around it
+//      (70% of the time). The index has no volume, so this is time at price, as in the test.
+//   4. Trend: 5-minute EMA 50 on the right side. CPR vs yesterday's CPR (higher / lower value).
+// STOP: other side of the 15-minute range (or its middle, or 0.2%). EXIT: target 3 x risk, or ride / trail.
+// Optional reversal trade: if the first break fails at a loss, take the break of the other side.
+// Entries 9:30-13:00, out by 3:15. Costs: 4 Nifty / 12 Sensex points a trade.
+// DEFAULTS (the version that held up): narrow-CPR days only; no sells when today's CPR is wholly above
+//   yesterday's, no buys when wholly below; entry on a touch of the 15-minute high / low; stop at the other side;
+//   trail 1R behind the best price after +1R; one reversal trade if the first break loses.
+// Tested on 1-minute candles after costs (4 Nifty / 12 Sensex points a trade), with those defaults:
+//   Nifty  last 90 sessions (3 Jun - 9 Oct 2026): 34 trades, 20 won / 14 lost, +1,068 / -807 points, net +262.
+//          Since Feb 2023: 276 trades, 51% won, +1,896 points; lost in 2023 (-181) and 2025 (-118).
+//   Sensex last 90 sessions: 31 trades, 22 won / 9 lost, net +1,998. Since 2023: +7,296; lost in 2023 and 2025.
+//   Average win about +53 and loss about -58 Nifty points: the 1:3 target was rarely reached. None of 3,888
+//   versions won 80% of its trades. The same rules on days that are NOT narrow lost (Nifty -2,300 since 2023).
+//   The open-vs-CPR direction filter and the 15-day POC filter lowered results; they are off by default.
+// The 15-day profile here uses the chart's 5-minute candles; the test used 1-minute candles.
+// Reference implementation (same rules): trading-system/research/quant/cpr_orb.py
+// ============================================================================
+indicator("CPR Breakout", "CPRB", overlay = true, max_lines_count = 500, max_labels_count = 500, max_bars_back = 1500)
+
+// ---------------- inputs ----------------
+G1 = "Rules"
+cprF   = input.string("Off", "Direction from the open vs the CPR", options = ["With the CPR", "Not against the CPR", "Off"], group = G1)
+pocF   = input.string("Off", "15-day profile filter", options = ["Off", "Beyond the POC", "Beyond the value area"], group = G1)
+emaF   = input.bool(false, "Only with the 5-minute EMA 50", group = G1)
+relF   = input.bool(true, "Not against today's CPR vs yesterday's (higher / lower value)", group = G1)
+widF   = input.string("Narrow only", "CPR width", options = ["Any", "Narrow only", "Skip narrow"], group = G1)
+entF   = input.string("Touch of the range high / low", "Entry", options = ["5-minute close beyond the range", "Touch of the range high / low"], group = G1)
+stopF  = input.string("Other side of the 15-minute range", "Stop", options = ["Other side of the 15-minute range", "Middle of the 15-minute range", "0.2% of price"], group = G1)
+exitF  = input.string("Trail 1R behind the best price after +1R", "Exit", options = ["Target 3 x risk", "Ride: stop to entry at +1R, out at 3:15", "Trail 1R behind the best price after +1R"], group = G1)
+revF   = input.bool(true, "Reversal trade when the first break fails", group = G1)
+costIn = input.float(0, "Cost per trade in index points (0 = auto: Nifty 4, Sensex 12)", step = 1, group = G1)
+G2 = "Display"
+showPrf = input.bool(true, "Show the 15-day POC and value area", group = G2)
+showEma = input.bool(true, "Show the EMA 50", group = G2)
+showBox = input.bool(true, "Show the status and results box", group = G2)
+
+TZ     = "Asia/Kolkata"
+GREEN  = color.new(#089981, 0)
+RED    = color.new(#f23645, 0)
+GREY   = color.new(#787b86, 0)
+BLUE   = color.new(#2962ff, 0)
+ORANGE = color.new(#f57c00, 0)
+PURPLE = color.new(#7e57c2, 0)
+fmt(x) => str.tostring(x, "#,##0.##")
+pts(x) => str.tostring(x, "+#,##0;-#,##0")
+minsOf(int t) => hour(t, TZ) * 60 + minute(t, TZ)
+cost = costIn > 0 ? costIn : close > 50000 ? 12.0 : 4.0
+BIN  = close > 50000 ? 16.0 : 5.0
+CUT  = 780     // last entry before 13:00
+TOUT = 915     // out at 15:15
+
+// ---------------- CPR: today's (from yesterday) and yesterday's (from the day before) ----------------
+cprWidth(float h, float l, float c) =>
+    float p = (h + l + c) / 3
+    float bc = (h + l) / 2
+    math.abs(2 * p - 2 * bc) / p * 100
+dayInfo() =>
+    float w = cprWidth(high[1], low[1], close[1])
+    int narrower = 0
+    for i = 1 to 20
+        if w[i] < w
+            narrower += 1
+    [high[1], low[1], close[1], high[2], low[2], close[2], narrower]
+[pH, pL, pC, qH, qL, qC, nNar] = request.security(syminfo.tickerid, "D", dayInfo(), lookahead = barmerge.lookahead_on)
+P   = (pH + pL + pC) / 3
+BC  = (pH + pL) / 2
+top = math.max(2 * P - BC, BC)
+bot = math.min(2 * P - BC, BC)
+yP  = (qH + qL + qC) / 3
+yBC = (qH + qL) / 2
+yTop = math.max(2 * yP - yBC, yBC)
+yBot = math.min(2 * yP - yBC, yBC)
+narrow  = nNar * 3 < 20
+relBias = bot > yTop ? 1 : top < yBot ? -1 : 0
+widOk   = widF == "Any" or (widF == "Narrow only") == narrow
+
+ema50  = ta.ema(close, 50)
+mins   = minsOf(time)
+newDay = dayofmonth(time, TZ) != dayofmonth(time[1], TZ)
+lc(color col) => newDay ? na : col
+is5 = timeframe.isintraday and timeframe.multiplier == 5
+
+// ---------------- 15-day time-at-price profile (bars before today) ----------------
+var int[] dStart = array.new_int()
+var float poc = na
+var float vah = na
+var float val = na
+if newDay and is5
+    n = array.size(dStart)
+    if n >= 15
+        first = array.get(dStart, n - 15)
+        nb = bar_index - first
+        if nb > 10 and nb < 1450
+            float lo0 = low[1]
+            float hi0 = high[1]
+            for i = 1 to nb
+                lo0 := math.min(lo0, low[i])
+                hi0 := math.max(hi0, high[i])
+            lo0 := math.floor(lo0 / BIN) * BIN
+            nbin = int((hi0 - lo0) / BIN) + 2
+            if nbin < 3000
+                float[] hist = array.new_float(nbin, 0.0)
+                for i = 1 to nb
+                    a = int((low[i] - lo0) / BIN)
+                    z = int((high[i] - lo0) / BIN)
+                    for b = a to z
+                        array.set(hist, b, array.get(hist, b) + 1)
+                k = array.indexof(hist, array.max(hist))
+                tot = array.sum(hist)
+                int a2 = k
+                int b2 = k
+                float s = array.get(hist, k)
+                while s < 0.7 * tot
+                    float up = b2 + 1 < nbin ? array.get(hist, b2 + 1) : -1.0
+                    float dn = a2 > 0 ? array.get(hist, a2 - 1) : -1.0
+                    if up < 0 and dn < 0
+                        break
+                    if up >= dn
+                        b2 += 1
+                        s += up
+                    else
+                        a2 -= 1
+                        s += dn
+                poc := lo0 + (k + 0.5) * BIN
+                vah := lo0 + (b2 + 1) * BIN
+                val := lo0 + a2 * BIN
+    array.push(dStart, bar_index)
+    if array.size(dStart) > 20
+        array.shift(dStart)
+
+// ---------------- plots ----------------
+cprCol = narrow ? ORANGE : BLUE
+pTop = plot(is5 ? top : na, "CPR top", color = lc(cprCol), linewidth = 2)
+pBot = plot(is5 ? bot : na, "CPR bottom", color = lc(cprCol), linewidth = 2)
+plot(is5 ? P : na, "Pivot P", color = lc(color.new(cprCol, 40)))
+fill(pTop, pBot, color = newDay ? na : color.new(cprCol, 82), title = "CPR band (orange = narrow)")
+plot(is5 and showPrf ? poc : na, "15-day POC", color = lc(PURPLE), linewidth = 2, style = plot.style_linebr)
+plot(is5 and showPrf ? vah : na, "Value area high", color = lc(color.new(PURPLE, 60)), style = plot.style_linebr)
+plot(is5 and showPrf ? val : na, "Value area low", color = lc(color.new(PURPLE, 60)), style = plot.style_linebr)
+plot(is5 and showEma ? ema50 : na, "EMA 50", color = color.new(GREY, 30))
+
+// ---------------- the 15-minute range and the trades ----------------
+[o1, h1, l1, c1, t1] = request.security_lower_tf(syminfo.tickerid, "1", [open, high, low, close, time])
+
+var float orh = na
+var float orl = na
+var int   cb = 0            // +1 opened above the CPR, -1 below, 0 inside
+var int   state = 0         // 0 waiting, 1 in a trade, 2 waiting for the reversal break, 3 done for today
+var int   side = 0
+var int   tradeNo = 0
+var int   afterMin = 0
+var int   startMin = 0
+var float e = na
+var float stp = na
+var float tgt = na
+var float R = na
+var float best = na
+var line  lnS = na
+var line  lnT = na
+var string todayMsg = ""
+var int   nTr = 0
+var int   nWon = 0
+var float totPts = 0.0
+var float winPts = 0.0
+var float lossPts = 0.0
+
+passes(int sd, float px, float emaNow) =>
+    bool ok = widOk
+    if cprF == "With the CPR" and sd != cb
+        ok := false
+    if cprF == "Not against the CPR" and sd == -cb
+        ok := false
+    if relF and sd == -relBias
+        ok := false
+    if emaF and sd * (px - emaNow) <= 0
+        ok := false
+    if pocF != "Off"
+        float ref = pocF == "Beyond the POC" ? poc : (sd > 0 ? vah : val)
+        if na(ref) or sd * (px - ref) <= 0
+            ok := false
+    ok
+
+stopFor(int sd, float px) =>
+    stopF == "Other side of the 15-minute range" ? (sd > 0 ? orl : orh) : stopF == "Middle of the 15-minute range" ? (orh + orl) / 2 : px - sd * 0.002 * px
+
+// 1 = stop, 2 = target, 0 = neither
+hitAt(float px, int sd, float s, float t) =>
+    sd * (px - s) <= 0 ? 1 : not na(t) and sd * (px - t) >= 0 ? 2 : 0
+
+if newDay
+    orh := na
+    orl := na
+    state := 0
+    tradeNo := 0
+    cb := 0
+    todayMsg := not widOk ? "No trade: CPR width filter" : "Building the 15-minute range"
+
+// a trade is opened by setting these, then drawn once below
+bool opened = false
+int  openSide = 0
+float openPx = na
+
+n1 = array.size(c1)
+if is5 and n1 > 0
+    for k = 0 to n1 - 1
+        mk = minsOf(array.get(t1, k))
+        ok = array.get(o1, k)
+        hk = array.get(h1, k)
+        lk = array.get(l1, k)
+        ck = array.get(c1, k)
+        complete = k < n1 - 1 or barstate.isconfirmed
+        if mk == 555
+            cb := ok > top ? 1 : ok < bot ? -1 : 0
+        if mk < 570
+            orh := na(orh) ? hk : math.max(orh, hk)
+            orl := na(orl) ? lk : math.min(orl, lk)
+        else
+            // exits
+            if state == 1 and mk >= startMin
+                float a1 = ck >= ok ? lk : hk
+                float a2 = ck >= ok ? hk : lk
+                int r = hitAt(ok, side, stp, tgt)
+                if r == 0
+                    r := hitAt(a1, side, stp, tgt)
+                if r == 0
+                    r := hitAt(a2, side, stp, tgt)
+                if r == 0
+                    r := hitAt(ck, side, stp, tgt)
+                bool isOut = r > 0
+                if not isOut
+                    best := side > 0 ? math.max(best, hk) : math.min(best, lk)
+                    if exitF == "Ride: stop to entry at +1R, out at 3:15" and side * (best - e) >= R and side * (e - stp) > 0
+                        stp := e
+                    if exitF == "Trail 1R behind the best price after +1R" and side * (best - e) >= R
+                        float ns = best - side * R
+                        if side * (ns - stp) > 0
+                            stp := ns
+                    isOut := mk >= TOUT and complete
+                if isOut
+                    float ex = r == 1 ? stp : r == 2 ? tgt : ck
+                    float g = side * (ex - e) - cost
+                    nTr += 1
+                    nWon += g > 0 ? 1 : 0
+                    totPts += g
+                    winPts += g > 0 ? g : 0
+                    lossPts += g > 0 ? 0 : g
+                    why = r == 1 ? "STOP" : r == 2 ? "TARGET" : "3:15 EXIT"
+                    label.new(bar_index, ex, why + " " + pts(g) + " pts", style = label.style_label_left, color = color.new(g > 0 ? GREEN : RED, 80), textcolor = g > 0 ? GREEN : RED, size = size.small)
+                    line.set_extend(lnT, extend.none)
+                    line.set_extend(lnS, extend.none)
+                    line.set_x2(lnT, bar_index)
+                    line.set_x2(lnS, bar_index)
+                    todayMsg := why + " at " + fmt(ex) + ": " + pts(g) + " pts after costs"
+                    alert("CPRB " + syminfo.ticker + " " + why + " at " + fmt(ex) + " (" + pts(g) + " pts after costs)", alert.freq_once_per_bar)
+                    if tradeNo == 1 and g <= 0 and revF
+                        state := 2
+                        afterMin := mk + 1
+                    else
+                        state := 3
+            // touch entries
+            if entF == "Touch of the range high / low" and mk < CUT and not na(orh) and (state == 0 or (state == 2 and mk >= afterMin))
+                int sd = hk >= orh ? 1 : lk <= orl ? -1 : 0
+                if state == 2 and sd != -side
+                    sd := 0
+                if sd != 0
+                    float px = sd > 0 ? math.max(ok, orh) : math.min(ok, orl)
+                    if state == 2 or passes(sd, px, ema50[1])
+                        float s0 = stopFor(sd, px)
+                        if sd * (px - s0) > 0
+                            opened := true
+                            openSide := sd
+                            openPx := px
+                            side := sd
+                            e := px
+                            stp := s0
+                            R := sd * (px - s0)
+                            tgt := exitF == "Target 3 x risk" ? px + sd * 3 * R : na
+                            best := px
+                            startMin := mk + 1
+                            tradeNo += 1
+                            state := 1
+
+// 5-minute close entries (at the close of this candle)
+if is5 and entF == "5-minute close beyond the range" and barstate.isconfirmed and not na(orh) and mins >= 570 and mins + 5 <= CUT and (state == 0 or (state == 2 and mins >= afterMin))
+    int sd = close > orh ? 1 : close < orl ? -1 : 0
+    if state == 2 and sd != -side
+        sd := 0
+    if sd != 0
+        if state == 2 or passes(sd, close, ema50)
+            float s0 = stopFor(sd, close)
+            if sd * (close - s0) > 0
+                opened := true
+                openSide := sd
+                openPx := close
+                side := sd
+                e := close
+                stp := s0
+                R := sd * (close - s0)
+                tgt := exitF == "Target 3 x risk" ? close + sd * 3 * R : na
+                best := close
+                startMin := mins + 5
+                tradeNo += 1
+                state := 1
+
+if opened
+    txt = (openSide > 0 ? "BUY " : "SELL ") + fmt(openPx) + (tradeNo == 2 ? " (reversal)" : "") + "\nstop " + fmt(stp) + (na(tgt) ? "\nride / trail" : "\ntarget " + fmt(tgt))
+    label.new(bar_index, openPx, txt, style = openSide > 0 ? label.style_label_up : label.style_label_down, color = openSide > 0 ? GREEN : RED, textcolor = color.white, size = size.small)
+    lnS := line.new(bar_index, stp, bar_index + 1, stp, color = RED, style = line.style_dashed, extend = extend.right)
+    lnT := line.new(bar_index, na(tgt) ? openPx : tgt, bar_index + 1, na(tgt) ? openPx : tgt, color = na(tgt) ? GREY : GREEN, style = line.style_dashed, extend = extend.right)
+    todayMsg := (openSide > 0 ? "BUY at " : "SELL at ") + fmt(openPx) + ", stop " + fmt(stp) + (na(tgt) ? "" : ", target " + fmt(tgt))
+    alert("CPRB " + syminfo.ticker + (openSide > 0 ? " BUY at " : " SELL at ") + fmt(openPx) + " | STOP " + fmt(stp) + (na(tgt) ? " | ride" : " | TARGET " + fmt(tgt)), alert.freq_once_per_bar)
+
+plot(is5 and mins >= 570 ? orh : na, "15-min high", color = lc(color.new(GREEN, 30)), style = plot.style_linebr)
+plot(is5 and mins >= 570 ? orl : na, "15-min low", color = lc(color.new(RED, 30)), style = plot.style_linebr)
+
+// ---------------- status and results box ----------------
+var table tbl = table.new(position.top_right, 2, 8, bgcolor = color.new(chart.bg_color, 5), border_width = 1, border_color = color.new(GREY, 60), frame_width = 1, frame_color = GREY)
+cell(int r, string a, string b, color tc) =>
+    table.cell(tbl, 0, r, a, text_color = GREY, text_size = size.small, text_halign = text.align_left)
+    table.cell(tbl, 1, r, b, text_color = tc, text_size = size.small, text_halign = text.align_left)
+if barstate.islast and showBox
+    bias = cprF == "Off" ? "both ways" : cb > 0 ? "opened above the CPR: buys" : cb < 0 ? "opened below the CPR: sells" : (cprF == "With the CPR" ? "opened inside the CPR: no trade" : "opened inside: both ways")
+    cell(0, "CPR Breakout", is5 ? syminfo.ticker : "Use a 5-minute chart", is5 ? chart.fg_color : RED)
+    cell(1, "Today's CPR", fmt(bot) + " - " + fmt(top) + (narrow ? " (narrow)" : ""), chart.fg_color)
+    cell(2, "Bias", bias, cb > 0 ? GREEN : cb < 0 ? RED : chart.fg_color)
+    cell(3, "15-minute range", na(orh) ? "-" : fmt(orl) + " - " + fmt(orh), chart.fg_color)
+    cell(4, "15-day POC / value area", na(poc) ? "-" : fmt(poc) + " / " + fmt(val) + " - " + fmt(vah), PURPLE)
+    cell(5, "Today", todayMsg, chart.fg_color)
+    cell(6, "On this chart", str.tostring(nTr) + " trades, " + str.tostring(nWon) + " won, " + str.tostring(nTr - nWon) + " lost", chart.fg_color)
+    cell(7, "Points won / lost / net", pts(winPts) + " / " + pts(lossPts) + " / " + pts(totPts), totPts >= 0 ? GREEN : RED)

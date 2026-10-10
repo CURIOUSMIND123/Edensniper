@@ -30,3 +30,6 @@ Costs: 4 Nifty points or 12 Sensex points per trade. `pip install pandas scikit-
 | `cpr_walkforward.py` | Picks the best versions on Feb 2023 - Jun 2025 only and shows what they did afterwards (run `cpr_backtest.py` for both indices first) |
 | `cpr_magnet_check.py` | The CPR Magnet rule in detail: narrow vs other days, random-direction baseline, drawdown, every trade in the last 90 sessions |
 | `cpr_magnet_lastn.py` | CPR Magnet day by day over the last N sessions (e.g. `nifty 30`): why each day did or didn't trade, how each trade ended, points won and lost |
+| `cpr_orb.py` | Open vs the CPR, the first 15-minute candle's high / low break, the 15-day point of control and value area, EMA 50: how often each idea held, then 3,888 combined breakout versions at 1:3, ride or trail (e.g. `nifty`) |
+| `cpr_orb_pick.py` | Which `cpr_orb.py` versions made money on both indices, every year, and in a walk-forward split (run `cpr_orb.py` for both first) |
+| `cpr_orb_lastn.py` | The chosen CPR Breakout version trade by trade over the last N sessions (e.g. `nifty 90`) |
