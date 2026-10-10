@@ -1,5 +1,6 @@
 """Check that alerts/cprb_alerts.py trades exactly like the 2026 backtest (y2026_combo.py / y2026_improve.py for the
-classic rules, y2026_sweep.py for the classic rules with liquidity sweeps, y2026_short.py + y2026_reversal.py for the
+classic rules, y2026_volume.py for the classic rules with the volume check, y2026_sweep.py for the classic rules with
+liquidity sweeps, y2026_short.py + y2026_reversal.py for the
 small-stop rules, y2026_rr.py for the 1:4 rules).
 
     python alerts_check.py nifty        (or sensex)
@@ -21,6 +22,7 @@ vol = collections.defaultdict(dict)
 for k, v in Y.bees.items(): vol[k[:10]][int(k[11:13]) * 60 + int(k[14:16])] = v[4]
 daily = {d: Y.DAY[d] for d in Y.days}                 # official daily high / low / close, as the backtest uses
 CX = {d: A.context(spec, sess, vol, d, daily) for d in Y.D26}
+for d in Y.D26: CX[d]['tvol'] = vol.get(d, {})        # today's NIFTYBEES volume (the volume check reads it minute by minute)
 
 bad = collections.Counter()
 for d in Y.D26:
@@ -33,8 +35,8 @@ for d in Y.D26:
     bad['lines'] += len(L) != len(cx['lines']) or any(abs(a - b) > 1e-9 for a, b in zip(L, cx['lines']))
 print(f"{Y.B.name.upper()} levels on {len(Y.D26)} days, mismatches: {dict(bad) or 'none'}")
 
-def mine(ladder, rules='classic', sweep=False):
-    A.SWEEP = sweep
+def mine(ladder, rules='classic', sweep=False, vcheck=False):
+    A.SWEEP, A.VOLCHECK = sweep, vcheck
     out = collections.defaultdict(list)
     for d in Y.D26:
         for t in A.day_trades(CX[d], Y.one[d], 929, True, ladder, rules):
@@ -64,7 +66,16 @@ LAD = [dict(d=t['d'], pnl=t['pnl'], m=t['m'], mx=t['mx'], src='plan' if t['src']
        for t in [x for d in Y.D26 for x in I.plan(d, 'edge', 1.0)] + [x for d in Y.D26 for x in I.vol(d, 'ladder')]]
 ref_lw = collections.defaultdict(list)
 for t in M.one_book(LAD, SWC, A.SWEEP_MAX): ref_lw[t['d']].append((t['m'], round(t['pnl'], 6)))
-for label, a, b in (('classic', mine(False), ref), ('ladder', mine(True), ref_l), ('sweep', mine(False, sweep=True), ref_w),
+import y2026_volume as VV
+VC = VV.check(dict(mode='sum', w=A.VOL_WINDOW, k=1.0))
+ref_v = collections.defaultdict(list)
+A.SWEEP, A.VOLCHECK = False, False
+for d in Y.D26:
+    CX[d]['vf'] = lambda side, m, src, d=d: VC(d, side, m)
+    for t in A.day_trades(CX[d], Y.one[d], 929, True, False, 'classic'):
+        if t['taken']: ref_v[d].append((t['m'], round(t['exit']['pnl'], 6)))
+    CX[d]['vf'] = None
+for label, a, b in (('volume', mine(False, vcheck=True), ref_v), ('classic', mine(False), ref), ('ladder', mine(True), ref_l), ('sweep', mine(False, sweep=True), ref_w),
                     ('ladder+sw', mine(True, sweep=True), ref_lw), ('small', mine(False, 'small'), ref_s),
                     ('rr', mine(False, 'rr'), ref_r)):
     diff = [d for d in Y.D26 if sorted(a[d]) != sorted(b[d])]
@@ -73,8 +84,8 @@ for label, a, b in (('classic', mine(False), ref), ('ladder', mine(True), ref_l)
           f"net {sum(p for v in b.values() for _, p in v):+,.0f} | days that differ: {len(diff)} {diff[:5]}")
     for d in diff[:3]: print(f"     {d} alerts {a[d]} backtest {b[d]}")
 
-for rules, sweep in (('classic', False), ('classic', True), ('small', False), ('rr', False)):
-    A.SWEEP = sweep
+for rules, sweep, vcheck in (('classic', False, True), ('classic', False, False), ('classic', True, False), ('small', False, False), ('rr', False, False)):
+    A.SWEEP, A.VOLCHECK = sweep, vcheck
     changed = 0
     for d in Y.D26:
         cx, said = CX[d], {}
@@ -85,4 +96,4 @@ for rules, sweep in (('classic', False), ('classic', True), ('small', False), ('
                 said[mid] = text
         full = A.messages(cx, A.day_trades(cx, Y.one[d], 929, True, False, rules), Y.one[d], 929, 5)
         changed += {m: t for m, _, t, _ in full} != said
-    print(f"  {rules}{' + sweeps' if sweep else ''} rules, minute by minute: days where something already said changed later: {changed}")
+    print(f"  {rules}{' + sweeps' if sweep else ''}{' + volume check' if vcheck else ''} rules, minute by minute: days where something already said changed later: {changed}")

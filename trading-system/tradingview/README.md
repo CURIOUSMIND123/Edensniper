@@ -4,20 +4,21 @@
 
 File: [`cpr_breakout.pine`](cpr_breakout.pine). An indicator; reads 1-minute candles underneath for exits.
 
-**Default rules now: the original rules + liquidity sweeps** (Settings > Trade style > Rules = "Original"; the
-sweeps are in their own settings group). The original rules (daily plan + 3-day volume lines) are described below.
-The sweep, one trade at a time with everything else:
-- Yesterday's high and low are drawn as yellow lines ("yday high" / "yday low").
-- A 5-minute candle (9:30-2:30) goes **above yesterday's high and closes back below it** -> SELL at the close; goes
-  **below yesterday's low and closes back above it** -> BUY. Stop 0.02% beyond the candle's high / low, target 3x
-  the stop, out by 3:15, at most 3 a day, only when no other trade is open.
-- 2026 (1 Jan - 9 Oct), after costs, the whole indicator: Nifty 203 trades, 57% won, net **+2,993** (Jan-Jun +2,175,
-  Jul-Oct +819), worst fall −284; Sensex 223 trades, 53% won, net **+9,279** (Jan-Jun +7,264, Jul-Oct +2,015), worst
-  fall −1,535. Without the sweeps: +2,274 / +8,102. The sweep trades alone win only about 1 in 3, but each win is
-  3x the stop (`research/quant/y2026_sweep.py`).
-- Also tested and not added (they lost on their own and didn't help in both halves): the squeeze, Smart Money
-  Concepts (break of structure, change of character, order blocks, fair value gaps) and trading the low-volume
-  areas of the last 2 days' volume profile (`research/quant/y2026_smc.py`).
+**Default rules now: the original rules + the volume check** (Settings > Trade style > Rules = "Original";
+Settings > "Volume check"). The original rules (daily plan + 3-day volume lines) are described below. The volume
+check (Dr David Paul's reading of volume: in a healthy up move price and volume move together; in distribution the
+falls come on heavy volume and the rallies on light volume):
+- A BUY is taken only if, over the last 24 five-minute candles (2 hours), the up candles carried more volume
+  (NIFTYBEES) than the down candles; a SELL only if the down candles did. The box says which side is allowed now.
+- 2026 (1 Jan - 9 Oct), after costs: Nifty 70 trades, 87% won, net **+2,214**, worst fall **−138**; Sensex 68
+  trades, 82% won, net **+8,001**, worst fall **−336**. Without it: Nifty 101 trades, +2,274, worst fall −352;
+  Sensex 114 trades, +8,102, worst fall −1,438. About the same points from a third fewer trades, with much smaller
+  losing runs (`research/quant/y2026_volume.py`).
+- **Liquidity sweeps** of yesterday's high / low (yellow lines) are in their own settings group, off by default:
+  more points (Nifty +2,993, Sensex +9,279 without the volume check) but twice the trades.
+- Also tested and not added: the squeeze, Smart Money Concepts, the low-volume areas of the last 2 days' volume
+  profile (`y2026_smc.py`), and a reversal candle (shooting star, hammer, doji, engulfing) + break of structure +
+  retest with the stop at the candle (`y2026_pattern.py`).
 
 **1:4 targets, held until 3:15** (the second choice): every stop at most 0.21% of price (about 150 Sensex / 47 Nifty
 points), target 4x the stop, held until the target, the stop or 3:15; only the CPR Magnet and the breakout on the

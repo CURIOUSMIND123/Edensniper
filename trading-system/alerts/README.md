@@ -12,8 +12,8 @@ or a login. It tells you:
 - **9:16:** CPR Magnet BUY / SELL, or "no magnet today";
 - **9:30:** the 15-minute range and the one breakout trade that is still allowed: "SELL when price touches X". Set
   a price alert in Groww at X, so you aren't late;
-- **9:30-2:30:** volume-line trades, and **liquidity sweeps**: "price went above yesterday's high and closed back
-  below it -> SELL";
+- **9:30-2:30:** volume-line trades (and liquidity sweeps if switched on);
+- **the volume check:** a signal whose volume doesn't agree is skipped, with a message saying so;
 - **every trade:** BUY = buy the ATM call, SELL = buy the ATM put, with the stop, the target (or when to book half
   and move the stop), and the exit with points and rupees.
 
@@ -22,10 +22,11 @@ Alerts appear on the screen (with a beep) and, if you set it up, on your phone t
 **Rules** (top of the file):
 
 - `RULES = 'classic'` (default): the original rules (daily plan + 3-day volume lines; book half, trailing, out by
-  3:15) **plus liquidity sweeps** of yesterday's high / low (`SWEEP = True`): a 5-minute candle goes beyond
-  yesterday's high / low and closes back -> the other way, stop just beyond the candle, target 3x the stop, at
-  most 3 a day (`SWEEP_MAX`), only when no other trade is open. The most profit in the 2026 tests.
-  `SWEEP = False` gives the original rules alone; `LADDER = True` the volume-line ladder.
+  3:15) **with the volume check** (`VOLCHECK = True`): a BUY only if, over the last 2 hours (`VOL_WINDOW` = 24
+  five-minute candles), the up candles carried more NIFTYBEES volume than the down candles; a SELL only if the
+  down candles did. A signal it stops is reported ("skipped: the volume doesn't agree"). About the same points as
+  without it from a third fewer trades, with much smaller losing runs. `SWEEP = True` adds liquidity sweeps of
+  yesterday's high / low (more points, twice the trades); `LADDER = True` the volume-line ladder.
 - `RULES = 'rr'`, **1:4 trades**: every stop at most 0.21% of price (`STOP_PCT`), target 4x the stop
   (`RR_TARGET`), held until the target, the stop or 3:15; only the CPR Magnet and the breakout on the pullback
   (a limit order back at the broken 15-minute level).
@@ -45,7 +46,7 @@ refreshes every 5 seconds; the program fetches new prices every 15 seconds. On a
 The chart library (TradingView's free open-source Lightweight Charts) is downloaded once and kept next to the
 program. `CHART = False` at the top switches the chart off.
 
-![The live chart on a phone, replaying 5 October 2026 (Sensex): a SELL after price went above yesterday's high and closed back below it; target hit, +517 points](chart-phone.png)
+![The live chart on a phone, replaying 28 September 2026 (Sensex): the 9:30 breakout SELL, half booked, closed at 3:15 for +236 points](chart-phone.png)
 
 ## Set up once
 
@@ -110,9 +111,9 @@ On a phone, put the date in `REPLAY_DAY = '2026-10-08'` at the top and press Run
 ## Checked
 
 `research/quant/alerts_check.py` runs it on every 2026 session, minute by minute as it runs live. It took exactly the
-backtest's trades: default (original rules + sweeps) Nifty 203 trades, net +2,993 points, Sensex 223 trades, net
-+9,279; original rules alone Nifty 101 trades, net +2,274, Sensex 114 trades, net +8,102 (with the ladder +2,193 /
-+8,819; ladder + sweeps +2,959 / +9,988); 1:4 rules Nifty 55 trades, net +1,344, Sensex 53 trades, net +4,419;
+backtest's trades: default (original rules + the volume check) Nifty 70 trades, net +2,214 points, Sensex 68
+trades, net +8,001; original rules alone Nifty 101 trades, net +2,274, Sensex 114 trades, net +8,102 (with the
+ladder +2,193 / +8,819); with sweeps Nifty 203 trades, +2,993, Sensex 223 trades, +9,279; 1:4 rules Nifty 55 trades, net +1,344, Sensex 53 trades, net +4,419;
 small-stop rules Nifty 150 trades, net +842, Sensex 170 trades, net +4,708. Nothing it had already said changed later in the day. The CPR uses the exchange's official daily close
 (downloaded each morning), like TradingView; the official close often differs from the last 1-minute candle.
 

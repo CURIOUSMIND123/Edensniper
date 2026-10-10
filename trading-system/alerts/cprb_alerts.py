@@ -4,8 +4,9 @@
 Follows the same rules as tradingview/cpr_breakout.pine (its default settings) on live 1-minute candles from
 Upstox's free public candle data. It tells you when to BUY (a call) or SELL (a put), where the stop and the target
 are and when to exit: on this screen, and on your phone through Telegram if you set that up (free).
-Default rules ('classic' with sweeps): the daily plan (CPR Magnet at 9:16 or the 9:30 breakout), the 3-day volume
-lines, and liquidity sweeps of yesterday's high / low; one trade at a time.
+Default rules ('classic' with the volume check): the daily plan (CPR Magnet at 9:16 or the 9:30 breakout) and the
+3-day volume lines, one trade at a time; a BUY only when the last 2 hours' up candles carried more volume (NIFTYBEES)
+than the down candles, a SELL only when the down candles did.
 
     python cprb_alerts.py                       run today: start it any time before 9:15, leave it running
     python cprb_alerts.py --replay 2026-10-09   replay a past day in a few seconds, to see what it does
@@ -20,6 +21,7 @@ shows the last session.
 Needs Python 3.8 or newer and nothing else. The settings are just below.
 Times are the 1-minute candle in which something happened; the alert comes when that candle closes.
 """
+import bisect
 import datetime as dt
 import json
 import math
@@ -33,11 +35,15 @@ import urllib.request
 INDICES = ['nifty', 'sensex']     # or ['nifty'] / ['sensex']
 LOTS = 5                          # lots per trade, only for the rupee estimates (option moves about half the index)
 RULES = 'classic'                 # 'classic': the original rules (daily plan + 3-day volume lines; wider stops, book
-                                  #       half, trailing, out by 3:15): the most profit in the 2026 tests
+                                  #       half, trailing, out by 3:15)
                                   # 'rr': 1:4 trades. Stop at most STOP_PCT % of price, target RR_TARGET x the stop,
                                   #       held until the target, the stop or 3:15. Pullback entry and CPR Magnet only
                                   # 'small': stops of at most STOP_CAP points, out within HOLD_MIN minutes, pullback entry
-SWEEP = True                      # 'classic' rules: also trade liquidity sweeps of yesterday's high / low
+VOLCHECK = True                   # 'classic' rules: the volume check (Dr David Paul): a BUY only when, over the last
+                                  # VOL_WINDOW 5-minute candles, the up candles carried more volume than the down
+                                  # candles (price and volume moving together); a SELL only when the down candles did
+VOL_WINDOW = 24                   # 24 five-minute candles = the last 2 hours (early in the day: yesterday's last ones)
+SWEEP = False                     # 'classic' rules: also trade liquidity sweeps of yesterday's high / low
 SWEEP_MAX = 3                     # at most this many sweep trades a day
 STOP_PCT = 0.21                   # 'rr' rules: the most a stop may be from entry, in % of price (Sensex ~150, Nifty ~47 points)
 RR_TARGET = 4.0                   # 'rr' rules: target = this x the stop
@@ -234,6 +240,7 @@ def context(spec, sess, vol, today, daily=None):
     return dict(spec, today=today, prev=days[-1], lv=lv, rank=rank, narrow=rank < 1 / 3,
                 rel=1 if lv['bot'] > ylv['top'] else -1 if lv['top'] < ylv['bot'] else 0,
                 yc=D[days[-1]][3], yh=D[days[-1]][1], yl=D[days[-1]][2], poc=poc, vah=vah, val=val, yday=sess[days[-1]],
+                yvol=vol.get(days[-1], {}),
                 lines=vol_lines(*combine([H[d] for d in days[-3:]]), spec['bin']))
 
 
@@ -344,6 +351,32 @@ def touches(c1, orh, orl, after):
         elif l <= orl:
             yield -1, min(o, orl), m + 1, m
 
+def vok(cx, side, m, src):
+    """The volume check on a signal (cx['vf'](side, minute, setup) -> True / False); none = every signal. The first
+    signal it stops of each kind is kept for the messages."""
+    f = cx.get('vf')
+    if f is None or f(side, m, src):
+        return True
+    if cx.get('vlog') is not None:
+        cx['vlog'].setdefault((src, side), m)
+    return False
+
+def volume_fn(cx, c1, upto):
+    """The volume check (Dr David Paul): over the last VOL_WINDOW 5-minute candles closed by the signal's minute
+    (yesterday's included), the total NIFTYBEES volume of the up candles (close above open) must beat the down
+    candles' for a BUY, and the other way for a SELL. cx['tvol'] = today's NIFTYBEES volume by minute."""
+    yv, tv = cx.get('yvol', {}), cx.get('tvol', {})
+    seq = [(m0 - 1440, c - o, sum(yv.get(m0 + k, 0) for k in range(5))) for m0, o, h, l, c in candles5(cx['yday'], CLOSE)]
+    seq += [(m0, c - o, sum(tv.get(m0 + k, 0) for k in range(5))) for m0, o, h, l, c in candles5(c1, upto)]
+    ends = [x[0] + 5 for x in seq]
+    def f(side, m, src):
+        k = bisect.bisect_right(ends, m)
+        win = seq[max(0, k - VOL_WINDOW):k]
+        up = sum(v for _, d, v in win if d > 0)
+        dn = sum(v for _, d, v in win if d < 0)
+        return up > dn if side > 0 else dn > up
+    return f
+
 def plan_trades(cx, c1, upto, over):
     """Daily plan: narrow-CPR day -> breakout; other day -> CPR Magnet at 9:16 if the open qualifies, else breakout."""
     if not c1:
@@ -354,7 +387,7 @@ def plan_trades(cx, c1, upto, over):
         side = -1 if o > lv['top'] else 1 if o < lv['bot'] else 0
         if side:
             edge = lv['top'] if side < 0 else lv['bot']
-            if side * (edge - e) >= 0.002 * e and side * (e - poc) > 0:
+            if side * (edge - e) >= 0.002 * e and side * (e - poc) > 0 and vok(cx, side, 556, 'MAGNET'):
                 r = run_magnet(c1, side, e, edge, over, cost)
                 return [dict(src='MAGNET', side=side, m=556, known=556, e=e, stp0=e - side * 0.3 / 100 * e,
                              t1=e + side * 0.25 * 0.3 / 100 * e, edge=edge, **r)]
@@ -369,7 +402,7 @@ def plan_trades(cx, c1, upto, over):
     for side, e, start, m in touches(c1, orh, orl, RANGE_END):
         if m >= CUTOFF:
             break
-        if side == -cx['rel'] or gap != side or side * (e - poc) <= 0:
+        if side == -cx['rel'] or gap != side or side * (e - poc) <= 0 or not vok(cx, side, m, 'BREAKOUT'):
             continue
         stp = orl if side > 0 else orh
         if side * (e - stp) <= 0:
@@ -380,7 +413,7 @@ def plan_trades(cx, c1, upto, over):
             for s2, e2, st2, m2 in touches(c1, orh, orl, r['exit']['m'] + 1):
                 if m2 >= CUTOFF:
                     break
-                if s2 != -side or s2 * (e2 - poc) <= 0:
+                if s2 != -side or s2 * (e2 - poc) <= 0 or not vok(cx, s2, m2, 'REVERSAL'):
                     continue
                 stp2 = orl if s2 > 0 else orh
                 if s2 * (e2 - stp2) <= 0:
@@ -420,7 +453,7 @@ def vol_trades(cx, c1, upto, over, ladder):
             tgt = nxt[0]
             stp = max(prv) if side > 0 else min(prv)
             e = c
-            if side * (e - stp) <= 0 or side * (tgt - e) < 1.5 * side * (e - stp):
+            if side * (e - stp) <= 0 or side * (tgt - e) < 1.5 * side * (e - stp) or not vok(cx, side, m0 + 5, 'VOLUME LINE'):
                 break
             tgt2 = nxt[1] if ladder and len(nxt) > 1 else None
             r = run_vol(c1, side, e, m0 + 5, stp, tgt, x, tgt2, over, cost)
@@ -452,6 +485,8 @@ def sweep_trades(cx, c1, upto, over):
         elif pc > yl > l and c > yl:
             side, ext, lvl = 1, l, yl
         else:
+            continue
+        if not vok(cx, side, m0 + 5, 'SWEEP'):
             continue
         stp = ext - side * 0.0002 * c
         risk = side * (c - stp)
@@ -617,8 +652,14 @@ def day_trades(cx, c1, upto, over=False, ladder=False, rules=None):
         cx['rules_used'] = rules
     else:
         cx['rules_used'] = 'classic'
+        own = cx.get('vf') is not None                   # a check set from outside (tests)
+        if VOLCHECK and not own:
+            cx['vf'] = volume_fn(cx, c1, upto)
+        cx['vlog'] = {}
         ts = plan_trades(cx, c1, upto, over) + vol_trades(cx, c1, upto, over, ladder) + \
             (sweep_trades(cx, c1, upto, over) if SWEEP else [])
+        if VOLCHECK and not own:
+            cx['vf'] = None
     ts.sort(key=lambda t: (t['m'], {'VOLUME LINE': 1, 'SWEEP': 2}.get(t['src'], 0)))
     free = nsw = 0
     for t in ts:
@@ -668,6 +709,9 @@ def plan_text(cx):
     out.append(f"3-day volume lines: {', '.join(f2(x) for x in cx['lines'])}. 9:30-2:30: a 5-minute close through a line "
                "-> trade toward the next line, stop at the previous line, only if the next line is at least 1.5x the stop "
                "away. One trade at a time." + (" Ladder on." if LADDER else ""))
+    if VOLCHECK:
+        out.append("Volume check on every signal: a BUY only if, over the last 2 hours, the up candles carried more volume "
+                   "(NIFTYBEES) than the down candles; a SELL only if the down candles did. Otherwise the signal is skipped.")
     if SWEEP:
         out.append(f"Liquidity sweeps, 9:30-2:30: a 5-minute candle goes above yesterday's high {f2(cx['yh'])} and closes back "
                    f"below it -> SELL; goes below yesterday's low {f2(cx['yl'])} and closes back above it -> BUY. Stop just "
@@ -734,7 +778,8 @@ def range_note(cx, c1):
     pocok = gap * (lvl - cx['poc']) > 0
     return (f"{cx['name']} 15-minute range {f2(orl)} - {f2(orh)}. Until 10:00: {word} when price touches {f2(lvl)}"
             + ("" if pocok else f" (only if price is {'above' if gap > 0 else 'below'} the POC {f2(cx['poc'])} then)") +
-            f", stop {f2(other)}, book half at {f2(lvl + gap * 0.25 * abs(lvl - other))}.")
+            f", stop {f2(other)}, book half at {f2(lvl + gap * 0.25 * abs(lvl - other))}" +
+            (" (only if the volume check agrees then)." if VOLCHECK else "."))
 
 def messages(cx, ts, c1, upto, lots):
     """(id, minute known, text, important) for everything that has happened so far."""
@@ -749,6 +794,10 @@ def messages(cx, ts, c1, upto, lots):
         if upto >= CUTOFF and not plan:
             out.append(('nobo', CUTOFF, f"{nm} 10:00: no breakout trade. Volume-line" + (" and sweep" if SWEEP else "") +
                         " trades only from now (till 2:30).", False))
+    for (src, side), m in sorted((cx.get('vlog') or {}).items(), key=lambda kv: kv[1]):
+        out.append((('vskip', src, side), m, f"{nm} {hhmm(m)} {src} {'BUY' if side > 0 else 'SELL'} signal skipped: the volume "
+                    f"doesn't agree (over the last 2 hours the {'down' if side > 0 else 'up'} candles carried more volume). "
+                    "Not taking it.", False))
     for t in ts:
         sd = 'BUY' if t['side'] > 0 else 'SELL'
         tid = (t['src'], t['m'])
@@ -1078,8 +1127,10 @@ def load(names, today):
 def replay(names, day, lots, ladder):
     cxs = load(names, day)
     rows = {n: fetch_range(SPEC[n]['key'], dt.date.fromisoformat(day), dt.date.fromisoformat(day)).get(day, {}) for n in names}
+    tvol = {m: v[4] for m, v in fetch_range(BEES, dt.date.fromisoformat(day), dt.date.fromisoformat(day)).get(day, {}).items()}
     for n in names:
         cx = cxs[n]
+        cx['tvol'] = tvol
         print("\n" + plan_text(cx).replace(f"the session after {cx['prev']}", day))
         c_all = [(m,) + tuple(rows[n][m][:4]) for m in sorted(rows[n])]
         if not c_all:
@@ -1134,6 +1185,17 @@ def live(names, lots, ladder, plan_only=False):
             waited = False
         upto = min(mnow - 1, CLOSE - 1)
         late = False
+        vlast = CLOSE
+        if VOLCHECK and RULES == 'classic':
+            try:
+                tvol = {m: v[4] for m, v in fetch_today(BEES).get(today, {}).items()}
+                vlast = max(tvol) if tvol else OPEN - 1
+            except Exception as e:
+                print(f"  NIFTYBEES volume: data error ({e}); trying again next minute")
+                time.sleep(15)
+                continue
+            for n in names:
+                cxs[n]['tvol'] = tvol
         for n in names:
             cx = cxs[n]
             try:
@@ -1148,12 +1210,15 @@ def live(names, lots, ladder, plan_only=False):
                     print(f"  {cx['name']}: no candles yet today ({hhmm(mnow)}). Market holiday or a data problem?")
                     shown[n] = 'none'
                 continue
-            if c1[-1][0] < upto and now.second < 40:
+            if (c1[-1][0] < upto or vlast < upto) and now.second < 40:
                 late = True                                   # the last minute isn't in yet: look again soon
                 if CHART:
                     chart_update(n, cx, c_all, last_ts.get(n, []), c1[-1][0], today)
                 continue
-            got = min(upto, c1[-1][0])                        # data complete up to here (the source can lag)
+            got = min(upto, c1[-1][0], vlast)                 # data complete up to here (the source can lag)
+            c1 = [x for x in c1 if x[0] <= got]
+            if not c1:
+                continue
             ts = day_trades(cx, c1, got, got == CLOSE - 1, ladder)
             last_ts[n] = ts
             for mid, mk, text, push in messages(cx, ts, c1, got, lots):

@@ -6,18 +6,24 @@
 // Draws the CPR (three pink lines; orange on narrow days), the first 15-minute candle's high / low, the 30-day
 // volume point of control (POC: the price where the most volume traded; volume from NIFTYBEES because the index has
 // none) with its value area, and the 5-minute EMA 50. Every filter is in Settings.
-// DEFAULT RULES = ORIGINAL (daily plan + 3-day volume lines, described below) + LIQUIDITY SWEEPS, one trade at a time:
-//   LIQUIDITY SWEEP of yesterday's high / low (yellow lines): a 5-minute candle (9:30-2:30) goes above yesterday's
-//   high and closes back below it (the candle before closed below it) -> SELL at the close; below yesterday's low
-//   and back above it -> BUY. Stop 0.02% beyond the candle's high / low (skipped if wider than 0.5% of price),
-//   target 3x the stop, out by 3:15, at most 3 a day, only when no other trade is open.
-//   2026 (1 Jan - 9 Oct), after costs, the whole indicator: Nifty 203 trades, 57% won, net +2,993 (Jan-Jun +2,175,
-//   Jul-Oct +819), worst fall -284; Sensex 223 trades, 53% won, net +9,279 (Jan-Jun +7,264, Jul-Oct +2,015), worst
-//   fall -1,535. Without the sweeps: Nifty +2,274, Sensex +8,102. The sweep trades alone win only about 1 in 3;
-//   the wins are 3x the stop. Reference: research/quant/y2026_sweep.py (and alerts/cprb_alerts.py, SWEEP = True).
-//   Liquidity squeeze, Smart Money Concepts (break of structure, change of character, order blocks, fair value
-//   gaps) and the low-volume areas of the last 2 days' volume profile were tested too (y2026_smc.py) and did not
-//   add profit in both halves of 2026.
+// DEFAULT RULES = ORIGINAL (daily plan + 3-day volume lines, described below) + THE VOLUME CHECK, one trade at a time:
+//   THE VOLUME CHECK (Dr David Paul: in a healthy up move price and volume move together, in distribution the falls
+//   come on heavy volume and the rallies on light volume): a BUY is taken only if, over the last 24 five-minute
+//   candles (2 hours; early in the day yesterday's last ones), the up candles carried more volume (NIFTYBEES) than
+//   the down candles; a SELL only if the down candles did. The box shows which side is allowed now.
+//   2026 (1 Jan - 9 Oct), after costs: Nifty 70 trades, 87% won, net +2,214 (Jan-Jun +1,790, Jul-Oct +423), worst
+//   fall -138; Sensex 68 trades, 82% won, net +8,001 (Jan-Jun +6,789, Jul-Oct +1,211), worst fall -336. Without the
+//   check: Nifty 101 trades, +2,274, worst fall -352; Sensex 114 trades, +8,102, worst fall -1,438. About the same
+//   points from a third fewer trades, with much smaller losing runs. Reference: research/quant/y2026_volume.py (and
+//   alerts/cprb_alerts.py, VOLCHECK = True).
+// LIQUIDITY SWEEPS of yesterday's high / low (off by default; Settings): a 5-minute candle (9:30-2:30) goes above
+//   yesterday's high and closes back below it -> SELL; below yesterday's low and back above it -> BUY. Stop 0.02%
+//   beyond the candle, target 3x the stop, at most 3 a day. 2026 without the volume check: Nifty +2,993, Sensex
+//   +9,279, but twice the trades (research/quant/y2026_sweep.py).
+// Tested and not added (y2026_smc.py, y2026_pattern.py): the squeeze, Smart Money Concepts (break of structure, change
+//   of character, order blocks, fair value gaps), the low-volume areas of the last 2 days' volume profile, and a
+//   reversal candle (shooting star, hammer, doji, engulfing) at the end of a move + break of structure + retest with
+//   the stop at the candle.
 // 1:4 TARGETS, HELD UNTIL 3:15 (the second choice in Settings > Trade style > Rules):
 //   Every stop at most 0.21% of price (about 150 Sensex / 47 Nifty points), target 4x the stop, the whole position
 //   held until the target, the stop or 3:15. CPR Magnet (stop 0.21%, target 4x) and the breakout ON THE PULLBACK:
@@ -112,8 +118,11 @@ vlN    = input.int(3, "Volume lines from the last N sessions", minval = 2, maxva
 vlRR   = input.float(1.5, "Skip when the next line is less than this x the stop away", step = 0.25, group = G5)
 vlLad  = input.bool(false, "Ladder: at the next line book half, move the stop to the broken line, ride the rest to the line after", group = G5, tooltip = "2026 test, whole indicator: Sensex net +8,612 instead of +7,894 (all of the gain in Jan-Jun), Nifty +2,373 instead of +2,454. Booking half needs at least 2 lots.")
 vlShow = input.bool(true, "Draw the volume lines", group = G5)
+G7 = "Volume check (Dr David Paul; original rules)"
+vcOn   = input.bool(true, "Volume check: BUY only when the up candles carried more volume than the down candles (SELL the other way)", group = G7, tooltip = "Price and volume move together in a healthy up move (rises on heavy volume, dips on light volume); in distribution the falls come on heavy volume and the rallies on light volume. Volume from the 'Volume from' symbol (NIFTYBEES). Over the last N five-minute candles closed by the signal. 2026: Nifty 70 trades instead of 101, net +2,214 instead of +2,274, worst fall -138 instead of -352; Sensex 68 instead of 114, +8,001 instead of +8,102, worst fall -336 instead of -1,438.")
+vcN    = input.int(24, "Volume check: over the last N five-minute candles (24 = 2 hours)", minval = 6, maxval = 100, group = G7)
 G6 = "Liquidity sweeps of yesterday's high / low (same book; original rules)"
-swOn   = input.bool(true, "Trade liquidity sweeps: a 5-minute candle goes beyond yesterday's high / low and closes back -> the other way", group = G6, tooltip = "9:30-2:30, only when no other trade is open. Above yesterday's high and back below -> SELL; below yesterday's low and back above -> BUY. Stop 0.02% beyond the candle's high / low (skipped if wider than 0.5% of price), target 3x the stop, out by 3:15. 2026: Nifty +2,993 instead of +2,274, Sensex +9,279 instead of +8,102.")
+swOn   = input.bool(false, "Trade liquidity sweeps: a 5-minute candle goes beyond yesterday's high / low and closes back -> the other way", group = G6, tooltip = "9:30-2:30, only when no other trade is open. Above yesterday's high and back below -> SELL; below yesterday's low and back above -> BUY. Stop 0.02% beyond the candle's high / low (skipped if wider than 0.5% of price), target 3x the stop, out by 3:15. 2026: Nifty +2,993 instead of +2,274, Sensex +9,279 instead of +8,102.")
 swMax  = input.int(3, "Sweeps: at most this many a day", minval = 1, maxval = 10, group = G6)
 swMult = input.float(3.0, "Sweeps: target = this x the stop", step = 0.5, group = G6)
 swShow = input.bool(true, "Draw yesterday's high / low", group = G6)
@@ -242,6 +251,17 @@ is5 = timeframe.isintraday and timeframe.multiplier == 5
 // NIFTYBEES volume spread over each index candle's range; time at price if that volume isn't available
 bv = request.security(volSym, timeframe.period, volume, lookahead = barmerge.lookahead_off)
 float vw = na(bv) or bv <= 0 ? 1.0 : bv
+// the volume check: total volume of the up candles vs the down candles over the last vcN candles; with the candle
+// still forming (1-minute signals) the candles before it, at a 5-minute close (close signals) up to this one
+float bvz  = na(bv) ? 0.0 : bv
+float vcUp = math.sum(close > open ? bvz : 0.0, vcN)
+float vcDn = math.sum(close < open ? bvz : 0.0, vcN)
+float vcUp1 = vcUp[1]
+float vcDn1 = vcDn[1]
+volOk(int sd, bool closed) =>
+    float u = closed ? vcUp : vcUp1
+    float d = closed ? vcDn : vcDn1
+    not vcOn or shortMode or (sd > 0 ? u > d : d > u)
 var int[] dStart = array.new_int()
 var float[] vLines = array.new_float()     // today's volume lines (from the last vlN sessions)
 var line[]  vlDraw = array.new_line()
@@ -532,6 +552,8 @@ if is5 and n1 > 0
                     ms := 0
                 if magIn and (ok > pH or ok < pL)
                     ms := 0
+                if ms != 0 and not volOk(ms, false)
+                    ms := 0
                 if ms != 0
                     opened := true
                     openSide := ms
@@ -695,7 +717,7 @@ if is5 and n1 > 0
                 sd := 0
             if sd != 0
                 float px = sd > 0 ? math.max(ok, orh) : math.min(ok, orl)
-                if state == 2 ? pocPass(sd, px) : passes(sd, px, ema50[1])
+                if (state == 2 ? pocPass(sd, px) : passes(sd, px, ema50[1])) and volOk(sd, false)
                     float s0 = stopFor(sd, px)
                     if sd * (px - s0) > 0
                         opened := true
@@ -775,7 +797,7 @@ if is5 and not shortMode and not volOpen and entF == "5-minute close beyond the 
     if state == 2 and sd != -side
         sd := 0
     if sd != 0
-        if state == 2 ? pocPass(sd, close) : passes(sd, close, ema50)
+        if (state == 2 ? pocPass(sd, close) : passes(sd, close, ema50)) and volOk(sd, true)
             float s0 = stopFor(sd, close)
             if sd * (close - s0) > 0
                 opened := true
@@ -823,7 +845,7 @@ if is5 and vlOn and not rrMode and barstate.isconfirmed and not volOpen and stat
             if shortMode
                 rk := math.min(rk, CAP)
             float rw = vs * (vt - close)
-            if rk > 0 and rw >= vlRR * rk
+            if rk > 0 and rw >= vlRR * rk and volOk(vs, true)
                 volOpen := true
                 vKind := "VOL"
                 vSide := vs
@@ -859,7 +881,7 @@ if is5 and swOn and not shortMode and barstate.isconfirmed and not volOpen and s
     if ws != 0
         float wStp = (ws < 0 ? high : low) - ws * 0.0002 * close
         float wRk = ws * (close - wStp)
-        if wRk > 0 and wRk <= 0.005 * close
+        if wRk > 0 and wRk <= 0.005 * close and volOk(ws, true)
             volOpen := true
             vKind := "SWEEP"
             vSide := ws
@@ -980,7 +1002,7 @@ if barstate.islast and cprOn
         edgeName(edgeLbl, xb, nBot, "BC " + fmt(nBot), nCol, size.small)
 
 // ---------------- status and results box ----------------
-var table tbl = table.new(position.top_right, 2, 10, bgcolor = color.new(chart.bg_color, 5), border_width = 1, border_color = color.new(GREY, 60), frame_width = 1, frame_color = GREY)
+var table tbl = table.new(position.top_right, 2, 11, bgcolor = color.new(chart.bg_color, 5), border_width = 1, border_color = color.new(GREY, 60), frame_width = 1, frame_color = GREY)
 cell(int r, string a, string b, color tc) =>
     table.cell(tbl, 0, r, a, text_color = GREY, text_size = size.small, text_halign = text.align_left)
     table.cell(tbl, 1, r, b, text_color = tc, text_size = size.small, text_halign = text.align_left)
@@ -995,5 +1017,7 @@ if barstate.islast and showBox
     cell(6, "On this chart", str.tostring(nTr) + " trades, " + str.tostring(nWon) + " won, " + str.tostring(nTr - nWon) + " lost", chart.fg_color)
     cell(7, "Points won / lost / net", pts(winPts) + " / " + pts(lossPts) + " / " + pts(totPts), totPts >= 0 ? GREEN : RED)
     cell(8, "Of which volume-line trades", str.tostring(nVol) + " trades, " + str.tostring(nVolWon) + " won, " + pts(volPts) + " pts", volPts >= 0 ? GREEN : RED)
+    if vcOn and not shortMode
+        cell(10, "Volume, last " + str.tostring(vcN) + " candles", vcUp > vcDn ? "up candles heavier: BUYs allowed" : vcDn > vcUp ? "down candles heavier: SELLs allowed" : "even: no trades", vcUp > vcDn ? GREEN : vcDn > vcUp ? RED : GREY)
     if swOn and not shortMode
         cell(9, "Of which sweep trades", str.tostring(nSw) + " trades, " + str.tostring(nSwWon) + " won, " + pts(swPts) + " pts", swPts >= 0 ? GREEN : RED)

@@ -898,13 +898,13 @@ stop, at most 3 a day, only when no other trade is open.
   1:30, how far beyond the level, a stop limit, adding the day before's high / low): 16 of 17 still better in both
   halves on Nifty, 14 of 17 on Sensex.
 - In rupees at 5 lots (delta 0.5, time decay left out): about Rs 9.5 lakh in 2026 so far instead of Rs 7.75 lakh.
-- **Now the default** in the indicator (Original rules, "Trade liquidity sweeps" on) and the phone alerts
-  (`RULES = 'classic'`, `SWEEP = True`); the alerts took exactly these trades (`alerts_check.py`). Chosen by
-  looking at 2026 itself; live results will very likely be lower.
+- **Available, off by default** in the indicator ("Trade liquidity sweeps") and the phone alerts (`SWEEP = True`):
+  twice the trades for about a fifth more points was judged not worth it. The alerts took exactly these trades
+  (`alerts_check.py`).
 
-## 2026: the full report of the current default (`y2026_report.py`)
+## 2026: the report of original rules + liquidity sweeps (`y2026_report.py`)
 
-Original rules + liquidity sweeps, both indices, 1 January - 9 October 2026, after costs (the alert program's own
+Original rules + liquidity sweeps (no longer the default; see the next section), both indices, 1 January - 9 October 2026, after costs (the alert program's own
 trades; rupees at delta 0.5, time decay left out):
 
 | | Nifty | Sensex |
@@ -924,6 +924,43 @@ trades; rupees at delta 0.5, time decay left out):
 Both indices at 5 lots: Rs +9.5 lakh in 9.3 months (about Rs 1 lakh a month; no losing month; weakest June
 +17k). Rs 30,000 at 2 lots, 5 from Rs 75,000: Rs 8.97 lakh, lowest Rs 25,971; in random order it fell below Rs 15,000
 in 8.4% of 10,000 runs. At 5 lots from the start: below Rs 15,000 in 32% of runs and below zero in 13%.
+
+## 2026: reading the volume under the price (Dr David Paul), and reversal candles + break of structure + retest
+
+**The volume check** (`y2026_volume.py`): in a healthy up move price and volume move together (rises on heavy
+volume, dips on light volume: accumulation); in distribution they pull apart (falls on heavy volume, rallies on
+light volume). At each signal of the original rules, over the 5-minute candles closed by then (NIFTYBEES volume; up
+candle = close above open): a BUY only if the up candles carried more volume than the down candles, a SELL only the
+other way. 18 versions (average or total volume, last 6 / 12 / 24 candles or today so far, margin 1 or 1.25x, or the
+last candle alone), on every setup or only some.
+
+| 2026, original rules, one trade at a time | Nifty | Sensex |
+|---|---|---|
+| No volume check | 101 trades, 78% won, net +2,274 (Jan-Jun +1,802, Jul-Oct +472), worst fall −352 | 114 trades, 75% won, net +8,102 (Jan-Jun +6,582, Jul-Oct +1,520), worst fall −1,438 |
+| **Volume check, total volume of the last 24 candles (2 hours), every setup** | 70 trades, 87% won, net **+2,214** (Jan-Jun +1,790, Jul-Oct +423), worst fall **−138** | 68 trades, 82% won, net **+8,001** (Jan-Jun +6,789, Jul-Oct +1,211), worst fall **−336** |
+| Same, last 12 candles | 71 trades, net +2,022, worst fall −180 | 76 trades, net +7,634, worst fall −938 |
+| Same, last 24 candles, margin 1.25x | 55 trades, net +2,138, worst fall −141 | 49 trades, net +5,894, worst fall −336 |
+| Only on the volume-line trades, last 6 candles | 89 trades, net +2,145 | 94 trades, net +9,635, worst fall −712 |
+
+- Almost every version cut the trades by a third or more and cut the worst fall from a high sharply; most also
+  cut the points a little. The 2-hour total kept nearly all the points (−3% Nifty, −1% Sensex) with 31% / 40% fewer
+  trades and a worst fall 61% / 77% smaller: more points per trade (Nifty +31.6 instead of +22.5, Sensex +117.7
+  instead of +71.1). It is the best of the 18 versions, so the kept points are the optimistic end.
+- With the sweeps, the check on the sweeps made Sensex better but Nifty worse.
+- **Now the default** in the indicator (Settings > "Volume check") and the phone alerts (`VOLCHECK = True`); the
+  alerts took exactly these trades (`alerts_check.py`).
+
+**A reversal candle at the end of a move, a break of structure, then the retest** (`y2026_pattern.py`, 1,152
+versions per index): at the lowest low of the last hour (optionally in a down structure of lower highs and lower
+lows), a shooting-star-shaped candle (inverted hammer), a hammer, a doji, an engulfing candle or any candle; then a
+5-minute close above the last lower high within an hour (break of structure); then a limit order back at the
+candle's high (the retest) or its middle, or entry at the break; stop just below the candle; target 2x / 3x, half,
+or the high of the move. The mirror image at tops (shooting star at a high, etc.).
+- Nifty: 85 of 1,152 versions made money on their own; the middle version lost 82 points; the shooting-star and
+  hammer shapes made money in none of their 192 versions each. Few signals (often under 10 a year).
+- Sensex: engulfing candles worked (best: entry at the break, target 3x: 25 trades, +2,556), but not on Nifty.
+- Added to the original rules (with or without the volume check): no version did better in both halves on both
+  indices. Not added.
 
 ## How to re-check all of this
 

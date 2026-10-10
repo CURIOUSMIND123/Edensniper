@@ -3,8 +3,8 @@ alert program's own trade logic (alerts/cprb_alerts.py, checked trade for trade 
 
     python y2026_report.py nifty        then  python y2026_report.py sensex   then  python y2026_report.py both
 
-Rules compared: default (original rules + liquidity sweeps), original rules without the sweeps, 1:4 targets, small
-stops (60 minutes). For each index: trades, won / lost, points won / lost / net, average win / loss, biggest win,
+Rules compared: default (original rules + the volume check), original rules without it, original rules + liquidity
+sweeps, 1:4 targets, small stops (60 minutes). For each index: trades, won / lost, points won / lost / net, average win / loss, biggest win,
 worst trade, worst fall from a high, longest losing run, January-June / July-October, by setup and by exit. Both
 indices together: by month in points and rupees, and what Rs 30,000 becomes trading 2 or 5 lots (also with the
 trades in random order, 10,000 times). Rupees: an at-the-money option moves about half the index, so one index point
@@ -13,8 +13,8 @@ in the points; time decay is left out.
 """
 import collections, json, random, sys
 
-RULES = {'default (original + sweeps)': ('classic', True), 'original, no sweeps': ('classic', False),
-         '1:4 targets': ('rr', False), 'small stops, 60 min': ('small', False)}
+RULES = {'default (original + volume check)': ('classic', False, True), 'original, no volume check': ('classic', False, False),
+         'original + sweeps': ('classic', True, False), '1:4 targets': ('rr', False, False), 'small stops, 60 min': ('small', False, False)}
 RS = {'nifty': 32.5, 'sensex': 10.0}
 CACHE = '../.cache/report_{}.json'
 
@@ -27,9 +27,10 @@ def dump(nm):
     for k, v in Y.bees.items(): vol[k[:10]][int(k[11:13]) * 60 + int(k[14:16])] = v[4]
     daily = {d: Y.DAY[d] for d in Y.days}
     cx = {d: A.context(spec, sess, vol, d, daily) for d in Y.D26}
+    for d in Y.D26: cx[d]['tvol'] = vol.get(d, {})
     out = {}
-    for lab, (rules, sweep) in RULES.items():
-        A.SWEEP = sweep
+    for lab, (rules, sweep, vcheck) in RULES.items():
+        A.SWEEP, A.VOLCHECK = sweep, vcheck
         out[lab] = [dict(d=d, m=t['m'], mx=t['exit']['m'], src=t['src'], side=t['side'], pnl=t['exit']['pnl'], why=t['exit']['why'])
                     for d in Y.D26 for t in A.day_trades(cx[d], Y.one[d], 929, True, False, rules) if t['taken']]
     json.dump(dict(days=Y.D26, h1=sorted(Y.H1), trades=out), open(CACHE.format(nm), 'w'))

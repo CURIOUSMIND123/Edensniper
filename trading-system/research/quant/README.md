@@ -55,7 +55,7 @@ Costs: 4 Nifty points or 12 Sensex points per trade. `pip install pandas scikit-
 | `y2026_combo.py` | 2026 only: the CPR daily plan plus 3-day volume-line trades, side by side or one trade at a time, with rupees at 2 lots (e.g. `nifty`) |
 | `y2026_trades.py` | 2026 only: every trade of the indicator one by one: calls vs puts, how far winners kept going after we booked, whether losers were in profit first |
 | `y2026_improve.py` | 2026 only: exit changes from that review (magnet rest to the far edge / trail / hold, breakout trail 1.5R / 2R / hold, volume-line breakeven stop and line-to-line ladder), alone and in all 64 combinations |
-| `alerts_check.py` | Checks that `alerts/cprb_alerts.py` (live alerts) takes exactly the backtest's 2026 trades (original rules with and without sweeps and the ladder, 1:4, small-stop rules), also minute by minute as it runs live |
+| `alerts_check.py` | Checks that `alerts/cprb_alerts.py` (live alerts) takes exactly the backtest's 2026 trades (original rules with the volume check, with and without sweeps and the ladder, 1:4, small-stop rules), also minute by minute as it runs live |
 | `y2026_pivots.py` | 2026 only: why the indicator skipped big days (its filters switched off one by one) and 864 versions of pivot-level trades (S3-R3, BC / P / TC, with or without the volume lines), alone and added to the indicator |
 | `fetch_daily.py` | Downloads the official daily high / low / close (November 2025 on) that `cpr_backtest.py` uses for the CPR and pivots; `CPR_CLOSE=last1m` uses the last 1-minute candle instead |
 | `fetch_pcr.py` | Daily put-call ratio and the strikes with the most call / put open interest, from the NSE and BSE F&O bhavcopy files (Nifty and Sensex) |
@@ -68,4 +68,6 @@ Costs: 4 Nifty points or 12 Sensex points per trade. `pip install pandas scikit-
 | `y2026_rr_combo.py` | 2026 only: the 1:3 / 1:4 setups that held up, put together, with 60 / 120 minute limits or to 3:15 |
 | `y2026_smc.py` | 2026 only: liquidity sweeps, the squeeze, Smart Money Concepts (break of structure, change of character, order blocks, fair value gaps) and the low-volume areas of the last 2 days' volume profile, on their own and added to the indicator's best version |
 | `y2026_sweep.py` | 2026 only: the sweep of yesterday's high / low added to the indicator: where the profit comes from, small changes to the rule, with the ladder |
+| `y2026_volume.py` | 2026 only: the volume check (Dr David Paul: price and volume together = accumulation, apart = distribution) on every signal of the original rules, 18 versions |
+| `y2026_pattern.py` | 2026 only: a reversal candle (shooting star, hammer, doji, engulfing) at the end of a move + break of structure + retest with the stop at the candle, alone and added to the indicator |
 | `y2026_report.py` | 2026 only: the full report of what the indicator / alerts trade now (default, original without sweeps, 1:4, small stops): trades, points, setups, exits, months, rupees, and what Rs 30,000 becomes |
