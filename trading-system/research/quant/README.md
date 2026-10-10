@@ -42,3 +42,4 @@ Costs: 4 Nifty points or 12 Sensex points per trade. `pip install pandas scikit-
 | `y2026.py` | 2026 only: CPR Magnet and CPR Breakout trade by trade, what the losing trades had in common (real-volume zones from NIFTYBEES, 30-day Fibonacci, trend, volatility, time), and which adjustments helped in both halves of 2026; `breakout_live()` is the adjusted indicator rule |
 | `y2026_levels.py` | 2026 only: scalps taken at the volume zones and Fibonacci levels themselves |
 | `y2026_daily.py` | 2026 only: the daily plan (CPR Breakout on narrow days; CPR Magnet or the breakout on other days), with and without half booking, by half-year and month |
+| `y2026_losses.py` | 2026 only: every losing trade of the daily plan, and which CPR Magnet changes (stop size, time stop, gap size, open inside yesterday's range, confirmation, POC side, volatility) cut losses |

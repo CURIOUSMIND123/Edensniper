@@ -13,10 +13,12 @@ File: [`cpr_breakout.pine`](cpr_breakout.pine). An indicator; reads 1-minute can
   - CPR Breakout scalp: opening-gap direction, not against today's CPR vs yesterday's, only on the volume side of
     the 30-day POC, a touch of the 15-minute high / low before 10:00, stop at the other side, book half at 0.25 x
     the risk, stop to entry, trail the rest.
-- 2026 (1 Jan - 9 Oct): Nifty 99 trades on 99 of 191 days, 81 won / 18 lost, net +917 points (Jan-Jun +916,
-  Jul-Oct +1); Sensex 98 trades, 85 won / 13 lost, net +2,542. Switching off the magnet's half booking: Nifty
-  59 won / 40 lost, net +1,834; Sensex 60 won / 38 lost, net +5,514.
-- Every filter is in Settings. `research/quant/y2026_daily.py` has the same plan in Python.
+- CPR Magnet also trades only on the volume side of the 30-day POC (sells below it, buys above). In 2026 that cut
+  most of the losing trades.
+- 2026 (1 Jan - 9 Oct): Nifty 63 trades, 56 won / 7 lost, +1,678 / −486, net +1,192; Sensex 66 trades, 62 won /
+  4 lost, +4,558 / −960, net +3,597. With "skip days that open outside yesterday's high-low range" switched on:
+  Nifty 44 won / 4 lost, net +1,181; Sensex 42 won / 1 lost, net +3,143.
+- Every filter is in Settings. `research/quant/y2026_losses.py` has the same plan in Python.
 
 ## CPR Magnet: Nifty or Sensex, any 1 to 15-minute chart, at most one trade a day
 

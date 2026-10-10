@@ -435,6 +435,25 @@ About 10 trades a month on each index; no trade on days when the open is near a 
 the filters (often sideways days). On Nifty the magnet with half booking made almost nothing in 2026 (+23 from 72
 trades); the profit came from the breakout. Booking half needs at least 2 lots.
 
+## 2026: cutting the daily plan's losing trades
+
+Every Sensex loss and 16 of the 18 Nifty losses in the daily plan were CPR Magnet trades that hit the full 0.3%
+stop, most within 15 minutes of the open. I tested changes to the magnet part only, on the whole plan:
+
+| 2026, whole daily plan | Nifty | Sensex |
+|---|---|---|
+| As it was | 99 trades, 81 won / 18 lost, +2,197 / −1,280, net +917 | 98 trades, 85 won / 13 lost, +5,682 / −3,141, net +2,542 |
+| **Magnet only on the 30-day POC side** (indicator default) | 63 trades, **56 won / 7 lost**, +1,678 / **−486**, **net +1,192** | 66 trades, **62 won / 4 lost**, +4,558 / **−960**, **net +3,597** |
+| Also skip magnet when the open is outside yesterday's range | 48 trades, 44 won / 4 lost, +1,438 / −256, net +1,181 | 43 trades, 42 won / 1 lost, +3,377 / −234, net +3,143 |
+| Magnet stop 0.2% instead of 0.3% | 82 won / 17 lost, net +1,014 | 84 won / 14 lost, net +2,481 |
+| Exit magnet if half isn't booked in 20 minutes | 79 won / 20 lost, net +1,058 | 83 won / 15 lost, net +2,790 |
+
+- A tighter stop or a time stop cut each loss a little but turned some winners into losers.
+- Filtering out the bad magnet days worked better. The 30-day POC side is the same rule the breakout already
+  uses, so the whole plan now follows one volume rule. On days the magnet skips, the plan falls back to the
+  breakout, which often doesn't trigger, so there are fewer trades (about 7 a month instead of 10).
+- Every part of each version was positive in January-June and July-October, but these were picked on 2026 itself.
+
 ## How to re-check all of this
 
 - `python research/fair_price_backtest.py` downloads the candles and re-runs the Fair Price test.

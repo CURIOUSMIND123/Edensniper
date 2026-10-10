@@ -10,6 +10,7 @@
 //   same CPR BREAKOUT scalp.
 //   CPR Magnet: the 9:15 one-minute candle opens beyond the CPR and closes 0.2%+ beyond it -> trade back toward
 //     the CPR at 9:16, stop 0.3% of price, book half at 0.25 x the risk, stop to entry, rest to the CPR edge.
+//     Only on the volume side of the 30-day POC (sells below it, buys above); this cut most of the losing trades.
 //   CPR Breakout scalp: only in the direction of the opening gap; not against today's CPR vs yesterday's; only on
 //     the volume side of the 30-day POC (buys above, sells below); BUY / SELL when price touches the first
 //     15-minute candle's high / low, only before 10:00; stop at the other side of that range; book half at
@@ -17,16 +18,16 @@
 //     first break loses (also before 10:00 and on the POC side).
 //   Out by 3:15.
 // Tested on 1-minute candles, 1 Jan - 9 Oct 2026 (191 sessions), after costs (4 Nifty / 12 Sensex points a trade):
-//   Nifty  99 trades on 99 days (about 10 a month), 81 won / 18 lost, +2,197 / -1,280, net +917
-//          (Jan-Jun +916, Jul-Oct +1). Breakout part: 25 won / 2 lost, +893. Magnet part: 56 won / 16 lost, +23.
-//   Sensex 98 trades on 98 days, 85 won / 13 lost, +5,682 / -3,141, net +2,542 (Jan-Jun +1,026, Jul-Oct +1,516).
-// MORE PROFIT, LOWER WIN RATE: switch off "Magnet: book half" (full target at the CPR edge):
-//   Nifty 59 won / 40 lost, net +1,834. Sensex 60 won / 38 lost, net +5,514.
-// The POC, 10:00 and every-day choices were made by looking at 2026 itself (each helped in both halves of the
-//   year on both indices); treat them as promising, not proven.
+//   Nifty  63 trades (about 7 a month), 56 won / 7 lost, +1,678 / -486, net +1,192 (Jan-Jun +716, Jul-Oct +476).
+//   Sensex 66 trades, 62 won / 4 lost, +4,558 / -960, net +3,597 (Jan-Jun +2,234, Jul-Oct +1,364).
+//   Before this change: Nifty 81 won / 18 lost, lost -1,280, net +917; Sensex 85 won / 13 lost, lost -3,141, net +2,542.
+// FEWEST LOSSES: also switch on "Magnet: skip days that open outside yesterday's high-low range":
+//   Nifty 48 trades, 44 won / 4 lost, lost -256, net +1,181. Sensex 43 trades, 42 won / 1 lost, lost -234, net +3,143.
+// The POC, 10:00, every-day and magnet-POC choices were made by looking at 2026 itself; treat them as promising,
+//   not proven.
 // The profile here uses the chart's 5-minute candles; the test used 1-minute candles, so the POC can differ by a
 //   few points.
-// Reference implementation (same rules): trading-system/research/quant/y2026_daily.py (plan)
+// Reference implementation (same rules): trading-system/research/quant/y2026_losses.py (plan with poc=True)
 // ============================================================================
 indicator("CPR Breakout", "CPRB", overlay = true, max_lines_count = 500, max_labels_count = 500, max_bars_back = 2500)
 
@@ -49,6 +50,8 @@ magOn   = input.bool(true, "On days that are NOT narrow, trade CPR Magnet at 9:1
 magGap  = input.float(0.2, "Magnet: 9:15 candle closes at least this % beyond the CPR", step = 0.05, group = G4)
 magStop = input.float(0.3, "Magnet: stop, % of price", step = 0.05, group = G4)
 magHalf = input.bool(true, "Magnet: book half at 0.25 x the risk, stop to entry, rest to the CPR edge", group = G4)
+magPoc  = input.bool(true, "Magnet: only on the volume side of the 30-day POC (buys above it, sells below)", group = G4)
+magIn   = input.bool(false, "Magnet: skip days that open outside yesterday's high-low range (fewer losses, fewer trades)", group = G4)
 costIn = input.float(0, "Cost per trade in index points (0 = auto: Nifty 4, Sensex 12)", step = 1, group = G1)
 G2 = "Display"
 showPrf = input.bool(true, "Show the volume POC and value area", group = G2)
@@ -258,6 +261,10 @@ if is5 and n1 > 0
             gapDir := ok > pC ? 1 : ok < pC ? -1 : 0
             if magOn and not narrow and state == 0 and complete
                 int ms = ok > top and ck >= top / (1 - magGap / 100) ? -1 : ok < bot and ck <= bot / (1 + magGap / 100) ? 1 : 0
+                if magPoc and (na(poc) or ms * (ck - poc) <= 0)
+                    ms := 0
+                if magIn and (ok > pH or ok < pL)
+                    ms := 0
                 if ms != 0
                     opened := true
                     openSide := ms
