@@ -74,4 +74,7 @@ Costs: 4 Nifty points or 12 Sensex points per trade. `pip install pandas scikit-
 | `y2026_stopcap.py` | 2026 only: the default with every stop held to 20 / 30 / 45 Nifty (60 / 100 / 150 Sensex) points, moved in or skipped |
 | `y2026_retest.py` | 2026 only: every trade of the default replayed as if we had waited for a retest of the broken level or a small pullback; trade by trade in `research/RETEST_TRADES.md` |
 | `y2026_exits.py` | 2026 only: booking the profit instead of the stop at entry / trailing stop (whole trade at a target, the rest at 1-3R, to 3:15), or reversing / entering again from the stop; the whole indicator re-run with each exit |
+| `fetch_options.py` | Daily Nifty / Sensex option prices (open, high, low, close, volume) from the exchanges' F&O bhavcopy, two nearest expiries, for every 2026 session |
+| `y2026_options.py` | 2026 only: the indicator's trades priced as real options (Black-Scholes with the day's implied volatility from the bhavcopy, time decay, costs): at / in / out of the money, nearest or next expiry, three exits |
+| `y2026_sniper.py` | 2026 only: sharper entries (stronger volume agreement, time of day, expiry day, 15-minute range width, setups) measured as options |
 | `y2026_report.py` | 2026 only: the full report of what the indicator / alerts trade now (default, original without sweeps, 1:4, small stops): trades, points, setups, exits, months, rupees, and what Rs 30,000 becomes |

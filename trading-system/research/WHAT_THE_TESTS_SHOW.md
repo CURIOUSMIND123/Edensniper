@@ -1090,6 +1090,50 @@ loses only the costs, 4 Nifty / 12 Sensex points):
 - Breakeven at 0.25R and then trailing (the same as now, without booking half) made more in both halves on both
   indices with about the same worst fall; 30 Nifty / 25 Sensex trades end at breakeven (−4 / −12 points).
 
+## 2026: the trades as real options (time decay included), and sharper entries
+
+Until now rupees were estimated as half the index move. `y2026_options.py` prices every trade of the default
+(original rules + volume check) as the option you would buy: a call for a BUY, a put for a SELL, Black-Scholes on the
+index price at the entry, book-half and exit minutes, with the day's implied volatility solved from the exchange's
+real prices for that option (F&O bhavcopy, `fetch_options.py`) and the time left to expiry. So time decay and the
+speed of expiry day are in; so are slippage (1 Nifty / 2 Sensex premium points), 0.13% charges and Rs 20 an order.
+Checked against the real day's high / close of the at-the-money option: median error about 6-7% / 11%.
+
+| 2026, 5 lots, exits as now | Nifty | Sensex | Both |
+|---|---|---|---|
+| Old estimate (half the index points) | Rs 3.60 lakh | Rs 4.00 lakh | Rs 7.60 lakh |
+| At the money, nearest expiry | Rs 2.87 lakh (avg premium 137) | Rs 3.07 lakh (459) | Rs 5.94 lakh |
+| At the money, next expiry on expiry day | Rs 2.97 lakh | Rs 3.33 lakh | Rs 6.30 lakh |
+| **One strike in the money, nearest expiry** | **Rs 3.69 lakh** (162) | Rs 3.48 lakh (506) | Rs 7.17 lakh |
+| One strike in the money, next expiry on expiry day | Rs 3.40 lakh | **Rs 3.63 lakh** | Rs 7.03 lakh |
+| One strike out of the money, nearest expiry | Rs 2.09 lakh | Rs 2.65 lakh | Rs 4.74 lakh |
+
+- Time decay and costs take about a fifth of the old estimate at the money; one strike in the money gets most of it
+  back (higher delta, less of the price is time value).
+- Expiry-day trades still made money (Nifty 14 trades +Rs 56,000, Sensex 13 trades +Rs 45,000); using next week's
+  expiry on that day did a little better on both indices in both halves.
+- **Exits, as options:** breakeven-then-trail about the same as now (Nifty Rs 3.04 lakh, Sensex Rs 3.06 lakh at the
+  money); the whole trade at 3R loses most of its edge to decay (Nifty Rs 3.39 lakh, Sensex Rs 3.03 lakh) and its
+  worst fall triples (Nifty −Rs 74,000).
+- Premium at 5 lots: about Rs 45,000-50,000 a trade per index (one strike in the money: Nifty 162 x 325, Sensex
+  506 x 100), more than a Rs 30,000 account; 2-3 lots fit.
+
+**Sharper ("sniper") entries** (`y2026_sniper.py`, options at the money, nearest expiry), each removing signals
+through the alert program's own logic:
+
+| 2026 | Nifty | Sensex |
+|---|---|---|
+| Default | 70 trades, 79% won, Rs 2.87 lakh, worst fall −Rs 24,409 | 68 trades, 75% won, Rs 3.07 lakh, worst fall −Rs 20,124 |
+| Volume 1.5x (not just more) | 42 trades, Rs 1.15 lakh | 39 trades, Rs 2.21 lakh |
+| Entries before 12:00 | 59 trades, Rs 2.49 lakh | 54 trades, Rs 2.63 lakh |
+| No trades on expiry day | 56 trades, Rs 2.31 lakh | 55 trades, Rs 2.63 lakh |
+| No breakout if the 15-minute range > 0.7% | 67 trades, Rs 2.77 lakh | 64 trades, Rs 2.93 lakh |
+| Without the volume lines | 44 trades, 86% won, Rs 1.49 lakh, worst fall −Rs 8,599 | 37 trades, 89% won, Rs 1.09 lakh |
+| Volume 1.5x + no expiry day | 35 trades, Rs 0.82 lakh | 29 trades, 86% won, Rs 1.82 lakh |
+
+- Every extra filter removed more profit than loss; none was better in both halves on both indices. The volume check
+  already does the sorting; tightening it further mostly drops winners.
+
 ## How to re-check all of this
 
 - `python research/fair_price_backtest.py` downloads the candles and re-runs the Fair Price test.
