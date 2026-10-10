@@ -794,6 +794,32 @@ minutes at the latest (`y2026_short.py`, 200 versions per index).
 - Taking the breakout again after a stop-out (same filters, until 10:00) made it worse.
 - In 2026 the profit came from the trades that were allowed to run: the biggest results held 1-3 hours.
 
+## 2026: reversals at key levels, and entering on the pullback
+
+**Reversals at key levels** (`y2026_reversal.py`): a 5-minute candle pokes through (or touches) a level and closes
+back; trade the turn, both ways or only in the day's direction (above the CPR only buys at support, i.e. buying
+the pullback). Levels: the last 7 sessions' opens and closes, their highs and lows, the 7-day volume profile
+(POC, value-area edges, high-volume lines), the CPR with R1 / S1 / R2 / S2, or all of them. Stops at most 100 /
+150 Sensex (30 / 45 Nifty), out within 30 or 60 minutes, several trades a day.
+- Nifty: none of the 640 versions made money in 2026 (middle version −1,961).
+- Sensex: 4 of 640 made money (2 in both halves); middle version −5,775. The best took 363 trades, won 36%.
+- Price going through a level was more common than price turning at it.
+
+**Entering on the pullback after the breakout**: the indicator's 9:30 breakout signal, but instead of entering
+at the break, a limit order back at the broken 15-minute high / low (after price has gone 0.1% beyond it), stop at
+most 150 / 45, target 1-2x the stop:
+
+| 2026 | Nifty | Sensex |
+|---|---|---|
+| Pullback entry, out within 30 min, target 2x | 33 trades, 76% won, +493, worst fall −63 | 28 trades, 71% won, +1,113, worst fall −371 |
+| Pullback entry, out within 60 min, target 2x | 33 trades, 73% won, +605, worst fall −79 | 28 trades, 68% won, +1,231, worst fall −325 |
+| Pullback + Magnet + volume lines, out within 60 min (`y2026_short_combo.py`) | 150 trades, 53% won, +842, worst trade −49, worst fall −317 | 170 trades, 54% won, +4,708, worst trade −162, worst fall −1,134 |
+| Pullback + Magnet, out within 30 min | 55 trades, 62% won, +457, worst fall −210 | 53 trades, 58% won, +1,458, worst fall −578 |
+| Indicator now | 101 trades, 78% won, +2,274, worst trade −105, worst fall −352 | 114 trades, 75% won, +8,102, worst trade −471, worst fall −1,438 |
+
+The pullback entry made money in both halves of 2026 on both indices with small stops and short holds (21 of 64
+Sensex versions, 18 of 64 Nifty). It trades about 3 times a month per index.
+
 ## How to re-check all of this
 
 - `python research/fair_price_backtest.py` downloads the candles and re-runs the Fair Price test.

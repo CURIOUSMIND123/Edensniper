@@ -62,3 +62,5 @@ Costs: 4 Nifty points or 12 Sensex points per trade. `pip install pandas scikit-
 | `y2026_tci_pcr.py` | 2026 only: the TCI zone breakout (`tci/rules.py`) alone and added to the indicator, and the put-call ratio as a direction (does it call the next day, as a filter, as the breakout direction, as its own trade) |
 | `y2026_money.py` | 2026 only: what Rs 30,000 becomes with the indicator on both indices at 2 lots, 5 lots, or 2 growing to 5, with a random-order risk check |
 | `y2026_short.py` | 2026 only: the indicator with stops capped at 100 / 150 Sensex (30 / 45 Nifty) points, no trailing, out within 15 / 30 / 60 minutes, plain targets, and taking the breakout again after a stop |
+| `y2026_reversal.py` | 2026 only: reversals at key levels (7-day opens / closes, highs / lows, 7-day volume profile, CPR and pivots) and entering on the pullback after the 9:30 breakout, with stops of 100-150 Sensex / 30-45 Nifty and 30-60 minute holds |
+| `y2026_short_combo.py` | 2026 only: pullback entry + CPR Magnet + volume lines with small stops and 30 / 60 minute holds, together |
