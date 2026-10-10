@@ -409,7 +409,11 @@ def plan_trades(cx, c1, upto, over):
             cs = capped_stop(cx, side, e, e - side * 0.3 / 100 * e)
             if side * (edge - e) >= 0.002 * e and side * (e - poc) > 0 and vok(cx, side, 556, 'MAGNET') and cs:
                 stp, R = cs
-                r = run_magnet(c1, side, e, edge, over, cost, side * (e - stp), R)
+                if stop_max(cx):
+                    r = run_magnet(c1, side, e, edge, over, cost, side * (e - stp), R)
+                else:                                   # no stop limit: the exact 0.3% arithmetic
+                    r = run_magnet(c1, side, e, edge, over, cost)
+                    stp, R = e - side * 0.3 / 100 * e, 0.3 / 100 * e
                 return [dict(src='MAGNET', side=side, m=556, known=556, e=e, stp0=stp, t1=e + side * 0.25 * R, edge=edge, **r)]
     if upto < RANGE_END - 1:
         return []
