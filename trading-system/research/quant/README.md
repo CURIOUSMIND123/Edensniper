@@ -29,3 +29,4 @@ Costs: 4 Nifty points or 12 Sensex points per trade. `pip install pandas scikit-
 | `cpr_backtest.py` | 576 CPR + pivot rule versions (fade to the CPR, opening-range breakout, CPR break, R1 / S1 rejection, all-day bias), picked on the last 60 sessions |
 | `cpr_walkforward.py` | Picks the best versions on Feb 2023 - Jun 2025 only and shows what they did afterwards (run `cpr_backtest.py` for both indices first) |
 | `cpr_magnet_check.py` | The CPR Magnet rule in detail: narrow vs other days, random-direction baseline, drawdown, every trade in the last 90 sessions |
+| `cpr_magnet_lastn.py` | CPR Magnet day by day over the last N sessions (e.g. `nifty 30`): why each day did or didn't trade, how each trade ended, points won and lost |
