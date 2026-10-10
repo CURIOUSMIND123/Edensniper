@@ -1,5 +1,6 @@
 """Check that alerts/cprb_alerts.py trades exactly like the 2026 backtest (y2026_combo.py / y2026_improve.py for the
-classic rules, y2026_short.py + y2026_reversal.py for the small-stop rules, y2026_rr.py for the 1:4 rules).
+classic rules, y2026_sweep.py for the classic rules with liquidity sweeps, y2026_short.py + y2026_reversal.py for the
+small-stop rules, y2026_rr.py for the 1:4 rules).
 
     python alerts_check.py nifty        (or sensex)
 
@@ -10,7 +11,7 @@ classic rules, y2026_short.py + y2026_reversal.py for the small-stop rules, y202
 """
 import collections, sys
 import y2026 as Y, y2026_combo as K, y2026_improve as I, y2026_vol_lines as V, cpr_orb as C, y2026_short as S, y2026_reversal as RV
-import y2026_rr as RR
+import y2026_rr as RR, y2026_smc as M, y2026_sweep as SW
 sys.path.insert(0, '../../alerts')
 import cprb_alerts as A
 
@@ -32,7 +33,8 @@ for d in Y.D26:
     bad['lines'] += len(L) != len(cx['lines']) or any(abs(a - b) > 1e-9 for a, b in zip(L, cx['lines']))
 print(f"{Y.B.name.upper()} levels on {len(Y.D26)} days, mismatches: {dict(bad) or 'none'}")
 
-def mine(ladder, rules='classic'):
+def mine(ladder, rules='classic', sweep=False):
+    A.SWEEP = sweep
     out = collections.defaultdict(list)
     for d in Y.D26:
         for t in A.day_trades(CX[d], Y.one[d], 929, True, ladder, rules):
@@ -55,7 +57,15 @@ ref_r = collections.defaultdict(list)
 RP = dict(cap=A.STOP_PCT / 100, mode='tighten', target=f"{A.RR_TARGET:g}R", hold=0)
 for t in S.one_book([t for d in Y.D26 for f in ('PB', 'MAG') for t in RR.FAMS[f](d, dict(RP, fam=f))]):
     ref_r[t['d']].append((t['m'], round(t['pnl'], 6)))
-for label, a, b in (('classic', mine(False), ref), ('ladder', mine(True), ref_l), ('small', mine(False, 'small'), ref_s),
+SWC = [t for d in Y.D26 for t in SW.sweeps(d)]
+ref_w = collections.defaultdict(list)
+for t in M.one_book(M.BASE_RAW, SWC, A.SWEEP_MAX): ref_w[t['d']].append((t['m'], round(t['pnl'], 6)))
+LAD = [dict(d=t['d'], pnl=t['pnl'], m=t['m'], mx=t['mx'], src='plan' if t['src'] in ('MAG', 'BO') else 'vol')
+       for t in [x for d in Y.D26 for x in I.plan(d, 'edge', 1.0)] + [x for d in Y.D26 for x in I.vol(d, 'ladder')]]
+ref_lw = collections.defaultdict(list)
+for t in M.one_book(LAD, SWC, A.SWEEP_MAX): ref_lw[t['d']].append((t['m'], round(t['pnl'], 6)))
+for label, a, b in (('classic', mine(False), ref), ('ladder', mine(True), ref_l), ('sweep', mine(False, sweep=True), ref_w),
+                    ('ladder+sw', mine(True, sweep=True), ref_lw), ('small', mine(False, 'small'), ref_s),
                     ('rr', mine(False, 'rr'), ref_r)):
     diff = [d for d in Y.D26 if sorted(a[d]) != sorted(b[d])]
     n = sum(len(v) for v in a.values()); net = sum(p for v in a.values() for _, p in v)
@@ -63,7 +73,8 @@ for label, a, b in (('classic', mine(False), ref), ('ladder', mine(True), ref_l)
           f"net {sum(p for v in b.values() for _, p in v):+,.0f} | days that differ: {len(diff)} {diff[:5]}")
     for d in diff[:3]: print(f"     {d} alerts {a[d]} backtest {b[d]}")
 
-for rules in ('classic', 'small', 'rr'):
+for rules, sweep in (('classic', False), ('classic', True), ('small', False), ('rr', False)):
+    A.SWEEP = sweep
     changed = 0
     for d in Y.D26:
         cx, said = CX[d], {}
@@ -74,4 +85,4 @@ for rules in ('classic', 'small', 'rr'):
                 said[mid] = text
         full = A.messages(cx, A.day_trades(cx, Y.one[d], 929, True, False, rules), Y.one[d], 929, 5)
         changed += {m: t for m, _, t, _ in full} != said
-    print(f"  {rules} rules, minute by minute: days where something already said changed later: {changed}")
+    print(f"  {rules}{' + sweeps' if sweep else ''} rules, minute by minute: days where something already said changed later: {changed}")

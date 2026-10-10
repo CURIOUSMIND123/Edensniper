@@ -4,25 +4,29 @@
 
 File: [`cpr_breakout.pine`](cpr_breakout.pine). An indicator; reads 1-minute candles underneath for exits.
 
-**Default rules now: 1:4 targets, held until 3:15** (Settings > Trade style > Rules). Every stop at most 0.21% of
-price (about 150 Sensex / 47 Nifty points), the target 4x the stop (about 600 / 190 points), the whole position held
-until the target, the stop or 3:15. No booking half, no trailing, one trade at a time, and only two setups:
-- **CPR Magnet** at 9:16 (same conditions as below): stop 0.21%, target 4x the stop.
-- **Breakout on the pullback**: when price touches the 15-minute high / low before 10:00 (same filters) and goes 0.1%
-  beyond it, a limit order goes back at the broken level (blue dashed line, until 12:00). Stop at the other side of
-  the range or 0.21%, whichever is closer; target 4x the stop.
-- No volume-line trades with these rules (the volume lines are still drawn).
-- 2026 (1 Jan - 9 Oct), after costs: Nifty 55 trades (about 6 a month), 44% won, average win +122 / average loss
-  −51, net +1,344 (Jan-Jun +866, Jul-Oct +478), worst fall −428; Sensex 53 trades, 43% won, average win +395 /
-  average loss −156, net +4,419 (Jan-Jun +3,623, Jul-Oct +796), worst fall −1,048. Only about 1 trade in 6 reaches
-  the full 4x target; most winners are closed at 3:15 with a smaller gain. Trades last about 3 hours on average.
-  On Nifty the Magnet trades about broke even; the pullback trades made the money (`research/quant/y2026_rr.py`).
+**Default rules now: the original rules + liquidity sweeps** (Settings > Trade style > Rules = "Original"; the
+sweeps are in their own settings group). The original rules (daily plan + 3-day volume lines) are described below.
+The sweep, one trade at a time with everything else:
+- Yesterday's high and low are drawn as yellow lines ("yday high" / "yday low").
+- A 5-minute candle (9:30-2:30) goes **above yesterday's high and closes back below it** -> SELL at the close; goes
+  **below yesterday's low and closes back above it** -> BUY. Stop 0.02% beyond the candle's high / low, target 3x
+  the stop, out by 3:15, at most 3 a day, only when no other trade is open.
+- 2026 (1 Jan - 9 Oct), after costs, the whole indicator: Nifty 203 trades, 57% won, net **+2,993** (Jan-Jun +2,175,
+  Jul-Oct +819), worst fall −284; Sensex 223 trades, 53% won, net **+9,279** (Jan-Jun +7,264, Jul-Oct +2,015), worst
+  fall −1,535. Without the sweeps: +2,274 / +8,102. The sweep trades alone win only about 1 in 3, but each win is
+  3x the stop (`research/quant/y2026_sweep.py`).
+- Also tested and not added (they lost on their own and didn't help in both halves): the squeeze, Smart Money
+  Concepts (break of structure, change of character, order blocks, fair value gaps) and trading the low-volume
+  areas of the last 2 days' volume profile (`research/quant/y2026_smc.py`).
 
-**Small stops, out within 60 minutes** (the second choice): every stop at most 150 Sensex / 45 Nifty points, out
+**1:4 targets, held until 3:15** (the second choice): every stop at most 0.21% of price (about 150 Sensex / 47 Nifty
+points), target 4x the stop, held until the target, the stop or 3:15; only the CPR Magnet and the breakout on the
+pullback (a limit order back at the broken 15-minute level, blue dashed line until 12:00). 2026: Nifty 55 trades,
+net +1,344; Sensex 53 trades, net +4,419 (`research/quant/y2026_rr.py`).
+
+**Small stops, out within 60 minutes** (the third choice): every stop at most 150 Sensex / 45 Nifty points, out
 after 60 minutes at the latest; Magnet target the CPR edge, pullback target 2x the stop, plus 3-day volume-line
-trades (target the next line). 2026: Nifty 150 trades, 53% won, net +842; Sensex 170 trades, 54% won, net +4,708
-(`research/quant/y2026_short_combo.py`). **Original** (the third choice): the rules below; Nifty +2,274, Sensex
-+8,102, with bigger single losses (−105 / −471).
+trades. 2026: Nifty 150 trades, net +842; Sensex 170 trades, net +4,708 (`research/quant/y2026_short_combo.py`).
 
 The rest of this section describes the original rules.
 

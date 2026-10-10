@@ -7,25 +7,30 @@ month. Brokers' charts (Groww, Dhan, Zerodha) show live prices for free but can'
 default settings) on live 1-minute candles from Upstox's free public candle data. It doesn't need an Upstox account
 or a login. It tells you:
 
-- **before 9:15:** the plan for the day: CPR, narrow or not, the 30-day POC, the CPR Magnet trigger prices;
+- **before 9:15:** the plan for the day: CPR, narrow or not, the 30-day POC, the 3-day volume lines, yesterday's high
+  and low, the CPR Magnet trigger prices;
 - **9:16:** CPR Magnet BUY / SELL, or "no magnet today";
-- **9:30:** the 15-minute range and the one breakout that is still allowed;
-- **the breakout:** "broke the 15-minute high X, don't chase it"; then "place a BUY LIMIT order at Y" (the pullback
-  to the broken level, valid until 12:00); at 12:00 "cancel it" if it didn't fill;
-- **every trade:** BUY = buy the ATM call, SELL = buy the ATM put, with the stop, the target, and the exit with
-  points and rupees.
+- **9:30:** the 15-minute range and the one breakout trade that is still allowed: "SELL when price touches X". Set
+  a price alert in Groww at X, so you aren't late;
+- **9:30-2:30:** volume-line trades, and **liquidity sweeps**: "price went above yesterday's high and closed back
+  below it -> SELL";
+- **every trade:** BUY = buy the ATM call, SELL = buy the ATM put, with the stop, the target (or when to book half
+  and move the stop), and the exit with points and rupees.
 
 Alerts appear on the screen (with a beep) and, if you set it up, on your phone through Telegram (free).
 
 **Rules** (top of the file):
 
-- `RULES = 'rr'` (default), **1:4 trades**: every stop at most 0.21% of price (`STOP_PCT`; about 150 Sensex / 47
-  Nifty points), target 4x the stop (`RR_TARGET`; about 600 Sensex / 190 Nifty points), held until the target, the
-  stop or 3:15. Only two setups: the CPR Magnet at 9:16 and the breakout traded on the pullback. No volume-line
-  trades. About 6 trades a month per index; fewer than half win, but a win is 4x a loss.
+- `RULES = 'classic'` (default): the original rules (daily plan + 3-day volume lines; book half, trailing, out by
+  3:15) **plus liquidity sweeps** of yesterday's high / low (`SWEEP = True`): a 5-minute candle goes beyond
+  yesterday's high / low and closes back -> the other way, stop just beyond the candle, target 3x the stop, at
+  most 3 a day (`SWEEP_MAX`), only when no other trade is open. The most profit in the 2026 tests.
+  `SWEEP = False` gives the original rules alone; `LADDER = True` the volume-line ladder.
+- `RULES = 'rr'`, **1:4 trades**: every stop at most 0.21% of price (`STOP_PCT`), target 4x the stop
+  (`RR_TARGET`), held until the target, the stop or 3:15; only the CPR Magnet and the breakout on the pullback
+  (a limit order back at the broken 15-minute level).
 - `RULES = 'small'`: stops of at most 150 Sensex / 45 Nifty points (`STOP_CAP`), out within 60 minutes
-  (`HOLD_MIN`), target 2x the stop for the pullback, plus volume-line trades. About 17 trades a month per index.
-- `RULES = 'classic'`: the original rules (wider stops, book half, trailing).
+  (`HOLD_MIN`), target 2x the stop for the pullback, plus volume-line trades.
 
 The chart shows a waiting limit order as a blue "LIMIT" line.
 
@@ -33,14 +38,14 @@ The chart shows a waiting limit order as a blue "LIMIT" line.
 
 While the program runs, open **http://127.0.0.1:8000** in Chrome on the same phone. It's a live candle chart drawn
 from the same free Upstox prices: NIFTY / SENSEX buttons, 1 / 3 / 5 / 15-minute candles, the CPR as three pink lines
-(orange on a narrow day), the 30-day POC (purple), the 3-day volume lines (teal dots), the 15-minute high / low, the
+(orange on a narrow day), the 30-day POC (purple), the 3-day volume lines (teal dots), the 15-minute high / low, yesterday's high / low (yellow, for the sweeps), the
 open trade's stop (SL) and target (T), and every trade as a small letter: B buy, S sell, T target or half booked,
 SL stop loss, BE stop at entry, X other exit. Under the chart: today's trades with entry, stop and result. It
 refreshes every 5 seconds; the program fetches new prices every 15 seconds. On a weekend it shows the last session.
 The chart library (TradingView's free open-source Lightweight Charts) is downloaded once and kept next to the
 program. `CHART = False` at the top switches the chart off.
 
-![The live chart on a phone, replaying 6 October 2026 (Sensex, 1:4 rules: pullback BUY, closed at 3:15)](chart-phone.png)
+![The live chart on a phone, replaying 5 October 2026 (Sensex): a SELL after price went above yesterday's high and closed back below it; target hit, +517 points](chart-phone.png)
 
 ## Set up once
 
@@ -105,9 +110,10 @@ On a phone, put the date in `REPLAY_DAY = '2026-10-08'` at the top and press Run
 ## Checked
 
 `research/quant/alerts_check.py` runs it on every 2026 session, minute by minute as it runs live. It took exactly the
-backtest's trades: 1:4 rules Nifty 55 trades, net +1,344 points, Sensex 53 trades, net +4,419; small-stop rules
-Nifty 150 trades, net +842, Sensex 170 trades, net +4,708; original rules Nifty 101 trades, net +2,274, Sensex 114
-trades, net +8,102 (with the ladder +2,193 / +8,819). Nothing it had already said changed later in the day. The CPR uses the exchange's official daily close
+backtest's trades: default (original rules + sweeps) Nifty 203 trades, net +2,993 points, Sensex 223 trades, net
++9,279; original rules alone Nifty 101 trades, net +2,274, Sensex 114 trades, net +8,102 (with the ladder +2,193 /
++8,819; ladder + sweeps +2,959 / +9,988); 1:4 rules Nifty 55 trades, net +1,344, Sensex 53 trades, net +4,419;
+small-stop rules Nifty 150 trades, net +842, Sensex 170 trades, net +4,708. Nothing it had already said changed later in the day. The CPR uses the exchange's official daily close
 (downloaded each morning), like TradingView; the official close often differs from the last 1-minute candle.
 
 ## Limits
@@ -119,5 +125,5 @@ trades, net +8,102 (with the ladder +2,193 / +8,819). Nothing it had already sai
   the script will say "data error".
 - It only sends alerts. You place the orders yourself in Groww.
 - The rules were adjusted on 2026 itself, so live results will very likely be lower than the backtest.
-- 1:4 trades are held for hours. An at-the-money option loses value every hour it is held (time decay), most on
-  expiry day, so the rupee estimates (half the index move) are on the high side for these trades.
+- Trades held for hours (most of them) lose option value every hour (time decay), most on expiry day, so the
+  rupee estimates (half the index move) are on the high side.

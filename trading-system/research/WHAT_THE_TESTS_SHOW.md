@@ -845,13 +845,62 @@ key levels, 5-minute closes through key levels (`y2026_rr.py`, 378 versions per 
 
 All versions shown were positive in both halves of 2026 except where the net is negative.
 
-**Now the default** in the indicator ("1:4 targets, held until 3:15") and the phone alerts (`RULES = 'rr'`):
+**Available** in the indicator ("1:4 targets, held until 3:15") and the phone alerts (`RULES = 'rr'`):
 pullback + Magnet, stop at most 0.21%, target 4x, to 3:15, no volume lines. Nifty: 24 of 55 won, average win +122 /
 average loss −51, Jan-Jun +866, Jul-Oct +478. Sensex: 23 of 53 won, average win +395 / average loss −156, Jan-Jun
 +3,623, Jul-Oct +796. Only 9 trades per index reached the full 4x target; 18 were closed at 3:15 and most of the
 wins come from those. On Nifty the Magnet trades about broke even (22 trades, −18); the pullback made the money.
 The alerts took exactly these trades (`alerts_check.py`). These trades are held about 3 hours on average, so an
 option's time decay matters more than with the 60-minute rules.
+
+## 2026: liquidity sweeps, the squeeze, Smart Money Concepts and low-volume areas
+
+Back to the version that made the most (daily plan + 3-day volume lines: Nifty +2,274, Sensex +8,102), and four
+families of setups tested on their own and added to it (`y2026_smc.py`, 450 versions per index; 5-minute signals
+9:30-2:30, exits on 1-minute candles, out by 3:15, costs included):
+- **Liquidity sweep (stop hunt)**: a 5-minute candle goes beyond a liquidity level (yesterday's high / low, also the
+  day before's, today's swing highs / lows, or the 9:15-9:30 range) and closes back -> the other way; entered at
+  the close or after a change of character.
+- **The squeeze**: Bollinger Bands inside the Keltner Channel for 3 / 6 candles; trade the break of the squeeze box.
+- **Smart Money Concepts**: break of structure, change of character, order blocks, fair value gaps (5-minute swings).
+- **Low-volume areas of the last 2 sessions' volume profile** (fixed range): trade the move through a thin area,
+  or the rejection at its edge.
+Targets 2x / 3x the stop, half at 1x then 3x, or the next level; filters none / POC side / CPR side; at most 1 or 3
+a day.
+
+| 2026 | Versions | Made money on its own (Nifty / Sensex) | Both halves, both indices | Middle version (Nifty / Sensex) |
+|---|---|---|---|---|
+| Liquidity sweep | 192 | 57 / 58 | 1 | −120 / −343 |
+| Squeeze | 72 | 2 / 3 | 0 | −1,020 / −1,703 |
+| Smart Money Concepts | 90 | 7 / 3 | 0 | −1,038 / −2,752 |
+| Low-volume areas (2-day profile) | 96 | 10 / 25 | 0 | −296 / −506 |
+
+- On their own, almost everything lost. The squeeze and the SMC setups lost in nearly every version.
+- **Added to the indicator** (one trade at a time, whichever signal comes first): 8 of 450 versions did better in
+  both halves on both indices, and **all 8 are sweeps of yesterday's high / low** entered at the sweep candle's
+  close. As a second position open at the same time (more trades at once), only 1 of 450 did.
+- More trades a day: at most 3 sweeps a day did a little better than 1; 5 a day was no better.
+
+**The sweep of yesterday's high / low** (`y2026_sweep.py`): stop 0.02% beyond the sweep candle, target 3x the
+stop, at most 3 a day, only when no other trade is open.
+
+| 2026, whole indicator, one trade at a time | Nifty | Sensex |
+|---|---|---|
+| Daily plan + 3-day volume lines | 101 trades, 78% won, net +2,274 (Jan-Jun +1,802, Jul-Oct +472), worst fall −352 | 114 trades, 75% won, net +8,102 (Jan-Jun +6,582, Jul-Oct +1,520), worst fall −1,438 |
+| **+ sweeps of yesterday's high / low** | 203 trades, 57% won, net **+2,993** (Jan-Jun +2,175, Jul-Oct +819), worst fall −284 | 223 trades, 53% won, net **+9,279** (Jan-Jun +7,264, Jul-Oct +2,015), worst fall −1,535 |
+| + sweeps, with the volume-line ladder | 200 trades, net +2,959 | 219 trades, net +9,988 |
+
+- The sweep trades themselves: Nifty 105, 35% won, +618; Sensex 111, 32% won, +1,259. Wins are 3x the stop, so a
+  low win rate still pays. They pushed out only 3 / 2 of the indicator's own trades.
+- Most of the sweep profit came from BUYs after price dipped below yesterday's low and came back (Nifty BUYs +707,
+  SELLs −89; Sensex BUYs +1,155, SELLs +104).
+- Small changes to the rule (stop 0.05% / 0.1% beyond, target 2x / 4x / 5x, 1 / 2 / 5 a day, last entry 12:00 /
+  1:30, how far beyond the level, a stop limit, adding the day before's high / low): 16 of 17 still better in both
+  halves on Nifty, 14 of 17 on Sensex.
+- In rupees at 5 lots (delta 0.5, time decay left out): about Rs 9.5 lakh in 2026 so far instead of Rs 7.75 lakh.
+- **Now the default** in the indicator (Original rules, "Trade liquidity sweeps" on) and the phone alerts
+  (`RULES = 'classic'`, `SWEEP = True`); the alerts took exactly these trades (`alerts_check.py`). Chosen by
+  looking at 2026 itself; live results will very likely be lower.
 
 ## How to re-check all of this
 

@@ -4,8 +4,8 @@
 Follows the same rules as tradingview/cpr_breakout.pine (its default settings) on live 1-minute candles from
 Upstox's free public candle data. It tells you when to BUY (a call) or SELL (a put), where the stop and the target
 are and when to exit: on this screen, and on your phone through Telegram if you set that up (free).
-Default rules ('rr'): 1:4 trades. Stop at most 0.21% of price (about 150 Sensex / 47 Nifty points), target 4x the
-stop, held until the target, the stop or 3:15. Only the CPR Magnet (9:16) and the pullback after the 9:30 breakout.
+Default rules ('classic' with sweeps): the daily plan (CPR Magnet at 9:16 or the 9:30 breakout), the 3-day volume
+lines, and liquidity sweeps of yesterday's high / low; one trade at a time.
 
     python cprb_alerts.py                       run today: start it any time before 9:15, leave it running
     python cprb_alerts.py --replay 2026-10-09   replay a past day in a few seconds, to see what it does
@@ -32,10 +32,13 @@ import urllib.request
 # ---------------- settings ----------------
 INDICES = ['nifty', 'sensex']     # or ['nifty'] / ['sensex']
 LOTS = 5                          # lots per trade, only for the rupee estimates (option moves about half the index)
-RULES = 'rr'                      # 'rr': 1:4 trades. Stop at most STOP_PCT % of price, target RR_TARGET x the stop,
+RULES = 'classic'                 # 'classic': the original rules (daily plan + 3-day volume lines; wider stops, book
+                                  #       half, trailing, out by 3:15): the most profit in the 2026 tests
+                                  # 'rr': 1:4 trades. Stop at most STOP_PCT % of price, target RR_TARGET x the stop,
                                   #       held until the target, the stop or 3:15. Pullback entry and CPR Magnet only
                                   # 'small': stops of at most STOP_CAP points, out within HOLD_MIN minutes, pullback entry
-                                  # 'classic': the original rules (wider stops, book half, trailing, out by 3:15)
+SWEEP = True                      # 'classic' rules: also trade liquidity sweeps of yesterday's high / low
+SWEEP_MAX = 3                     # at most this many sweep trades a day
 STOP_PCT = 0.21                   # 'rr' rules: the most a stop may be from entry, in % of price (Sensex ~150, Nifty ~47 points)
 RR_TARGET = 4.0                   # 'rr' rules: target = this x the stop
 STOP_CAP = {'nifty': 45, 'sensex': 150}   # 'small' rules: the most a stop may be from entry, in index points
@@ -230,7 +233,7 @@ def context(spec, sess, vol, today, daily=None):
     poc, vah, val = poc_va(*combine([H[d] for d in days[-30:]]), spec['bin'])
     return dict(spec, today=today, prev=days[-1], lv=lv, rank=rank, narrow=rank < 1 / 3,
                 rel=1 if lv['bot'] > ylv['top'] else -1 if lv['top'] < ylv['bot'] else 0,
-                yc=D[days[-1]][3], poc=poc, vah=vah, val=val, yday=sess[days[-1]],
+                yc=D[days[-1]][3], yh=D[days[-1]][1], yl=D[days[-1]][2], poc=poc, vah=vah, val=val, yday=sess[days[-1]],
                 lines=vol_lines(*combine([H[d] for d in days[-3:]]), spec['bin']))
 
 
@@ -429,6 +432,38 @@ def vol_trades(cx, c1, upto, over, ladder):
     return out
 
 
+def sweep_trades(cx, c1, upto, over):
+    """Liquidity sweeps of yesterday's high / low: a 5-minute candle (9:30-2:30) trades above yesterday's high and
+    closes back below it (the candle before closed below it) -> SELL at the close; the mirror image at yesterday's
+    low -> BUY. Stop 0.02% beyond the candle's high / low (skipped if wider than 0.5% of price), target 3x the stop,
+    out by 3:15. Every signal; the book takes one trade at a time and at most SWEEP_MAX a day."""
+    yh, yl, cost = cx['yh'], cx['yl'], cx['cost']
+    b5 = candles5(c1, upto)
+    out = []
+    for j in range(1, len(b5)):
+        m0, o, h, l, c = b5[j]
+        pc = b5[j - 1][4]
+        if m0 < RANGE_END:
+            continue
+        if m0 + 5 > VOL_END:
+            break
+        if pc < yh < h and c < yh:
+            side, ext, lvl = -1, h, yh
+        elif pc > yl > l and c > yl:
+            side, ext, lvl = 1, l, yl
+        else:
+            continue
+        stp = ext - side * 0.0002 * c
+        risk = side * (c - stp)
+        if risk > 0.005 * c:
+            continue
+        tgt = c + side * 3 * risk
+        r = run_fixed(c1, side, c, m0 + 5, stp, tgt, OUT, over, cost)
+        out.append(dict(src='SWEEP', small=True, side=side, m=m0 + 5, known=m0 + 5, e=c, stp0=stp, tgt=tgt, lvl=lvl,
+                        last=OUT, **r))
+    return out
+
+
 # ---------------- the 'rr' and 'small' rules: capped stops, fixed targets, pullback entry ----------------
 def run_fixed(c1, side, e, start, stp, tgt, last_m, over, cost):
     """Stop, target, time limit (close of minute last_m), 3:15. No booking half, no trailing."""
@@ -582,13 +617,16 @@ def day_trades(cx, c1, upto, over=False, ladder=False, rules=None):
         cx['rules_used'] = rules
     else:
         cx['rules_used'] = 'classic'
-        ts = plan_trades(cx, c1, upto, over) + vol_trades(cx, c1, upto, over, ladder)
-    ts.sort(key=lambda t: (t['m'], t['src'] == 'VOLUME LINE'))
-    free = 0
+        ts = plan_trades(cx, c1, upto, over) + vol_trades(cx, c1, upto, over, ladder) + \
+            (sweep_trades(cx, c1, upto, over) if SWEEP else [])
+    ts.sort(key=lambda t: (t['m'], {'VOLUME LINE': 1, 'SWEEP': 2}.get(t['src'], 0)))
+    free = nsw = 0
     for t in ts:
-        t['taken'] = t['m'] >= free
+        t['full'] = t['src'] == 'SWEEP' and nsw >= SWEEP_MAX
+        t['taken'] = t['m'] >= free and not t['full']
         if t['taken']:
             free = t['exit']['m'] + 1 if t['exit'] else 10 ** 9
+            nsw += t['src'] == 'SWEEP'
     return ts
 
 
@@ -630,6 +668,10 @@ def plan_text(cx):
     out.append(f"3-day volume lines: {', '.join(f2(x) for x in cx['lines'])}. 9:30-2:30: a 5-minute close through a line "
                "-> trade toward the next line, stop at the previous line, only if the next line is at least 1.5x the stop "
                "away. One trade at a time." + (" Ladder on." if LADDER else ""))
+    if SWEEP:
+        out.append(f"Liquidity sweeps, 9:30-2:30: a 5-minute candle goes above yesterday's high {f2(cx['yh'])} and closes back "
+                   f"below it -> SELL; goes below yesterday's low {f2(cx['yl'])} and closes back above it -> BUY. Stop just "
+                   f"beyond the candle, target 3x the stop, at most {SWEEP_MAX} a day, only when no other trade is open.")
     return '\n'.join(out)
 
 def plan_text_small(cx):
@@ -685,7 +727,8 @@ def range_note(cx, c1):
     gap = 1 if gap > 0 else -1 if gap < 0 else 0
     if gap == 0 or gap == -cx['rel']:
         return f"{cx['name']} 15-minute range {f2(orl)} - {f2(orh)}. No breakout trade today (" + \
-               ("flat open" if gap == 0 else "the opening gap is against today's CPR vs yesterday's") + "). Volume-line trades only."
+               ("flat open" if gap == 0 else "the opening gap is against today's CPR vs yesterday's") + "). Volume-line" + \
+               (" and sweep" if SWEEP else "") + " trades only."
     lvl, word = (orh, 'BUY') if gap > 0 else (orl, 'SELL')
     other = orl if gap > 0 else orh
     pocok = gap * (lvl - cx['poc']) > 0
@@ -696,7 +739,7 @@ def range_note(cx, c1):
 def messages(cx, ts, c1, upto, lots):
     """(id, minute known, text, important) for everything that has happened so far."""
     nm, out = cx['name'], []
-    plan = [t for t in ts if t['src'] != 'VOLUME LINE']
+    plan = [t for t in ts if t['src'] not in ('VOLUME LINE', 'SWEEP')]
     if cx.get('rules_used') in ('small', 'rr'):
         return messages_small(cx, ts, c1, upto, lots)
     if c1 and not cx['narrow'] and upto >= 556 and not any(t['src'] == 'MAGNET' for t in plan):
@@ -704,15 +747,21 @@ def messages(cx, ts, c1, upto, lots):
     if c1 and upto >= RANGE_END - 1 and not any(t['src'] == 'MAGNET' for t in plan):
         out.append(('range', RANGE_END, range_note(cx, c1), True))
         if upto >= CUTOFF and not plan:
-            out.append(('nobo', CUTOFF, f"{nm} 10:00: no breakout trade. Volume-line trades only from now (till 2:30).", False))
+            out.append(('nobo', CUTOFF, f"{nm} 10:00: no breakout trade. Volume-line" + (" and sweep" if SWEEP else "") +
+                        " trades only from now (till 2:30).", False))
     for t in ts:
         sd = 'BUY' if t['side'] > 0 else 'SELL'
         tid = (t['src'], t['m'])
         if not t['taken']:
-            out.append((tid + ('skip',), t['known'], f"{nm} {hhmm(t['m'])} {t['src']} {sd} signal at {f2(t['e'])} skipped: "
-                        "another trade is still open.", False))
+            out.append((tid + ('skip',), t['known'], f"{nm} {hhmm(t['m'])} {t['src']} {sd} signal at {f2(t['e'])} skipped: " +
+                        (f"{SWEEP_MAX} sweep trades already today." if t.get('full') else "another trade is still open."), False))
             continue
-        if t['src'] == 'MAGNET':
+        if t['src'] == 'SWEEP':
+            hi = t['side'] < 0
+            how = (f"Price went {'above' if hi else 'below'} yesterday's {'high' if hi else 'low'} {f2(t['lvl'])} and closed back "
+                   f"{'below' if hi else 'above'} it (liquidity sweep). Stop {f2(t['stp0'])} (just beyond the candle). "
+                   f"Target {f2(t['tgt'])} (3x the stop). Out by 15:15 at the latest.")
+        elif t['src'] == 'MAGNET':
             how = (f"Stop {f2(t['stp0'])} (0.3%). Book half at {f2(t['t1'])}, then stop to entry; "
                    f"rest to the CPR edge {f2(t['edge'])}.")
         elif t['src'] == 'VOLUME LINE':
@@ -831,6 +880,8 @@ def chart_update(n, cx, c_all, ts, got, day):
     levels = [dict(p=lv['top'], c=pink, t='TC', s=0, w=2), dict(p=lv['p'], c=pink, t='P', s=0, w=1),
               dict(p=lv['bot'], c=pink, t='BC', s=0, w=2), dict(p=cx['poc'], c='#9c6ade', t='POC', s=0, w=1)]
     levels += [dict(p=x, c='#26a69a', t='', s=1, w=1) for x in cx['lines']]
+    if SWEEP and cx.get('rules_used') == 'classic':
+        levels += [dict(p=cx['yh'], c='#fdd835', t='yday high', s=2, w=1), dict(p=cx['yl'], c='#fdd835', t='yday low', s=2, w=1)]
     first = [x for x in c_all if x[0] < RANGE_END]
     if first and got >= RANGE_END - 1:
         levels += [dict(p=max(x[2] for x in first), c='#4caf50', t='15m H', s=2, w=1),
@@ -840,7 +891,7 @@ def chart_update(n, cx, c_all, ts, got, day):
         if not t['taken']:
             continue
         sd = t['side']
-        m0 = 555 if t['src'] == 'MAGNET' else t['m'] - 1 if t['src'] == 'VOLUME LINE' else t['m']
+        m0 = 555 if t['src'] == 'MAGNET' else t['m'] - 1 if t['src'] in ('VOLUME LINE', 'SWEEP') else t['m']
         marks.append(dict(m=m0, pos='belowBar' if sd > 0 else 'aboveBar', c='#26a69a' if sd > 0 else '#ef5350', x='B' if sd > 0 else 'S'))
         for ev in t['ev']:
             if ev['kind'] == 'half':
@@ -852,7 +903,7 @@ def chart_update(n, cx, c_all, ts, got, day):
                               c='#9e9e9e' if k == 'BE' else '#26a69a' if x['pnl'] > 0 else '#ef5350', x=k))
         else:
             open_t = t
-        rows.append([hhmm(m0 + (1 if t['src'] == 'VOLUME LINE' else 0)), ('BUY' if sd > 0 else 'SELL') + ' ' + t['src'].lower(), f2(t['e']), f2(t['stp0']),
+        rows.append([hhmm(m0 + (1 if t['src'] in ('VOLUME LINE', 'SWEEP') else 0)), ('BUY' if sd > 0 else 'SELL') + ' ' + t['src'].lower(), f2(t['e']), f2(t['stp0']),
                      (f"{x['why']} at {f2(x['px'])}: {x['pnl']:+.0f} pts" if x else f"open, stop now {f2(t['stp'])}")])
     pend = cx.get('pending')
     if pend and got < 720 and not any(t['src'] == 'PULLBACK' for t in ts):
@@ -895,7 +946,7 @@ table{width:100%;border-collapse:collapse;font-size:13px}td,th{padding:5px 8px;b
 </style></head><body>
 <div id="bar"></div><div id="c"></div>
 <div id="key">Pink: CPR (TC, P, BC; orange on a narrow day). Purple: 30-day POC. Teal dots: 3-day volume lines.
-Green / red dashed: 15-minute high / low, and the open trade's T / SL. Letters: B buy, S sell, T target or half booked,
+Green / red dashed: 15-minute high / low, and the open trade's T / SL. Yellow dashed: yesterday's high / low (sweeps). Letters: B buy, S sell, T target or half booked,
 SL stop loss, BE stop at entry, X other exit.</div>
 <table><thead><tr><th>Time</th><th>Trade</th><th>Entry</th><th>Stop</th><th>Result</th></tr></thead><tbody id="list"></tbody></table>
 <script src="/lwc.js"></script>

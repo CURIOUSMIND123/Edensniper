@@ -6,26 +6,33 @@
 // Draws the CPR (three pink lines; orange on narrow days), the first 15-minute candle's high / low, the 30-day
 // volume point of control (POC: the price where the most volume traded; volume from NIFTYBEES because the index has
 // none) with its value area, and the 5-minute EMA 50. Every filter is in Settings.
-// DEFAULT RULES = 1:4 TARGETS, HELD UNTIL 3:15 (Settings > Trade style > Rules):
+// DEFAULT RULES = ORIGINAL (daily plan + 3-day volume lines, described below) + LIQUIDITY SWEEPS, one trade at a time:
+//   LIQUIDITY SWEEP of yesterday's high / low (yellow lines): a 5-minute candle (9:30-2:30) goes above yesterday's
+//   high and closes back below it (the candle before closed below it) -> SELL at the close; below yesterday's low
+//   and back above it -> BUY. Stop 0.02% beyond the candle's high / low (skipped if wider than 0.5% of price),
+//   target 3x the stop, out by 3:15, at most 3 a day, only when no other trade is open.
+//   2026 (1 Jan - 9 Oct), after costs, the whole indicator: Nifty 203 trades, 57% won, net +2,993 (Jan-Jun +2,175,
+//   Jul-Oct +819), worst fall -284; Sensex 223 trades, 53% won, net +9,279 (Jan-Jun +7,264, Jul-Oct +2,015), worst
+//   fall -1,535. Without the sweeps: Nifty +2,274, Sensex +8,102. The sweep trades alone win only about 1 in 3;
+//   the wins are 3x the stop. Reference: research/quant/y2026_sweep.py (and alerts/cprb_alerts.py, SWEEP = True).
+//   Liquidity squeeze, Smart Money Concepts (break of structure, change of character, order blocks, fair value
+//   gaps) and the low-volume areas of the last 2 days' volume profile were tested too (y2026_smc.py) and did not
+//   add profit in both halves of 2026.
+// 1:4 TARGETS, HELD UNTIL 3:15 (the second choice in Settings > Trade style > Rules):
 //   Every stop at most 0.21% of price (about 150 Sensex / 47 Nifty points), target 4x the stop, the whole position
-//   held until the target, the stop or 3:15. No booking half, no trailing. One trade at a time. Two setups only:
-//   CPR MAGNET at 9:16 (as below), stop 0.21%, target 4x the stop.
-//   BREAKOUT ON THE PULLBACK: when price touches the 15-minute high / low before 10:00 (same filters as below) and
-//     then goes 0.1% beyond it, a LIMIT order goes back at the broken level (blue dashed line, until 12:00); stop at
-//     the other side of the range or 0.21%, whichever is closer; target 4x the stop.
-//   No volume-line trades.
-//   2026 (1 Jan - 9 Oct), after costs: Nifty 55 trades, 44% won, avg win +122 / avg loss -51, net +1,344
-//   (Jan-Jun +866, Jul-Oct +478), worst fall -428; Sensex 53 trades, 43% won, avg win +395 / avg loss -156,
-//   net +4,419 (Jan-Jun +3,623, Jul-Oct +796), worst fall -1,048. About 1 trade in 6 reaches the 4x target.
-//   Reference implementation: research/quant/y2026_rr.py (and alerts/cprb_alerts.py, RULES = 'rr').
-// SMALL STOPS, OUT WITHIN 60 MINUTES (the second choice):
+//   held until the target, the stop or 3:15. CPR Magnet (stop 0.21%, target 4x) and the breakout ON THE PULLBACK:
+//   when price touches the 15-minute high / low before 10:00 (same filters as below) and then goes 0.1% beyond it,
+//   a LIMIT order goes back at the broken level (blue dashed line, until 12:00); stop at the other side of the
+//   range or 0.21%, whichever is closer. No volume-line trades.
+//   2026: Nifty 55 trades, 44% won, net +1,344; Sensex 53 trades, 43% won, net +4,419 (research/quant/y2026_rr.py).
+// SMALL STOPS, OUT WITHIN 60 MINUTES (the third choice):
 //   Every stop at most 150 Sensex / 45 Nifty points, every trade out after 60 minutes at the latest, the whole
 //   position at the target. Magnet: target the CPR edge. Pullback (as above): target 2x the stop.
 //   3-DAY VOLUME LINES (as below), stop at the previous line or 150 / 45 points, target the next line.
 //   2026 (1 Jan - 9 Oct), after costs: Nifty 150 trades, 53% won, net +842, worst trade -49, worst fall -317;
 //   Sensex 170 trades, 54% won, net +4,708, worst trade -162, worst fall -1,134.
 //   Reference implementation: research/quant/y2026_short_combo.py (and alerts/cprb_alerts.py, RULES = 'small').
-// ORIGINAL RULES (the third choice) = DAILY PLAN (one plan per day), adjusted on 2026:
+// ORIGINAL RULES = DAILY PLAN (one plan per day), adjusted on 2026:
 //   NARROW-CPR DAY -> CPR BREAKOUT scalp. OTHER DAY -> CPR MAGNET at 9:16 if the open qualifies, otherwise the
 //   same CPR BREAKOUT scalp.
 //   CPR Magnet: the 9:15 one-minute candle opens beyond the CPR and closes 0.2%+ beyond it -> trade back toward
@@ -72,8 +79,8 @@ indicator("CPR Breakout", "CPRB", overlay = true, max_lines_count = 500, max_lab
 
 // ---------------- inputs ----------------
 G0 = "Trade style"
-rulesIn  = input.string("1:4 targets, held until 3:15", "Rules", options = ["1:4 targets, held until 3:15", "Small stops, out within 60 min", "Original (wider stops, trailing)"], group = G0,
-                         tooltip = "1:4 targets: every stop at most 0.21% of price (about 150 Sensex / 47 Nifty points), target 4x the stop, held until the target, the stop or 3:15. Only the CPR Magnet and the breakout traded on the pullback (a limit order back at the broken 15-minute level); no volume-line trades. Small stops: every stop at most 150 Sensex / 45 Nifty points, out after 60 minutes at the latest, all at the target, no trailing, volume-line trades too.")
+rulesIn  = input.string("Original (wider stops, trailing)", "Rules", options = ["Original (wider stops, trailing)", "1:4 targets, held until 3:15", "Small stops, out within 60 min"], group = G0,
+                         tooltip = "Original: the daily plan (CPR Magnet or the 9:30 breakout), the 3-day volume lines and the liquidity sweeps, one trade at a time; the most profit in the 2026 tests. 1:4 targets: every stop at most 0.21% of price (about 150 Sensex / 47 Nifty points), target 4x the stop, held until the target, the stop or 3:15. Only the CPR Magnet and the breakout traded on the pullback (a limit order back at the broken 15-minute level); no volume-line trades. Small stops: every stop at most 150 Sensex / 45 Nifty points, out after 60 minutes at the latest, all at the target, no trailing, volume-line trades too.")
 rrStop   = input.float(0.21, "1:4 targets: the largest stop, % of price (0.21 = about 150 Sensex / 47 Nifty points)", step = 0.01, group = G0)
 rrMult   = input.float(4.0, "1:4 targets: target = this x the stop", step = 0.5, group = G0)
 smallCap = input.float(0, "Small stops: the largest stop in points (0 = Sensex 150, Nifty 45)", step = 5, group = G0)
@@ -105,6 +112,11 @@ vlN    = input.int(3, "Volume lines from the last N sessions", minval = 2, maxva
 vlRR   = input.float(1.5, "Skip when the next line is less than this x the stop away", step = 0.25, group = G5)
 vlLad  = input.bool(false, "Ladder: at the next line book half, move the stop to the broken line, ride the rest to the line after", group = G5, tooltip = "2026 test, whole indicator: Sensex net +8,612 instead of +7,894 (all of the gain in Jan-Jun), Nifty +2,373 instead of +2,454. Booking half needs at least 2 lots.")
 vlShow = input.bool(true, "Draw the volume lines", group = G5)
+G6 = "Liquidity sweeps of yesterday's high / low (same book; original rules)"
+swOn   = input.bool(true, "Trade liquidity sweeps: a 5-minute candle goes beyond yesterday's high / low and closes back -> the other way", group = G6, tooltip = "9:30-2:30, only when no other trade is open. Above yesterday's high and back below -> SELL; below yesterday's low and back above -> BUY. Stop 0.02% beyond the candle's high / low (skipped if wider than 0.5% of price), target 3x the stop, out by 3:15. 2026: Nifty +2,993 instead of +2,274, Sensex +9,279 instead of +8,102.")
+swMax  = input.int(3, "Sweeps: at most this many a day", minval = 1, maxval = 10, group = G6)
+swMult = input.float(3.0, "Sweeps: target = this x the stop", step = 0.5, group = G6)
+swShow = input.bool(true, "Draw yesterday's high / low", group = G6)
 costIn = input.float(0, "Cost per trade in index points (0 = auto: Nifty 4, Sensex 12)", step = 1, group = G1)
 G2 = "Display"
 cprPink = input.color(color.new(#e91e63, 0), "CPR colour", group = G2)
@@ -407,6 +419,11 @@ var line  vlnT = na
 var int   nVol = 0
 var int   nVolWon = 0
 var float volPts = 0.0
+var string vKind = "VOL"       // what the second trade slot holds: "VOL" volume-line trade, "SWEEP" liquidity sweep
+var int   swDay = 0            // sweep trades today
+var int   nSw = 0
+var int   nSwWon = 0
+var float swPts = 0.0
 var float tgt2 = na            // magnet: final target (the CPR edge)
 var line  lnS = na
 var line  lnT = na
@@ -489,6 +506,7 @@ if newDay
     cb := 0
     isMag := false
     volOpen := false
+    swDay := 0
     todayMsg := not widOk ? "No trade: CPR width filter" : "Building the 15-minute range"
 
 // a trade is opened by setting these, then drawn once below
@@ -652,19 +670,24 @@ if is5 and n1 > 0
                 totPts += vg
                 winPts += vg > 0 ? vg : 0
                 lossPts += vg > 0 ? 0 : vg
-                nVol += 1
-                nVolWon += vg > 0 ? 1 : 0
-                volPts += vg
+                bool isSw = vKind == "SWEEP"
+                string vNm = isSw ? "Sweep: " : "Volume line: "
+                nVol += isSw ? 0 : 1
+                nVolWon += not isSw and vg > 0 ? 1 : 0
+                volPts += isSw ? 0 : vg
+                nSw += isSw ? 1 : 0
+                nSwWon += isSw and vg > 0 ? 1 : 0
+                swPts += isSw ? vg : 0
                 string vm = exitMark(vWhy)
-                mark(vm, vm == "SL" ? vSide < 0 : vSide > 0, vg > 0 ? GREEN : RED, "Volume line: " + vWhy + " at " + fmt(vEx) + ": " + pts(vg) + " pts after costs")
+                mark(vm, vm == "SL" ? vSide < 0 : vSide > 0, vg > 0 ? GREEN : RED, vNm + vWhy + " at " + fmt(vEx) + ": " + pts(vg) + " pts after costs")
                 line.set_extend(vlnT, extend.none)
                 line.set_extend(vlnS, extend.none)
                 line.set_x2(vlnT, bar_index)
                 line.set_x2(vlnS, bar_index)
                 if showBoxes
-                    posEnd(vbT, vbR, vbH, vbTt, vbRt, vg, "Volume line: " + vWhy + " " + pts(vg) + " pts", vEx)
-                todayMsg := "Volume line: " + vWhy + " at " + fmt(vEx) + ", " + pts(vg) + " pts after costs" + (vHalf ? " (half booked earlier)" : "")
-                alert("CPRB " + syminfo.ticker + " VOLUME-LINE " + vWhy + " at " + fmt(vEx) + " (" + pts(vg) + " pts after costs)", alert.freq_once_per_bar)
+                    posEnd(vbT, vbR, vbH, vbTt, vbRt, vg, vNm + vWhy + " " + pts(vg) + " pts", vEx)
+                todayMsg := vNm + vWhy + " at " + fmt(vEx) + ", " + pts(vg) + " pts after costs" + (vHalf ? " (half booked earlier)" : "")
+                alert("CPRB " + syminfo.ticker + (isSw ? " SWEEP " : " VOLUME-LINE ") + vWhy + " at " + fmt(vEx) + " (" + pts(vg) + " pts after costs)", alert.freq_once_per_bar)
         // touch entries
         if not shortMode and mk >= 570 and not volOpen and entF == "Touch of the range high / low" and mk < CUT and not na(orh) and (state == 0 or (state == 2 and mk >= afterMin))
             int sd = hk >= orh ? 1 : lk <= orl ? -1 : 0
@@ -802,6 +825,7 @@ if is5 and vlOn and not rrMode and barstate.isconfirmed and not volOpen and stat
             float rw = vs * (vt - close)
             if rk > 0 and rw >= vlRR * rk
                 volOpen := true
+                vKind := "VOL"
                 vSide := vs
                 vE := close
                 vStp := shortMode ? close - vs * rk : vp
@@ -827,6 +851,41 @@ if is5 and vlOn and not rrMode and barstate.isconfirmed and not volOpen and stat
                     vbH := vb3x
                 todayMsg := "Volume line " + (vs > 0 ? "BUY at " : "SELL at ") + fmt(close) + ", stop " + fmt(vp) + ", target " + fmt(vt) + vLadTxt
                 alert("CPRB " + syminfo.ticker + " VOLUME-LINE " + (vs > 0 ? "BUY at " : "SELL at ") + fmt(close) + " | STOP " + fmt(vp) + " | TARGET " + fmt(vt) + vLadTxt, alert.freq_once_per_bar)
+
+// liquidity sweeps of yesterday's high / low (original rules): a 5-minute close back inside after going beyond it,
+// 9:30-2:30, when no other trade is open; stop 0.02% beyond the candle, target swMult x the stop, out by 3:15
+if is5 and swOn and not shortMode and barstate.isconfirmed and not volOpen and state != 1 and not opened and mins >= 570 and mins + 5 <= 870 and swDay < swMax and not na(pH)
+    int ws = close[1] < pH and high > pH and close < pH ? -1 : close[1] > pL and low < pL and close > pL ? 1 : 0
+    if ws != 0
+        float wStp = (ws < 0 ? high : low) - ws * 0.0002 * close
+        float wRk = ws * (close - wStp)
+        if wRk > 0 and wRk <= 0.005 * close
+            volOpen := true
+            vKind := "SWEEP"
+            vSide := ws
+            vE := close
+            vStp := wStp
+            vTgt := close + ws * swMult * wRk
+            vTgt2 := na
+            vLast := TOUT
+            vBroken := na
+            vHalf := false
+            vHalfPts := na
+            vStart := mins + 5
+            swDay += 1
+            string wTxt = "Sweep of yesterday's " + (ws < 0 ? "high " + fmt(pH) + " -> SELL " : "low " + fmt(pL) + " -> BUY ") + fmt(close) + "\nstop " + fmt(wStp) + "\ntarget " + fmt(vTgt) + " (" + str.tostring(swMult) + "x the stop)"
+            mark(ws > 0 ? "B" : "S", ws < 0, ws > 0 ? GREEN : RED, wTxt)
+            vlnS := line.new(bar_index, wStp, bar_index + 1, wStp, color = lnRed, style = line.style_dashed, extend = extend.right)
+            vlnT := line.new(bar_index, vTgt, bar_index + 1, vTgt, color = lnGreen, style = line.style_dashed, extend = extend.right)
+            if showBoxes
+                vbTt := "TARGET (" + str.tostring(swMult) + "x the stop) " + fmt(vTgt) + "\nsweep of yesterday's " + (ws < 0 ? "high" : "low")
+                vbRt := "STOP " + fmt(wStp)
+                [wb1, wb2, wb3] = posNew(ws, close, vTgt, wStp, float(na), vbTt, vbRt, wTxt)
+                vbT := wb1
+                vbR := wb2
+                vbH := wb3
+            todayMsg := "Sweep " + (ws > 0 ? "BUY at " : "SELL at ") + fmt(close) + ", stop " + fmt(wStp) + ", target " + fmt(vTgt)
+            alert("CPRB " + syminfo.ticker + " SWEEP of yesterday's " + (ws < 0 ? "high: SELL at " : "low: BUY at ") + fmt(close) + " | STOP " + fmt(wStp) + " | TARGET " + fmt(vTgt), alert.freq_once_per_bar)
 
 if opened
     float t0 = shortMode or isMag ? tgt : tgtFor(openSide, openPx, R)
@@ -860,6 +919,8 @@ if showBoxes and state == 1
 if showBoxes and volOpen
     posGrow(vbT, vbR, vbH, bar_index + 1)
 
+plot(is5 and swOn and swShow and not shortMode ? pH : na, "Yesterday's high", color = lc(color.new(#fdd835, 20)), style = plot.style_linebr)
+plot(is5 and swOn and swShow and not shortMode ? pL : na, "Yesterday's low", color = lc(color.new(#fdd835, 20)), style = plot.style_linebr)
 plot(is5 and mins >= 570 ? orh : na, "15-min high", color = lc(color.new(GREEN, 30)), style = plot.style_linebr)
 plot(is5 and mins >= 570 ? orl : na, "15-min low", color = lc(color.new(RED, 30)), style = plot.style_linebr)
 
@@ -889,6 +950,9 @@ if barstate.islast and cprOn
         if is5 and vlShow
             for x in vLines
                 edgeName(edgeLbl, x1, x, "vol", TEAL, size.tiny)
+        if is5 and swOn and swShow and not shortMode
+            edgeName(edgeLbl, x1, pH, "yday high", color.new(#fdd835, 0), size.small)
+            edgeName(edgeLbl, x1, pL, "yday low", color.new(#fdd835, 0), size.small)
         if pullState == 1 and pullArmed
             edgeName(edgeLbl, x1, pullLv + pullSide * 0.0005 * pullLv, (pullSide > 0 ? "LIMIT BUY " : "LIMIT SELL ") + fmt(pullLv + pullSide * 0.0005 * pullLv), BLUE, size.small)
         if state == 1 and not showBoxes
@@ -916,7 +980,7 @@ if barstate.islast and cprOn
         edgeName(edgeLbl, xb, nBot, "BC " + fmt(nBot), nCol, size.small)
 
 // ---------------- status and results box ----------------
-var table tbl = table.new(position.top_right, 2, 9, bgcolor = color.new(chart.bg_color, 5), border_width = 1, border_color = color.new(GREY, 60), frame_width = 1, frame_color = GREY)
+var table tbl = table.new(position.top_right, 2, 10, bgcolor = color.new(chart.bg_color, 5), border_width = 1, border_color = color.new(GREY, 60), frame_width = 1, frame_color = GREY)
 cell(int r, string a, string b, color tc) =>
     table.cell(tbl, 0, r, a, text_color = GREY, text_size = size.small, text_halign = text.align_left)
     table.cell(tbl, 1, r, b, text_color = tc, text_size = size.small, text_halign = text.align_left)
@@ -931,3 +995,5 @@ if barstate.islast and showBox
     cell(6, "On this chart", str.tostring(nTr) + " trades, " + str.tostring(nWon) + " won, " + str.tostring(nTr - nWon) + " lost", chart.fg_color)
     cell(7, "Points won / lost / net", pts(winPts) + " / " + pts(lossPts) + " / " + pts(totPts), totPts >= 0 ? GREEN : RED)
     cell(8, "Of which volume-line trades", str.tostring(nVol) + " trades, " + str.tostring(nVolWon) + " won, " + pts(volPts) + " pts", volPts >= 0 ? GREEN : RED)
+    if swOn and not shortMode
+        cell(9, "Of which sweep trades", str.tostring(nSw) + " trades, " + str.tostring(nSwWon) + " won, " + pts(swPts) + " pts", swPts >= 0 ? GREEN : RED)
