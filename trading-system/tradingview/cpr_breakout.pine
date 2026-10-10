@@ -80,6 +80,8 @@ costIn = input.float(0, "Cost per trade in index points (0 = auto: Nifty 4, Sens
 G2 = "Display"
 cprPink = input.color(color.new(#e91e63, 0), "CPR colour", group = G2)
 cprNar  = input.color(color.new(#f57c00, 0), "CPR colour on narrow days", group = G2)
+markSz  = input.string("normal", "Size of the B / S / T / SL marks", options = ["small", "normal", "large", "huge"], group = G2)
+markBox = input.bool(true, "Marks in a small coloured tag (off: the letter only)", group = G2)
 cprLbl  = input.bool(false, "Also write the CPR width on the chart each morning (it is always in the box)", group = G2)
 showPrf = input.bool(true, "Show the 30-day volume POC", group = G2)
 showVA  = input.bool(false, "Show the value area (the 70% of volume around the POC)", group = G2)
@@ -102,8 +104,10 @@ pts(x) => str.tostring(x, "+#,##0;-#,##0")
 // small chart marks (tap one for the details): B / S entry, T target or half booked, SL stop loss, BE stop at
 // entry, X any other exit (trailing stop or 3:15)
 mark(string txt, bool above, color col, string tip) =>
-    label.new(bar_index, above ? high : low, txt, yloc = above ? yloc.abovebar : yloc.belowbar, style = label.style_none,
-              textcolor = col, size = size.small, tooltip = tip)
+    string sz = markSz == "small" ? size.small : markSz == "large" ? size.large : markSz == "huge" ? size.huge : size.normal
+    label.new(bar_index, above ? high : low, txt, yloc = above ? yloc.abovebar : yloc.belowbar,
+              style = markBox ? (above ? label.style_label_down : label.style_label_up) : label.style_none,
+              color = markBox ? col : color.new(col, 100), textcolor = markBox ? color.white : col, size = sz, tooltip = tip)
 exitMark(string why) =>
     why == "STOP" ? "SL" : why == "STOP AT ENTRY" ? "BE" : str.startswith(why, "TARGET") ? "T" : "X"
 minsOf(int t) => hour(t, TZ) * 60 + minute(t, TZ)

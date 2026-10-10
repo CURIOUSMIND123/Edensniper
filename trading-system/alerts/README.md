@@ -28,7 +28,7 @@ refreshes every 5 seconds; the program fetches new prices every 15 seconds. On a
 The chart library (TradingView's free open-source Lightweight Charts) is downloaded once and kept next to the
 program. `CHART = False` at the top switches the chart off.
 
-![The live chart on a phone, replaying 8 October 2026](chart-phone.png)
+![The live chart on a phone, replaying 15 September 2026](chart-phone.png)
 
 ## Set up once
 

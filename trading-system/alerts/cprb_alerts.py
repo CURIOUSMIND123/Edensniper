@@ -642,7 +642,7 @@ SL stop loss, BE stop at entry, X other exit.</div>
 const IDX = %INDICES%; let cur = IDX[0][0], tf = 5, plines = [], lastKey = '', fitted = '';
 const box = document.getElementById('c');
 if (!window.LightweightCharts) document.getElementById('bar').textContent = 'The chart library did not load: check the internet connection and reload.';
-const chart = LightweightCharts.createChart(box, {layout: {background: {color: '#0f1419'}, textColor: '#d1d4dc'},
+const chart = LightweightCharts.createChart(box, {layout: {background: {color: '#0f1419'}, textColor: '#d1d4dc', fontSize: 14},
   grid: {vertLines: {color: '#18202a'}, horzLines: {color: '#18202a'}}, rightPriceScale: {borderColor: '#2a3240'},
   timeScale: {timeVisible: true, secondsVisible: false, borderColor: '#2a3240', rightOffset: 6}, crosshair: {mode: 0},
   localization: {locale: 'en-IN'}});
@@ -673,7 +673,7 @@ async function load() {
   catch (e) { document.getElementById('st').textContent = 'The program is not running: start it in Pydroid 3.'; return; }
   if (!d.day) return;
   s.setData(agg(d.day, d.candles, agg(d.yday_date, d.yday, [])));
-  s.setMarkers(d.marks.map(k => ({time: ts(d.day, bucket(k.m)), position: k.pos, color: k.c, shape: k.pos === 'belowBar' ? 'arrowUp' : 'arrowDown', size: 0.4, text: k.x})));
+  s.setMarkers(d.marks.map(k => ({time: ts(d.day, bucket(k.m)), position: k.pos, color: k.c, shape: k.pos === 'belowBar' ? 'arrowUp' : 'arrowDown', size: 1.2, text: k.x})));
   const key = JSON.stringify(d.levels);
   if (key !== lastKey) { plines.forEach(p => s.removePriceLine(p)); lastKey = key;
     plines = d.levels.map(l => s.createPriceLine({price: l.p, color: l.c, lineWidth: l.w, lineStyle: l.s, axisLabelVisible: l.t !== '', title: l.t})); }
