@@ -33,10 +33,10 @@ File: [`cpr_breakout.pine`](cpr_breakout.pine). An indicator; reads 1-minute can
   and SL / T for an open trade. After the close, the **next session's CPR** is drawn dashed to the right with its
   width, so on a weekend you already see Monday's levels. (A CPR is fixed for its whole session: it comes from the
   previous day's high, low and close.) The value area lines are off by default.
-- Chart marks are small letters by the candles: **B** buy, **S** sell, **T** target or half booked, **SL** stop
-  loss, **BE** stop at entry, **X** any other exit, each in a small coloured tag (Settings: size small / normal /
-  large / huge, or the letter only). Tap a letter for the prices and points. Dashed red / green
-  lines show the open trade's stop and target.
+- **Trades are drawn as position boxes**, like TradingView's Long / Short Position tool: green = entry to target,
+  red = entry to stop, from the entry candle until the trade closes, with the entry ("SELL 72,650"), target, stop,
+  book-half level and the result written where the prices are. Settings > "How trades are drawn" switches to small
+  letters (B buy, S sell, T target or half booked, SL stop loss, BE stop at entry, X other exit) or shows both.
 - Every filter is in Settings. `research/quant/y2026_combo.py` has the same plan in Python.
 - **No live data on free TradingView?** [`alerts/cprb_alerts.py`](../alerts/cprb_alerts.py) runs the same rules on
   free live data and sends the alerts to your phone through Telegram. Setup: [`alerts/README.md`](../alerts/README.md).

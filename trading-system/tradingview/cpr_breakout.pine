@@ -29,8 +29,10 @@
 //   with its width in the box. The trades and the volume levels need a 5-minute chart. Today's lines are named at
 //   the right edge; after the close the NEXT session's CPR is drawn dashed to the right (from today's high, low
 //   and close; a CPR never changes during its session).
-// CHART MARKS (small letters by the candles; tap one for the details): B buy, S sell, T target or half booked,
-//   SL stop loss, BE stop at entry, X any other exit (trailing stop or 3:15). Dashed lines: red stop, green target.
+// TRADES are drawn as POSITION BOXES, like TradingView's Long / Short Position tool: green = entry to target, red =
+//   entry to stop, from the entry candle until the trade closes, with the prices and the result written inside.
+//   Settings > "How trades are drawn" can switch to small letters instead (B buy, S sell, T target or half booked,
+//   SL stop loss, BE stop at entry, X other exit) or show both.
 // Tested on 1-minute candles, 1 Jan - 9 Oct 2026 (191 sessions), after costs (4 Nifty / 12 Sensex points a trade),
 // CPR from the official daily close, as drawn here:
 //   Nifty  101 trades on 90 days (about 11 a month), 79 won / 22 lost, +3,633 / -1,359, net +2,274
@@ -47,7 +49,7 @@
 // Reference implementation (same rules): trading-system/research/quant/y2026_combo.py (one book, target >= 1.5x);
 //   ladder: y2026_improve.py (volume lines: ladder)
 // ============================================================================
-indicator("CPR Breakout", "CPRB", overlay = true, max_lines_count = 500, max_labels_count = 500, max_bars_back = 2500)
+indicator("CPR Breakout", "CPRB", overlay = true, max_lines_count = 500, max_labels_count = 500, max_boxes_count = 500, max_bars_back = 2500)
 
 // ---------------- inputs ----------------
 G1 = "Rules"
@@ -80,6 +82,7 @@ costIn = input.float(0, "Cost per trade in index points (0 = auto: Nifty 4, Sens
 G2 = "Display"
 cprPink = input.color(color.new(#e91e63, 0), "CPR colour", group = G2)
 cprNar  = input.color(color.new(#f57c00, 0), "CPR colour on narrow days", group = G2)
+tradeView = input.string("Position boxes", "How trades are drawn", options = ["Position boxes", "Letters (B / S / T / SL)", "Both"], group = G2, tooltip = "Position boxes: like TradingView's Long / Short Position tool. Green = entry to target, red = entry to stop, from the entry candle until the trade closes; the prices are written inside.")
 markSz  = input.string("normal", "Size of the B / S / T / SL marks", options = ["small", "normal", "large", "huge"], group = G2)
 markBox = input.bool(true, "Marks in a small coloured tag (off: the letter only)", group = G2)
 cprLbl  = input.bool(false, "Also write the CPR width on the chart each morning (it is always in the box)", group = G2)
@@ -103,13 +106,47 @@ fmt(x) => str.tostring(x, "#,##0.##")
 pts(x) => str.tostring(x, "+#,##0;-#,##0")
 // small chart marks (tap one for the details): B / S entry, T target or half booked, SL stop loss, BE stop at
 // entry, X any other exit (trailing stop or 3:15)
-mark(string txt, bool above, color col, string tip) =>
+showBoxes = tradeView != "Letters (B / S / T / SL)"
+showMarks = tradeView != "Position boxes"
+markLabel(string txt, bool above, color col, string tip) =>
     string sz = markSz == "small" ? size.small : markSz == "large" ? size.large : markSz == "huge" ? size.huge : size.normal
     label.new(bar_index, above ? high : low, txt, yloc = above ? yloc.abovebar : yloc.belowbar,
               style = markBox ? (above ? label.style_label_down : label.style_label_up) : label.style_none,
               color = markBox ? col : color.new(col, 100), textcolor = markBox ? color.white : col, size = sz, tooltip = tip)
+mark(string txt, bool above, color col, string tip) =>
+    if showMarks
+        markLabel(txt, above, col, tip)
 exitMark(string why) =>
     why == "STOP" ? "SL" : why == "STOP AT ENTRY" ? "BE" : str.startswith(why, "TARGET") ? "T" : "X"
+// position boxes, like TradingView's Long / Short Position tool: green = entry to target, red = entry to stop
+posNew(int sd, float e, float tg, float sl, float half, string tT, string tR, string eTxt) =>
+    box bT = box.new(bar_index, math.max(e, tg), bar_index, math.min(e, tg), border_color = color.new(GREEN, 30), bgcolor = color.new(GREEN, 82),
+              text = tT, text_size = size.small, text_color = GREEN, text_halign = text.align_left, text_valign = sd > 0 ? text.align_top : text.align_bottom)
+    box bR = box.new(bar_index, math.max(e, sl), bar_index, math.min(e, sl), border_color = color.new(RED, 30), bgcolor = color.new(RED, 82),
+              text = tR, text_size = size.small, text_color = RED, text_halign = text.align_left, text_valign = sd > 0 ? text.align_bottom : text.align_top)
+    line bH = na
+    if not na(half)
+        bH := line.new(bar_index, half, bar_index, half, color = GREEN, style = line.style_dotted, width = 1)
+    label.new(bar_index, e, (sd > 0 ? "BUY " : "SELL ") + fmt(e), style = label.style_label_right, color = sd > 0 ? GREEN : RED,
+              textcolor = color.white, size = size.small, tooltip = eTxt)
+    [bT, bR, bH]
+posGrow(box bT, box bR, line bH, int x) =>
+    if not na(bT)
+        box.set_right(bT, x)
+    if not na(bR)
+        box.set_right(bR, x)
+    if not na(bH)
+        line.set_x2(bH, x)
+posEnd(box bT, box bR, line bH, string tT, string tR, float g, string res, float ex) =>
+    posGrow(bT, bR, bH, bar_index)
+    if not na(bT)
+        if g > 0
+            box.set_text(bT, tT + "\n" + res)
+        else
+            box.set_text(bR, tR + "\n" + res)
+        label.new(bar_index, ex, pts(g), style = label.style_label_left, color = g > 0 ? GREEN : RED, textcolor = color.white, size = size.small, tooltip = res)
+lnRed   = showBoxes ? color.new(RED, 100) : RED
+lnGreen = showBoxes ? color.new(GREEN, 100) : GREEN
 minsOf(int t) => hour(t, TZ) * 60 + minute(t, TZ)
 cost = costIn > 0 ? costIn : close > 50000 ? 12.0 : 4.0
 BIN  = close > 50000 ? 16.0 : 5.0
@@ -287,6 +324,13 @@ plot(is5 and showEma ? ema50 : na, "EMA 50", color = color.new(GREY, 30))
 
 // ---------------- the 15-minute range and the trades ----------------
 [o1, h1, l1, c1, t1] = request.security_lower_tf(syminfo.tickerid, "1", [open, high, low, close, time])
+// if TradingView has no 1-minute data for a candle, use the candle itself (so trades still close at 3:15)
+bool noIntra = array.size(c1) == 0
+float[] xo = noIntra ? array.from(open) : o1
+float[] xh = noIntra ? array.from(high) : h1
+float[] xl = noIntra ? array.from(low) : l1
+float[] xc = noIntra ? array.from(close) : c1
+int[]   xt = noIntra ? array.from(time) : t1
 
 var float orh = na
 var float orl = na
@@ -323,6 +367,19 @@ var float volPts = 0.0
 var float tgt2 = na            // magnet: final target (the CPR edge)
 var line  lnS = na
 var line  lnT = na
+var box   pbT = na             // position box of the plan trade (target side)
+var box   pbR = na             // (stop side)
+var line  pbH = na             // book-half level inside it
+var string pbTt = ""
+var string pbRt = ""
+var box   vbT = na             // the same for the volume-line trade
+var box   vbR = na
+var line  vbH = na
+var string vbTt = ""
+var string vbRt = ""
+var float lastG = na            // the plan trade's last result (for a trade that opens and closes inside one candle)
+var float lastEx = na
+var string lastWhy = ""
 var string todayMsg = ""
 var int   nTr = 0
 var int   nWon = 0
@@ -369,11 +426,13 @@ if newDay
         line.set_extend(lnT, extend.none)
         line.set_x2(lnS, bar_index - 1)
         line.set_x2(lnT, bar_index - 1)
+        posGrow(pbT, pbR, pbH, bar_index - 1)
     if volOpen
         line.set_extend(vlnS, extend.none)
         line.set_extend(vlnT, extend.none)
         line.set_x2(vlnS, bar_index - 1)
         line.set_x2(vlnT, bar_index - 1)
+        posGrow(vbT, vbR, vbH, bar_index - 1)
     orh := na
     orl := na
     state := 0
@@ -388,14 +447,14 @@ bool opened = false
 int  openSide = 0
 float openPx = na
 
-n1 = array.size(c1)
+n1 = array.size(xc)
 if is5 and n1 > 0
     for k = 0 to n1 - 1
-        mk = minsOf(array.get(t1, k))
-        ok = array.get(o1, k)
-        hk = array.get(h1, k)
-        lk = array.get(l1, k)
-        ck = array.get(c1, k)
+        mk = minsOf(array.get(xt, k))
+        ok = array.get(xo, k)
+        hk = array.get(xh, k)
+        lk = array.get(xl, k)
+        ck = array.get(xc, k)
         complete = k < n1 - 1 or barstate.isconfirmed
         if mk == 555
             cb := ok > top ? 1 : ok < bot ? -1 : 0
@@ -448,6 +507,9 @@ if is5 and n1 > 0
                             if side * (e - stp) > 0
                                 stp := e
                             mark("T", side > 0, GREEN, "Book half at " + fmt(tgt) + " (" + pts(halfPts) + " pts). Stop to " + fmt(stp))
+                            if showBoxes and not na(pbT)
+                                pbTt := pbTt + "\nhalf booked " + pts(halfPts) + ", stop to entry"
+                                box.set_text(pbT, pbTt)
                             alert("CPRB " + syminfo.ticker + " BOOK HALF at " + fmt(tgt) + ", move stop to " + fmt(stp), alert.freq_once_per_bar)
                             tgt := na
                         else
@@ -468,6 +530,9 @@ if is5 and n1 > 0
                     why := "3:15 EXIT"
             if isOut
                 float g = (halfDone ? (halfPts + side * (ex - e)) / 2 : side * (ex - e)) - cost
+                lastG := g
+                lastEx := ex
+                lastWhy := why
                 nTr += 1
                 nWon += g > 0 ? 1 : 0
                 totPts += g
@@ -479,6 +544,8 @@ if is5 and n1 > 0
                 line.set_extend(lnS, extend.none)
                 line.set_x2(lnT, bar_index)
                 line.set_x2(lnS, bar_index)
+                if showBoxes
+                    posEnd(pbT, pbR, pbH, pbTt, pbRt, g, why + " " + pts(g) + " pts", ex)
                 todayMsg := why + " at " + fmt(ex) + ": " + pts(g) + " pts after costs" + (halfDone ? " (half booked earlier)" : "")
                 alert("CPRB " + syminfo.ticker + " " + why + " at " + fmt(ex) + " (" + pts(g) + " pts after costs)", alert.freq_once_per_bar)
                 if tradeNo == 1 and g <= 0 and revF and not isMag
@@ -504,6 +571,9 @@ if is5 and n1 > 0
                             vHalf := true
                             vHalfPts := vSide * (vTgt - vE)
                             mark("T", vSide > 0, GREEN, "Volume line: book half at " + fmt(vTgt) + " (" + pts(vHalfPts) + " pts). Stop to " + fmt(vBroken) + ", rest to " + fmt(vTgt2))
+                            if showBoxes and not na(vbT)
+                                vbTt := vbTt + "\nhalf booked " + pts(vHalfPts) + ", stop to " + fmt(vBroken)
+                                box.set_text(vbT, vbTt)
                             alert("CPRB " + syminfo.ticker + " VOLUME-LINE BOOK HALF at " + fmt(vTgt) + ", move stop to " + fmt(vBroken) + ", rest to " + fmt(vTgt2), alert.freq_once_per_bar)
                             vStp := vBroken
                             vTgt := vTgt2
@@ -511,8 +581,8 @@ if is5 and n1 > 0
                             line.set_extend(vlnS, extend.none)
                             line.set_x2(vlnT, bar_index)
                             line.set_x2(vlnS, bar_index)
-                            vlnS := line.new(bar_index, vStp, bar_index + 1, vStp, color = RED, style = line.style_dashed, extend = extend.right)
-                            vlnT := line.new(bar_index, vTgt, bar_index + 1, vTgt, color = GREEN, style = line.style_dashed, extend = extend.right)
+                            vlnS := line.new(bar_index, vStp, bar_index + 1, vStp, color = lnRed, style = line.style_dashed, extend = extend.right)
+                            vlnT := line.new(bar_index, vTgt, bar_index + 1, vTgt, color = lnGreen, style = line.style_dashed, extend = extend.right)
                             if vSide * (q - vTgt) >= 0
                                 vEx := vTgt
                                 vWhy := "TARGET 2"
@@ -539,6 +609,8 @@ if is5 and n1 > 0
                 line.set_extend(vlnS, extend.none)
                 line.set_x2(vlnT, bar_index)
                 line.set_x2(vlnS, bar_index)
+                if showBoxes
+                    posEnd(vbT, vbR, vbH, vbTt, vbRt, vg, "Volume line: " + vWhy + " " + pts(vg) + " pts", vEx)
                 todayMsg := "Volume line: " + vWhy + " at " + fmt(vEx) + ", " + pts(vg) + " pts after costs" + (vHalf ? " (half booked earlier)" : "")
                 alert("CPRB " + syminfo.ticker + " VOLUME-LINE " + vWhy + " at " + fmt(vEx) + " (" + pts(vg) + " pts after costs)", alert.freq_once_per_bar)
         // touch entries
@@ -631,8 +703,16 @@ if is5 and vlOn and barstate.isconfirmed and not volOpen and state != 1 and not 
                 vStart := mins + 5
                 string vLadTxt = vlLad and not na(vt2) ? " (book half), then " + fmt(vt2) : ""
                 mark(vs > 0 ? "B" : "S", vs < 0, vs > 0 ? GREEN : RED, "Volume line " + (vs > 0 ? "BUY " : "SELL ") + fmt(close) + "\nstop " + fmt(vp) + "\ntarget " + fmt(vt) + vLadTxt)
-                vlnS := line.new(bar_index, vp, bar_index + 1, vp, color = RED, style = line.style_dashed, extend = extend.right)
-                vlnT := line.new(bar_index, vt, bar_index + 1, vt, color = GREEN, style = line.style_dashed, extend = extend.right)
+                vlnS := line.new(bar_index, vp, bar_index + 1, vp, color = lnRed, style = line.style_dashed, extend = extend.right)
+                vlnT := line.new(bar_index, vt, bar_index + 1, vt, color = lnGreen, style = line.style_dashed, extend = extend.right)
+                if showBoxes
+                    bool vLad = vlLad and not na(vt2)
+                    vbTt := (vLad ? "TARGET (line after) " + fmt(vt2) + "\nbook half at " + fmt(vt) : "TARGET (next volume line) " + fmt(vt))
+                    vbRt := "STOP (previous volume line) " + fmt(vp)
+                    [vb1x, vb2x, vb3x] = posNew(vs, close, vLad ? vt2 : vt, vp, vLad ? vt : na, vbTt, vbRt, "Volume line " + (vs > 0 ? "BUY " : "SELL ") + fmt(close) + "\nstop " + fmt(vp) + "\ntarget " + fmt(vt) + vLadTxt)
+                    vbT := vb1x
+                    vbR := vb2x
+                    vbH := vb3x
                 todayMsg := "Volume line " + (vs > 0 ? "BUY at " : "SELL at ") + fmt(close) + ", stop " + fmt(vp) + ", target " + fmt(vt) + vLadTxt
                 alert("CPRB " + syminfo.ticker + " VOLUME-LINE " + (vs > 0 ? "BUY at " : "SELL at ") + fmt(close) + " | STOP " + fmt(vp) + " | TARGET " + fmt(vt) + vLadTxt, alert.freq_once_per_bar)
 
@@ -641,10 +721,31 @@ if opened
     string tTxt = isMag ? (magHalf ? "book half at " + fmt(t0) + ", rest to CPR " + fmt(tgt2) : "target CPR " + fmt(tgt2)) : na(t0) ? "ride / trail" : halfMode ? "book half at " + fmt(t0) : "target " + fmt(t0)
     txt = (isMag ? "MAGNET " : "") + (openSide > 0 ? "BUY " : "SELL ") + fmt(openPx) + (tradeNo == 2 ? " (reversal)" : "") + "\nstop " + fmt(stp) + "\n" + tTxt
     mark(openSide > 0 ? "B" : "S", openSide < 0, openSide > 0 ? GREEN : RED, txt)
-    lnS := line.new(bar_index, stp, bar_index + 1, stp, color = RED, style = line.style_dashed, extend = extend.right)
-    lnT := line.new(bar_index, na(t0) ? openPx : t0, bar_index + 1, na(t0) ? openPx : t0, color = na(t0) ? GREY : GREEN, style = line.style_dashed, extend = extend.right)
+    lnS := line.new(bar_index, stp, bar_index + 1, stp, color = lnRed, style = line.style_dashed, extend = extend.right)
+    lnT := line.new(bar_index, na(t0) ? openPx : t0, bar_index + 1, na(t0) ? openPx : t0, color = showBoxes ? lnGreen : na(t0) ? GREY : GREEN, style = line.style_dashed, extend = extend.right)
+    if showBoxes
+        bool t3 = not isMag and exitF == "Target 3 x risk"
+        float tMain = isMag ? tgt2 : openPx + openSide * (t3 ? 3 : 1) * R
+        float tHalf = isMag ? (magHalf ? t0 : na) : halfMode ? openPx + openSide * 0.25 * R : na
+        pbTt := (isMag ? "TARGET (CPR edge) " : t3 ? "TARGET " : "+1R, then trail the stop ") + fmt(tMain) + (na(tHalf) ? "" : "\nbook half at " + fmt(tHalf))
+        pbRt := "STOP " + fmt(stp)
+        [pb1x, pb2x, pb3x] = posNew(openSide, openPx, tMain, stp, tHalf, pbTt, pbRt, txt)
+        pbT := pb1x
+        pbR := pb2x
+        pbH := pb3x
+    if state != 1                                     // it opened and closed inside this same candle
+        line.set_extend(lnS, extend.none)
+        line.set_extend(lnT, extend.none)
+        if showBoxes
+            posEnd(pbT, pbR, pbH, pbTt, pbRt, lastG, lastWhy + " " + pts(lastG) + " pts", lastEx)
     todayMsg := (openSide > 0 ? "BUY at " : "SELL at ") + fmt(openPx) + ", stop " + fmt(stp) + ", " + tTxt
     alert("CPRB " + syminfo.ticker + (openSide > 0 ? " BUY at " : " SELL at ") + fmt(openPx) + " | STOP " + fmt(stp) + " | " + tTxt, alert.freq_once_per_bar)
+
+// position boxes grow until the trade closes
+if showBoxes and state == 1
+    posGrow(pbT, pbR, pbH, bar_index + 1)
+if showBoxes and volOpen
+    posGrow(vbT, vbR, vbH, bar_index + 1)
 
 plot(is5 and mins >= 570 ? orh : na, "15-min high", color = lc(color.new(GREEN, 30)), style = plot.style_linebr)
 plot(is5 and mins >= 570 ? orl : na, "15-min low", color = lc(color.new(RED, 30)), style = plot.style_linebr)
@@ -675,14 +776,14 @@ if barstate.islast and cprOn
         if is5 and vlShow
             for x in vLines
                 edgeName(edgeLbl, x1, x, "vol", TEAL, size.tiny)
-        if state == 1
+        if state == 1 and not showBoxes
             edgeName(edgeLbl, x1, stp, "SL", RED, size.small)
             edgeName(edgeLbl, x1, tgt, "T", GREEN, size.small)
-        if volOpen
+        if volOpen and not showBoxes
             edgeName(edgeLbl, x1, vStp, "SL", RED, size.small)
             edgeName(edgeLbl, x1, vTgt, "T", GREEN, size.small)
     // after the close (the chart's last candle is the session's last one): the next session's CPR, dashed, to the right
-    if nextCpr and mins + timeframe.multiplier >= 930
+    if nextCpr and (mins + timeframe.multiplier >= 930 or timenow - time_close > 45 * 60000)
         float nP = (tH + tL + tC) / 3
         float nBC = (tH + tL) / 2
         float nTop = math.max(2 * nP - nBC, nBC)
