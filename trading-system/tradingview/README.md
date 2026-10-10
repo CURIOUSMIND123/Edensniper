@@ -17,8 +17,10 @@ falls come on heavy volume and the rallies on light volume):
 - **Liquidity sweeps** of yesterday's high / low (yellow lines) are in their own settings group, off by default:
   more points (Nifty +2,993, Sensex +9,279 without the volume check) but twice the trades.
 - Also tested and not added: the squeeze, Smart Money Concepts, the low-volume areas of the last 2 days' volume
-  profile (`y2026_smc.py`), and a reversal candle (shooting star, hammer, doji, engulfing) + break of structure +
-  retest with the stop at the candle (`y2026_pattern.py`).
+  profile (`y2026_smc.py`), a reversal candle (shooting star, hammer, doji, engulfing) + break of structure +
+  retest with the stop at the candle (`y2026_pattern.py`), and reversal patterns (morning / evening star,
+  engulfing, harami, tweezer, ...) at supply and demand zones with break of structure and retest
+  (`y2026_sdzones.py`).
 
 **1:4 targets, held until 3:15** (the second choice): every stop at most 0.21% of price (about 150 Sensex / 47 Nifty
 points), target 4x the stop, held until the target, the stop or 3:15; only the CPR Magnet and the breakout on the

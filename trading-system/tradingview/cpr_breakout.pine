@@ -23,7 +23,8 @@
 // Tested and not added (y2026_smc.py, y2026_pattern.py): the squeeze, Smart Money Concepts (break of structure, change
 //   of character, order blocks, fair value gaps), the low-volume areas of the last 2 days' volume profile, and a
 //   reversal candle (shooting star, hammer, doji, engulfing) at the end of a move + break of structure + retest with
-//   the stop at the candle.
+//   the stop at the candle, and reversal patterns (morning / evening star, engulfing, harami, tweezer, ...) at supply
+//   and demand zones with break of structure and retest (y2026_sdzones.py).
 // 1:4 TARGETS, HELD UNTIL 3:15 (the second choice in Settings > Trade style > Rules):
 //   Every stop at most 0.21% of price (about 150 Sensex / 47 Nifty points), target 4x the stop, the whole position
 //   held until the target, the stop or 3:15. CPR Magnet (stop 0.21%, target 4x) and the breakout ON THE PULLBACK:

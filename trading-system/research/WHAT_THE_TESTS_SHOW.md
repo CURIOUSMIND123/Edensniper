@@ -962,6 +962,46 @@ or the high of the move. The mirror image at tops (shooting star at a high, etc.
 - Added to the original rules (with or without the volume check): no version did better in both halves on both
   indices. Not added.
 
+## 2026: reversal patterns at supply and demand zones, with break of structure and retest
+
+`y2026_sdzones.py`, 768 versions per index. Zones from 15- or 60-minute candles of the last 5 sessions: a base of
+1-3 small candles followed by a strong candle away (demand: strong candle up; supply: down), until a close through
+the zone; fresh (first return only) or any. Patterns on 5-minute candles with their low in a demand zone (BUY) / high
+in a supply zone (SELL): morning / evening star, engulfing, piercing line / dark cloud cover, harami, tweezer bottom /
+top, hammer / hanging man, inverted hammer / shooting star, or any of them. Entry at the pattern's close, at the
+break of structure (a 5-minute close beyond the last swing high / low within an hour), or on the retest of the
+pattern after the break; stop just beyond the pattern; target 2x / 3x, half, or the nearest opposite zone; with or
+without the volume check.
+- On their own: Nifty 196 of 768 versions made money (middle −24), Sensex 209 (middle 0); only 10 made money in both
+  halves on both indices, all with 6-29 trades a year. Morning / evening star: Nifty 6 of 96, Sensex 10 of 96 made
+  money; none on both.
+- Added to the default (original rules + volume check): 12 of 768 did better in both halves on both indices. The
+  best, a shooting-star / inverted-hammer candle at a zone, break of structure, retest, target the opposite zone:
+  Nifty 74 trades, +2,363 (instead of 70, +2,214), Sensex 71 trades, +8,612 (instead of 68, +8,001): about 4 extra
+  trades a year per index. With so few trades, and 12 winners out of 768 tries, this is too thin to rely on. Not
+  added.
+
+## 2026: the report of the default, original rules + the volume check (`y2026_report.py`)
+
+| | Nifty | Sensex |
+|---|---|---|
+| Trades | 70 on 65 days (7.5 a month) | 68 on 63 days (7.3 a month) |
+| Won / lost | 61 / 9 (87%) | 56 / 12 (82%) |
+| Points won / lost / net | +2,773 / −560 / **+2,214** | +10,125 / −2,124 / **+8,001** |
+| Average win / loss | +45 / −62 | +181 / −177 |
+| Biggest win / worst trade | +260 / −105 | +701 / −336 |
+| Worst fall from a high | −138 | −336 |
+| Longest losing run | 2 trades | 1 trade |
+| Jan-Jun / Jul-Oct | +1,790 / +423 | +6,789 / +1,211 |
+| Breakout | 39 trades, 38 won, +1,000 | 30 trades, 30 won, +2,730 |
+| Volume lines | 26 trades, 18 won, +1,131 | 31 trades, 19 won, +4,930 |
+| Magnet | 5 trades, 5 won, +83 | 7 trades, 7 won, +341 |
+
+Both indices at 5 lots: 138 trades, 85% won, Rs +7.6 lakh in 9.3 months (about Rs 82,000 a month), no losing month;
+82 days with trades, 68 up, 14 down. Rs 30,000 at 5 lots from the start: Rs 7.9 lakh, never below Rs 30,000, biggest
+fall Rs 33,872; in random order below Rs 15,000 in 8.6% of 10,000 runs (26.8% without the volume check). 2 lots, 5
+from Rs 75,000, 10 from Rs 2.5 lakh: Rs 11.9 lakh, below Rs 15,000 in 0.4% of runs.
+
 ## How to re-check all of this
 
 - `python research/fair_price_backtest.py` downloads the candles and re-runs the Fair Price test.
