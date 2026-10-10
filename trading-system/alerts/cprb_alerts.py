@@ -256,7 +256,7 @@ def path(o, h, l, c):
 def done(m, px, why, pnl):
     return dict(m=m, px=px, why=why, pnl=pnl)
 
-def run_magnet(c1, side, e, edge, over, cost, risk=None, R=None):
+def run_magnet(c1, side, e, edge, over, cost, risk=None, R=None, start=556):
     """Stop 0.3% (or `risk` points); book half at 0.25 x the risk (or R) and move the stop to entry; the rest to the
     CPR edge; out by 3:15."""
     R0 = 0.3 / 100 * e
@@ -264,7 +264,7 @@ def run_magnet(c1, side, e, edge, over, cost, risk=None, R=None):
     t1 = e + side * 0.25 * (R0 if R is None else R)
     half, ev = None, []
     for m, o, h, l, c in c1:
-        if m < 556:
+        if m < start:
             continue
         for px in path(o, h, l, c):
             if side * (px - stp) <= 0:

@@ -1026,6 +1026,27 @@ points: moved in (book half and trailing scaled to the new stop, or as before), 
   Rs 22,700).
 - `STOP_MAX` / `STOP_MODE` in the alert program try it live; the default stays each setup's own stop.
 
+## 2026: what waiting for a retest or a small pullback would have changed
+
+`y2026_retest.py` replays every trade of the default (original rules + volume check) as if we had waited before
+entering: for the retest of the broken level (the 15-minute high / low after price went 0.1% beyond it, or the broken
+volume line; within an hour), or for a pullback of 10 / 20 / 30 Nifty (30 / 60 / 100 Sensex) points within 15 / 30 /
+60 minutes. Same stop price and exit rules. Trade by trade: `research/RETEST_TRADES.md`.
+
+| 2026, net points | Nifty | Sensex |
+|---|---|---|
+| As traded | 70 trades, **+2,214** | 68 trades, **+8,001** |
+| Waiting for the retest | 45 filled, 18 missed, +1,460 | 42 filled, 19 missed, +4,902 |
+| Pullback 10 / 30 points, 30 minutes | 45 filled, +1,293 | 55 filled, +5,083 |
+| Pullback 20 / 60 points, 30 minutes | 37 filled, +1,127 | 37 filled, +3,796 |
+| Best waiting version | 10 points, 15 minutes: +1,459 | 30 points, 15 minutes: +5,571 |
+
+- Every waiting version made less, on both indices.
+- The losing trades came back (that is why they lost): with the retest, 8 of the 9 Nifty losers and 11 of the 12
+  Sensex losers would still have been taken, a little smaller (Nifty +134 points saved in all, Sensex +513).
+- The best winners did not come back: with the retest 18 Nifty winners (+805 points) and 18 Sensex winners
+  (+3,288) would have been missed, among them the biggest volume-line and breakout trades.
+
 ## How to re-check all of this
 
 - `python research/fair_price_backtest.py` downloads the candles and re-runs the Fair Price test.
