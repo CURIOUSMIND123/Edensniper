@@ -416,6 +416,25 @@ The adjusted breakout, simulated exactly as the indicator trades it:
 These adjustments were chosen by looking at 2026 itself, so part of the improvement may be luck; the half-year
 check lowers that risk but doesn't remove it. The rule trades about once every 10 sessions.
 
+## 2026: a trade most days
+
+The adjusted CPR Breakout traded only about once every 10 sessions because it waited for narrow-CPR days. Two
+changes give a trade on about half of all days:
+
+1. The same breakout filters (gap direction, POC side, before 10:00) also worked on days that are **not** narrow:
+   Nifty 21 trades, 19 won / 2 lost, +264; Sensex 22 trades, 21 won / 1 lost, +1,450 (positive in both halves).
+2. On days that aren't narrow, CPR Magnet trades at 9:16 when the open is 0.2%+ beyond the CPR.
+
+| 2026, one plan per day | Nifty | Sensex |
+|---|---|---|
+| Daily plan, magnet books half (indicator default) | 99 trades, **81 won / 18 lost**, +2,197 / −1,280, **net +917** | 98 trades, **85 won / 13 lost**, +5,682 / −3,141, **net +2,542** |
+| Jan-Jun / Jul-Oct | +916 / +1 | +1,026 / +1,516 |
+| Daily plan, magnet full target | 99 trades, 59 won / 40 lost, net +1,834 | 98 trades, 60 won / 38 lost, net +5,514 |
+
+About 10 trades a month on each index; no trade on days when the open is near a wide CPR and no breakout passes
+the filters (often sideways days). On Nifty the magnet with half booking made almost nothing in 2026 (+23 from 72
+trades); the profit came from the breakout. Booking half needs at least 2 lots.
+
 ## How to re-check all of this
 
 - `python research/fair_price_backtest.py` downloads the candles and re-runs the Fair Price test.

@@ -5,25 +5,28 @@
 // Draws the CPR (orange = narrow), pivot, the first 15-minute candle's high / low, the 30-day volume point of
 // control (POC: the price where the most volume traded; volume from NIFTYBEES because the index has none) with its
 // value area, and the 5-minute EMA 50. Every filter is in Settings.
-// DEFAULTS = SCALP MODE, adjusted on 2026:
-//   1. Only on narrow-CPR days (today's CPR among the narrowest third of the last 20 days).
-//   2. Only in the direction of the opening gap (open vs yesterday's close).
-//   3. No sells when today's CPR is wholly above yesterday's, no buys when wholly below.
-//   4. Only on the volume side of the 30-day POC: buys above it, sells below it.
-//   5. BUY / SELL when price touches the first 15-minute candle's high / low, only before 10:00.
-//   6. Stop at the other side of the 15-minute range. BOOK HALF at 0.25 x the risk, move the stop to entry, trail
-//      the rest 1R behind the best price after +1R. Out by 3:15. One reversal trade if the first break loses
-//      (also before 10:00 and on the POC side).
-// Tested on 1-minute candles, 1 Jan - 9 Oct 2026, after costs (4 Nifty / 12 Sensex points a trade):
-//   Nifty  20 trades, 19 won / 1 lost, +886 / -66 points, net +820 (Jan-Jun +629, Jul-Oct +191).
-//   Sensex 16 trades, 16 won / 0 lost, net +1,254 (Jan-Jun +822, Jul-Oct +432).
-//   About one trade every 10 sessions. The POC and 10:00 adjustments were chosen by looking at 2026 itself
-//   (they helped in both halves of the year on both indices); treat them as promising, not proven.
-// MORE PROFIT, LOWER WIN RATE: Exit = "Trail 1R..." and the gap filter off (POC and 10:00 kept):
-//   Nifty 30 trades, 20 won / 10 lost, net +1,550. Sensex 27 trades, 21 won / 6 lost, net +4,700.
+// DEFAULTS = DAILY PLAN (one plan per day), adjusted on 2026:
+//   NARROW-CPR DAY -> CPR BREAKOUT scalp. OTHER DAY -> CPR MAGNET at 9:16 if the open qualifies, otherwise the
+//   same CPR BREAKOUT scalp.
+//   CPR Magnet: the 9:15 one-minute candle opens beyond the CPR and closes 0.2%+ beyond it -> trade back toward
+//     the CPR at 9:16, stop 0.3% of price, book half at 0.25 x the risk, stop to entry, rest to the CPR edge.
+//   CPR Breakout scalp: only in the direction of the opening gap; not against today's CPR vs yesterday's; only on
+//     the volume side of the 30-day POC (buys above, sells below); BUY / SELL when price touches the first
+//     15-minute candle's high / low, only before 10:00; stop at the other side of that range; book half at
+//     0.25 x the risk, stop to entry, trail the rest 1R behind the best price after +1R; one reversal trade if the
+//     first break loses (also before 10:00 and on the POC side).
+//   Out by 3:15.
+// Tested on 1-minute candles, 1 Jan - 9 Oct 2026 (191 sessions), after costs (4 Nifty / 12 Sensex points a trade):
+//   Nifty  99 trades on 99 days (about 10 a month), 81 won / 18 lost, +2,197 / -1,280, net +917
+//          (Jan-Jun +916, Jul-Oct +1). Breakout part: 27 won / 3 lost, +893. Magnet part: 56 won / 16 lost, +23.
+//   Sensex 98 trades on 98 days, 85 won / 13 lost, +5,682 / -3,141, net +2,542 (Jan-Jun +1,026, Jul-Oct +1,516).
+// MORE PROFIT, LOWER WIN RATE: switch off "Magnet: book half" (full target at the CPR edge):
+//   Nifty 59 won / 40 lost, net +1,834. Sensex 60 won / 38 lost, net +5,514.
+// The POC, 10:00 and every-day choices were made by looking at 2026 itself (each helped in both halves of the
+//   year on both indices); treat them as promising, not proven.
 // The profile here uses the chart's 5-minute candles; the test used 1-minute candles, so the POC can differ by a
 //   few points.
-// Reference implementation (same rules): trading-system/research/quant/y2026.py (breakout_live)
+// Reference implementation (same rules): trading-system/research/quant/y2026_daily.py (plan)
 // ============================================================================
 indicator("CPR Breakout", "CPRB", overlay = true, max_lines_count = 500, max_labels_count = 500, max_bars_back = 2500)
 
@@ -35,12 +38,17 @@ cutH   = input.int(10, "No new entries from (hour)", minval = 9, maxval = 15, gr
 cutMn  = input.int(0, "No new entries from (minute)", minval = 0, maxval = 59, group = G1)
 emaF   = input.bool(false, "Only with the 5-minute EMA 50", group = G1)
 relF   = input.bool(true, "Not against today's CPR vs yesterday's (higher / lower value)", group = G1)
-widF   = input.string("Narrow only", "CPR width", options = ["Any", "Narrow only", "Skip narrow"], group = G1)
+widF   = input.string("Any", "CPR width (breakout trades)", options = ["Any", "Narrow only", "Skip narrow"], group = G1)
 entF   = input.string("Touch of the range high / low", "Entry", options = ["5-minute close beyond the range", "Touch of the range high / low"], group = G1)
 stopF  = input.string("Other side of the 15-minute range", "Stop", options = ["Other side of the 15-minute range", "Middle of the 15-minute range", "0.2% of price"], group = G1)
 exitF  = input.string("Scalp: book half at 0.25R, stop to entry, trail the rest", "Exit", options = ["Scalp: book half at 0.25R, stop to entry, trail the rest", "Target 3 x risk", "Ride: stop to entry at +1R, out at 3:15", "Trail 1R behind the best price after +1R"], group = G1)
 gapF   = input.bool(true, "Only in the direction of the opening gap (open vs yesterday's close)", group = G1)
 revF   = input.bool(true, "Reversal trade when the first break fails", group = G1)
+G4 = "CPR Magnet (one plan per day)"
+magOn   = input.bool(true, "On days that are NOT narrow, trade CPR Magnet at 9:16 if the open qualifies (then no breakout that day)", group = G4)
+magGap  = input.float(0.2, "Magnet: 9:15 candle closes at least this % beyond the CPR", step = 0.05, group = G4)
+magStop = input.float(0.3, "Magnet: stop, % of price", step = 0.05, group = G4)
+magHalf = input.bool(true, "Magnet: book half at 0.25 x the risk, stop to entry, rest to the CPR edge", group = G4)
 costIn = input.float(0, "Cost per trade in index points (0 = auto: Nifty 4, Sensex 12)", step = 1, group = G1)
 G2 = "Display"
 showPrf = input.bool(true, "Show the volume POC and value area", group = G2)
@@ -178,6 +186,8 @@ var float best = na
 var bool  halfDone = false
 var float halfPts = na
 var int   gapDir = 0           // +1 opened above yesterday's close, -1 below
+var bool  isMag = false        // today's trade is a CPR Magnet trade
+var float tgt2 = na            // magnet: final target (the CPR edge)
 var line  lnS = na
 var line  lnT = na
 var string todayMsg = ""
@@ -226,6 +236,7 @@ if newDay
     state := 0
     tradeNo := 0
     cb := 0
+    isMag := false
     todayMsg := not widOk ? "No trade: CPR width filter" : "Building the 15-minute range"
 
 // a trade is opened by setting these, then drawn once below
@@ -245,93 +256,111 @@ if is5 and n1 > 0
         if mk == 555
             cb := ok > top ? 1 : ok < bot ? -1 : 0
             gapDir := ok > pC ? 1 : ok < pC ? -1 : 0
+            if magOn and not narrow and state == 0 and complete
+                int ms = ok > top and ck >= top / (1 - magGap / 100) ? -1 : ok < bot and ck <= bot / (1 + magGap / 100) ? 1 : 0
+                if ms != 0
+                    opened := true
+                    openSide := ms
+                    openPx := ck
+                    side := ms
+                    e := ck
+                    R := magStop / 100 * ck
+                    stp := ck - ms * R
+                    tgt2 := ms < 0 ? top : bot
+                    tgt := magHalf ? ck + ms * 0.25 * R : tgt2
+                    halfDone := false
+                    halfPts := na
+                    best := ck
+                    startMin := 556
+                    tradeNo := 1
+                    isMag := true
+                    state := 1
         if mk < 570
             orh := na(orh) ? hk : math.max(orh, hk)
             orl := na(orl) ? lk : math.min(orl, lk)
-        else
-            // exits
-            if state == 1 and mk >= startMin
-                // order of prices inside a 1-minute candle: green open-low-high-close, red open-high-low-close
-                float a1 = ck >= ok ? lk : hk
-                float a2 = ck >= ok ? hk : lk
-                bool isOut = false
-                float ex = na
-                string why = ""
-                for j = 0 to 3
-                    float q = j == 0 ? ok : j == 1 ? a1 : j == 2 ? a2 : ck
-                    if not isOut
-                        if side * (q - stp) <= 0
-                            isOut := true
-                            ex := stp
-                            why := side * (stp - e) > 0 ? "TRAIL STOP" : stp == e ? "STOP AT ENTRY" : "STOP"
-                        else if not na(tgt) and side * (q - tgt) >= 0
-                            if halfMode and not halfDone
-                                halfDone := true
-                                halfPts := side * (tgt - e)
-                                if side * (e - stp) > 0
-                                    stp := e
-                                label.new(bar_index, tgt, "HALF BOOKED +" + str.tostring(halfPts, "#,##0"), style = label.style_label_left, color = color.new(GREEN, 80), textcolor = GREEN, size = size.tiny)
-                                alert("CPRB " + syminfo.ticker + " BOOK HALF at " + fmt(tgt) + ", move stop to " + fmt(stp), alert.freq_once_per_bar)
-                                tgt := na
-                            else
-                                isOut := true
-                                ex := tgt
-                                why := "TARGET"
+        // exits
+        if state == 1 and mk >= startMin
+            // order of prices inside a 1-minute candle: green open-low-high-close, red open-high-low-close
+            float a1 = ck >= ok ? lk : hk
+            float a2 = ck >= ok ? hk : lk
+            bool isOut = false
+            float ex = na
+            string why = ""
+            for j = 0 to 3
+                float q = j == 0 ? ok : j == 1 ? a1 : j == 2 ? a2 : ck
                 if not isOut
-                    best := side > 0 ? math.max(best, hk) : math.min(best, lk)
-                    if exitF == "Ride: stop to entry at +1R, out at 3:15" and side * (best - e) >= R and side * (e - stp) > 0
-                        stp := e
-                    if (exitF == "Trail 1R behind the best price after +1R" or halfMode) and side * (best - e) >= R
-                        float ns = best - side * R
-                        if side * (ns - stp) > 0
-                            stp := ns
-                    if mk >= TOUT and complete
+                    if side * (q - stp) <= 0
                         isOut := true
-                        ex := ck
-                        why := "3:15 EXIT"
-                if isOut
-                    float g = (halfDone ? (halfPts + side * (ex - e)) / 2 : side * (ex - e)) - cost
-                    nTr += 1
-                    nWon += g > 0 ? 1 : 0
-                    totPts += g
-                    winPts += g > 0 ? g : 0
-                    lossPts += g > 0 ? 0 : g
-                    label.new(bar_index, ex, why + " " + pts(g) + " pts", style = label.style_label_left, color = color.new(g > 0 ? GREEN : RED, 80), textcolor = g > 0 ? GREEN : RED, size = size.small)
-                    line.set_extend(lnT, extend.none)
-                    line.set_extend(lnS, extend.none)
-                    line.set_x2(lnT, bar_index)
-                    line.set_x2(lnS, bar_index)
-                    todayMsg := why + " at " + fmt(ex) + ": " + pts(g) + " pts after costs" + (halfDone ? " (half booked earlier)" : "")
-                    alert("CPRB " + syminfo.ticker + " " + why + " at " + fmt(ex) + " (" + pts(g) + " pts after costs)", alert.freq_once_per_bar)
-                    if tradeNo == 1 and g <= 0 and revF
-                        state := 2
-                        afterMin := mk + 1
-                    else
-                        state := 3
-            // touch entries
-            if entF == "Touch of the range high / low" and mk < CUT and not na(orh) and (state == 0 or (state == 2 and mk >= afterMin))
-                int sd = hk >= orh ? 1 : lk <= orl ? -1 : 0
-                if state == 2 and sd != -side
-                    sd := 0
-                if sd != 0
-                    float px = sd > 0 ? math.max(ok, orh) : math.min(ok, orl)
-                    if state == 2 ? pocPass(sd, px) : passes(sd, px, ema50[1])
-                        float s0 = stopFor(sd, px)
-                        if sd * (px - s0) > 0
-                            opened := true
-                            openSide := sd
-                            openPx := px
-                            side := sd
-                            e := px
-                            stp := s0
-                            R := sd * (px - s0)
-                            tgt := tgtFor(sd, px, R)
-                            halfDone := false
-                            halfPts := na
-                            best := px
-                            startMin := mk + 1
-                            tradeNo += 1
-                            state := 1
+                        ex := stp
+                        why := side * (stp - e) > 0 ? "TRAIL STOP" : stp == e ? "STOP AT ENTRY" : "STOP"
+                    else if not na(tgt) and side * (q - tgt) >= 0
+                        if (isMag ? magHalf : halfMode) and not halfDone
+                            halfDone := true
+                            halfPts := side * (tgt - e)
+                            if side * (e - stp) > 0
+                                stp := e
+                            label.new(bar_index, tgt, "HALF BOOKED +" + str.tostring(halfPts, "#,##0"), style = label.style_label_left, color = color.new(GREEN, 80), textcolor = GREEN, size = size.tiny)
+                            alert("CPRB " + syminfo.ticker + " BOOK HALF at " + fmt(tgt) + ", move stop to " + fmt(stp), alert.freq_once_per_bar)
+                            tgt := na
+                        else
+                            isOut := true
+                            ex := tgt
+                            why := "TARGET"
+            if not isOut
+                best := side > 0 ? math.max(best, hk) : math.min(best, lk)
+                if not isMag and exitF == "Ride: stop to entry at +1R, out at 3:15" and side * (best - e) >= R and side * (e - stp) > 0
+                    stp := e
+                if not isMag and (exitF == "Trail 1R behind the best price after +1R" or halfMode) and side * (best - e) >= R
+                    float ns = best - side * R
+                    if side * (ns - stp) > 0
+                        stp := ns
+                if mk >= TOUT and complete
+                    isOut := true
+                    ex := ck
+                    why := "3:15 EXIT"
+            if isOut
+                float g = (halfDone ? (halfPts + side * (ex - e)) / 2 : side * (ex - e)) - cost
+                nTr += 1
+                nWon += g > 0 ? 1 : 0
+                totPts += g
+                winPts += g > 0 ? g : 0
+                lossPts += g > 0 ? 0 : g
+                label.new(bar_index, ex, why + " " + pts(g) + " pts", style = label.style_label_left, color = color.new(g > 0 ? GREEN : RED, 80), textcolor = g > 0 ? GREEN : RED, size = size.small)
+                line.set_extend(lnT, extend.none)
+                line.set_extend(lnS, extend.none)
+                line.set_x2(lnT, bar_index)
+                line.set_x2(lnS, bar_index)
+                todayMsg := why + " at " + fmt(ex) + ": " + pts(g) + " pts after costs" + (halfDone ? " (half booked earlier)" : "")
+                alert("CPRB " + syminfo.ticker + " " + why + " at " + fmt(ex) + " (" + pts(g) + " pts after costs)", alert.freq_once_per_bar)
+                if tradeNo == 1 and g <= 0 and revF and not isMag
+                    state := 2
+                    afterMin := mk + 1
+                else
+                    state := 3
+        // touch entries
+        if mk >= 570 and entF == "Touch of the range high / low" and mk < CUT and not na(orh) and (state == 0 or (state == 2 and mk >= afterMin))
+            int sd = hk >= orh ? 1 : lk <= orl ? -1 : 0
+            if state == 2 and sd != -side
+                sd := 0
+            if sd != 0
+                float px = sd > 0 ? math.max(ok, orh) : math.min(ok, orl)
+                if state == 2 ? pocPass(sd, px) : passes(sd, px, ema50[1])
+                    float s0 = stopFor(sd, px)
+                    if sd * (px - s0) > 0
+                        opened := true
+                        openSide := sd
+                        openPx := px
+                        side := sd
+                        e := px
+                        stp := s0
+                        R := sd * (px - s0)
+                        tgt := tgtFor(sd, px, R)
+                        halfDone := false
+                        halfPts := na
+                        best := px
+                        startMin := mk + 1
+                        tradeNo += 1
+                        state := 1
 
 // 5-minute close entries (at the close of this candle)
 if is5 and entF == "5-minute close beyond the range" and barstate.isconfirmed and not na(orh) and mins >= 570 and mins + 5 <= CUT and (state == 0 or (state == 2 and mins >= afterMin))
@@ -358,9 +387,9 @@ if is5 and entF == "5-minute close beyond the range" and barstate.isconfirmed an
                 state := 1
 
 if opened
-    float t0 = tgtFor(openSide, openPx, R)
-    string tTxt = na(t0) ? "ride / trail" : halfMode ? "book half at " + fmt(t0) : "target " + fmt(t0)
-    txt = (openSide > 0 ? "BUY " : "SELL ") + fmt(openPx) + (tradeNo == 2 ? " (reversal)" : "") + "\nstop " + fmt(stp) + "\n" + tTxt
+    float t0 = isMag ? tgt : tgtFor(openSide, openPx, R)
+    string tTxt = isMag ? (magHalf ? "book half at " + fmt(t0) + ", rest to CPR " + fmt(tgt2) : "target CPR " + fmt(tgt2)) : na(t0) ? "ride / trail" : halfMode ? "book half at " + fmt(t0) : "target " + fmt(t0)
+    txt = (isMag ? "MAGNET " : "") + (openSide > 0 ? "BUY " : "SELL ") + fmt(openPx) + (tradeNo == 2 ? " (reversal)" : "") + "\nstop " + fmt(stp) + "\n" + tTxt
     label.new(bar_index, openPx, txt, style = openSide > 0 ? label.style_label_up : label.style_label_down, color = openSide > 0 ? GREEN : RED, textcolor = color.white, size = size.small)
     lnS := line.new(bar_index, stp, bar_index + 1, stp, color = RED, style = line.style_dashed, extend = extend.right)
     lnT := line.new(bar_index, na(t0) ? openPx : t0, bar_index + 1, na(t0) ? openPx : t0, color = na(t0) ? GREY : GREEN, style = line.style_dashed, extend = extend.right)

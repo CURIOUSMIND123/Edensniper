@@ -145,11 +145,12 @@ if __name__ == '__main__':
     json.dump({k: [{kk: (float(vv) if isinstance(vv, (np.floating, float)) else vv) for kk, vv in t.items()} for t in v] for k, v in strat.items()},
               open(f'../.cache/y2026_{B.name}.json', 'w'))
 
-def breakout_live(d, mode, poc_on=True, cut=600):
+def breakout_live(d, mode, poc_on=True, cut=600, days_kind='narrow'):
     """CPR Breakout exactly as tradingview/cpr_breakout.pine trades it with the 2026 adjustments: entries only
-    before `cut` (minutes from midnight; 600 = 10:00) and only on the 30-day volume POC side (reversal included)."""
-    lv = LV[d]
-    if lv['rank'] >= 1 / 3: return []
+    before `cut` (minutes from midnight; 600 = 10:00) and only on the 30-day volume POC side (reversal included).
+    days_kind: 'narrow' (narrow-CPR days only), 'other' (the rest) or 'any'."""
+    lv = LV[d]; nar = lv['rank'] < 1 / 3
+    if (days_kind == 'narrow' and not nar) or (days_kind == 'other' and nar): return []
     first = [x for x in one[d] if x[0] < 570]; orh, orl = max(x[2] for x in first), min(x[3] for x in first)
     f = W.FEAT[d]; poc = PROF30[d]['poc']; ex = ('half', 0.25) if mode == 'scalp' else ('trail', 0)
     pocok = lambda s, e: not poc_on or s * (e - poc) > 0

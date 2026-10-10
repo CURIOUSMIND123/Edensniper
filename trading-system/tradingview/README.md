@@ -1,22 +1,22 @@
 # TCI indicators for TradingView: plain-language guide
 
-## CPR Breakout (newest): Nifty or Sensex, 5-minute chart, trades on narrow-CPR days
+## CPR Breakout (newest): daily plan, Nifty or Sensex, 5-minute chart
 
 File: [`cpr_breakout.pine`](cpr_breakout.pine). An indicator; reads 1-minute candles underneath for exits.
 
 - Draws the CPR (orange = narrow), the pivot, the first 15-minute candle's high and low, the 30-day volume point
   of control (purple, the price where the most NIFTYBEES volume traded) with its value area, and the EMA 50.
-- **Default = scalp mode, adjusted on 2026:** only on narrow-CPR days, only in the direction of the opening gap,
-  not against today's CPR vs yesterday's, **only on the volume side of the 30-day POC** (buys above the price where
-  the most volume traded in 30 sessions, sells below; volume from NIFTYBEES), and **only before 10:00**. BUY / SELL
-  on a touch of the 15-minute high / low, stop at the other side, book half at 0.25 x the risk, stop to entry,
-  trail the rest; out by 3:15.
-  - 2026 (1 Jan - 9 Oct): Nifty 20 trades, 19 won / 1 lost, net +820 points; Sensex 16 trades, 16 won / 0 lost,
-    net +1,254. Positive in January-June and July-October on both. About one trade every 10 sessions.
-- For more profit and a lower win rate, set Exit to "Trail" and switch off the gap filter: 2026 Nifty 20 won /
-  10 lost, net +1,550; Sensex 21 won / 6 lost, net +4,700.
-- Every filter you asked about is in Settings (open vs CPR direction, POC / value area, EMA, 1:3 target, ride).
-  `research/quant/cpr_scalp_lastn.py` and `cpr_orb_lastn.py` list the trades.
+- **Default = daily plan, one plan per day.** Narrow-CPR day: CPR Breakout scalp. Other day: CPR Magnet at 9:16
+  if the open is 0.2%+ beyond the CPR, otherwise the CPR Breakout scalp.
+  - CPR Magnet: trade back toward the CPR, stop 0.3%, book half at 0.25 x the risk, stop to entry, rest to the
+    CPR edge.
+  - CPR Breakout scalp: opening-gap direction, not against today's CPR vs yesterday's, only on the volume side of
+    the 30-day POC, a touch of the 15-minute high / low before 10:00, stop at the other side, book half at 0.25 x
+    the risk, stop to entry, trail the rest.
+- 2026 (1 Jan - 9 Oct): Nifty 99 trades on 99 of 191 days, 81 won / 18 lost, net +917 points (Jan-Jun +916,
+  Jul-Oct +1); Sensex 98 trades, 85 won / 13 lost, net +2,542. Switching off the magnet's half booking: Nifty
+  59 won / 40 lost, net +1,834; Sensex 60 won / 38 lost, net +5,514.
+- Every filter is in Settings. `research/quant/y2026_daily.py` has the same plan in Python.
 
 ## CPR Magnet: Nifty or Sensex, any 1 to 15-minute chart, at most one trade a day
 
