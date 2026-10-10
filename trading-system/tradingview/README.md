@@ -4,17 +4,17 @@
 
 File: [`cpr_breakout.pine`](cpr_breakout.pine). An indicator; reads 1-minute candles underneath for exits.
 
-- Draws the CPR (orange = narrow), the pivot, the first 15-minute candle's high and low, the 15-day point of
-  control (purple, the price traded most in 15 days) with its value area, and the 5-minute EMA 50.
-- **Default = scalp mode**, the highest win rate that still made money on both indices: only on narrow-CPR days,
-  only in the direction of the opening gap, and no trade against today's CPR vs yesterday's. BUY / SELL when price
-  touches the 15-minute high / low (9:30 to 1:00), stop at the other side of that range. **Book half at 0.25 x the
-  risk**, move the stop to entry, trail the rest; out by 3:15; one reversal trade if the first break loses.
-  - Last 90 sessions: Nifty 19 trades, 17 won / 2 lost, net +97 points; Sensex 16 trades, 16 won / 0 lost, net
-    +577. Since 2023: Nifty 76% won, +549; Sensex 82% won, +1,654; both lost in 2023 and 2025. About one trade a
-    week.
-- For more profit and a lower win rate, set Exit to "Trail" and switch off the gap filter: Nifty last 90 sessions
-  20 won / 14 lost, net +262 (since 2023 +1,896); Sensex 22 won / 9 lost, net +1,998 (since 2023 +7,296).
+- Draws the CPR (orange = narrow), the pivot, the first 15-minute candle's high and low, the 30-day volume point
+  of control (purple, the price where the most NIFTYBEES volume traded) with its value area, and the EMA 50.
+- **Default = scalp mode, adjusted on 2026:** only on narrow-CPR days, only in the direction of the opening gap,
+  not against today's CPR vs yesterday's, **only on the volume side of the 30-day POC** (buys above the price where
+  the most volume traded in 30 sessions, sells below; volume from NIFTYBEES), and **only before 10:00**. BUY / SELL
+  on a touch of the 15-minute high / low, stop at the other side, book half at 0.25 x the risk, stop to entry,
+  trail the rest; out by 3:15.
+  - 2026 (1 Jan - 9 Oct): Nifty 20 trades, 19 won / 1 lost, net +820 points; Sensex 16 trades, 16 won / 0 lost,
+    net +1,254. Positive in January-June and July-October on both. About one trade every 10 sessions.
+- For more profit and a lower win rate, set Exit to "Trail" and switch off the gap filter: 2026 Nifty 20 won /
+  10 lost, net +1,550; Sensex 21 won / 6 lost, net +4,700.
 - Every filter you asked about is in Settings (open vs CPR direction, POC / value area, EMA, 1:3 target, ride).
   `research/quant/cpr_scalp_lastn.py` and `cpr_orb_lastn.py` list the trades.
 

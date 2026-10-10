@@ -383,6 +383,39 @@ Taking more trades (top 3% or 10%) lost more on both indices.
   to be hit, not which side. Candle shapes added almost nothing (scrambling them barely changed its accuracy:
   0.003 on Nifty, 0.0004 on Sensex, on a scale where 0.5 is a coin toss).
 
+## 2026 only: why trades lost, volume zones and Fibonacci
+
+From here on, everything is 1 January to 9 October 2026 (191 sessions). Real volume comes from NIFTYBEES, the Nifty
+ETF, spread over the index's price range minute by minute (the index itself has no volume).
+
+| 2026, after costs | Nifty | Sensex |
+|---|---|---|
+| CPR Magnet | 72 trades, 34 won / 38 lost, net +941 | 72 trades, 34 won / 38 lost, net +3,560 |
+| CPR Breakout, trail | 57 trades, 32 won / 25 lost, net +918 | 45 trades, 31 won / 14 lost, net +4,401 |
+| CPR Breakout, scalp mode | 33 trades, 29 won / 4 lost, net +603 | 26 trades, 24 won / 2 lost, net +1,087 |
+
+**What the losers had in common.** I compared winners and losers on 14 properties: direction, time, gap, yesterday's
+candle, 5-day trend, the 30-day Fibonacci trend, position vs the 30-day volume POC and value area, high-volume
+nodes or Fibonacci levels between entry and target, being near a volume node or a Fibonacci level, and volatility.
+An adjustment counted only if it improved results in January-June and July-October on both indices.
+
+- **Only on the volume side of the 30-day POC** (buys above it, sells below) and **only before 10:00** passed for
+  both breakout versions.
+- Nothing passed for CPR Magnet on both indices. Its Nifty trades within half an ATR of a 30-day Fibonacci level
+  won 9 of 11 (+520); on Sensex the same kind of trade won only 3 of 6.
+- Trading **at** the volume zones or Fibonacci levels (432 scalp versions: break or bounce, 15-30 point targets,
+  10-20 point stops) made money in both halves of 2026 on neither index.
+
+The adjusted breakout, simulated exactly as the indicator trades it:
+
+| 2026 | Nifty | Sensex |
+|---|---|---|
+| Scalp mode + POC side + before 10:00 | 20 trades, **19 won / 1 lost**, +886 / −66, **net +820** | 16 trades, **16 won / 0 lost**, **net +1,254** |
+| Trail + POC side + before 10:00 | 30 trades, 20 won / 10 lost, net +1,550 | 27 trades, 21 won / 6 lost, net +4,700 |
+
+These adjustments were chosen by looking at 2026 itself, so part of the improvement may be luck; the half-year
+check lowers that risk but doesn't remove it. The rule trades about once every 10 sessions.
+
 ## How to re-check all of this
 
 - `python research/fair_price_backtest.py` downloads the candles and re-runs the Fair Price test.

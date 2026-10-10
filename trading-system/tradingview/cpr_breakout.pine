@@ -2,39 +2,37 @@
 //@version=5
 // ============================================================================
 // CPR Breakout: NIFTY or SENSEX, 5-MINUTE chart (1-minute data is read underneath for exits)
-// Your two ideas plus filters, all switchable in Settings:
-//   1. The day's bias: open above the CPR -> buys only; open below -> sells only (inside -> no trade).
-//   2. The trigger: price breaks the high or low of the first 15 minutes (9:15-9:30).
-//   3. 15-day profile: the price traded most in the last 15 days (POC) and the value area around it
-//      (70% of the time). The index has no volume, so this is time at price, as in the test.
-//   4. Trend: 5-minute EMA 50 on the right side. CPR vs yesterday's CPR (higher / lower value).
-// STOP: other side of the 15-minute range (or its middle, or 0.2%). EXIT: target 3 x risk, or ride / trail.
-// Optional reversal trade: if the first break fails at a loss, take the break of the other side.
-// Entries 9:30-13:00, out by 3:15. Costs: 4 Nifty / 12 Sensex points a trade.
-// DEFAULTS = SCALP MODE (highest win rate that still made money on both indices):
-//   narrow-CPR days only; only in the direction of the opening gap (open vs yesterday's close); no sells when
-//   today's CPR is wholly above yesterday's, no buys when wholly below; entry on a touch of the 15-minute high /
-//   low (9:30-1:00); stop at the other side; BOOK HALF at 0.25 x the risk, move the stop to entry, trail the rest
-//   1R behind the best price after +1R; out by 3:15; one reversal trade if the first break loses.
-// Tested on 1-minute candles after costs (4 Nifty / 12 Sensex points a trade):
-//   Nifty  last 90 sessions (3 Jun - 9 Oct 2026): 19 trades, 17 won / 2 lost, +232 / -135, net +97.
-//          Since Feb 2023: 137 trades, 76% won, +549 (about +4 points a trade); lost in 2023 and 2025.
-//   Sensex last 90 sessions: 16 trades, 16 won / 0 lost, net +577. Since 2023: 132 trades, 82% won, +1,654.
-//   About one trade a week (one in the last 30 sessions).
-// MORE PROFIT, LOWER WIN RATE: set Exit to "Trail 1R..." and switch the gap filter off:
-//   Nifty last 90: 34 trades, 20 won / 14 lost, net +262; since 2023 +1,896 (51% won).
-//   Sensex last 90: 31 trades, 22 won / 9 lost, net +1,998; since 2023 +7,296 (53% won).
-// Smaller targets win more and make less: a 0.1R target won 97% of Nifty trades in the last 90 sessions but lost
-//   money since 2023 (79% won, -1,164). The open-vs-CPR and 15-day POC filters lowered results; they are off.
-// The 15-day profile here uses the chart's 5-minute candles; the test used 1-minute candles.
-// Reference implementation (same rules): trading-system/research/quant/cpr_orb.py
+// Draws the CPR (orange = narrow), pivot, the first 15-minute candle's high / low, the 30-day volume point of
+// control (POC: the price where the most volume traded; volume from NIFTYBEES because the index has none) with its
+// value area, and the 5-minute EMA 50. Every filter is in Settings.
+// DEFAULTS = SCALP MODE, adjusted on 2026:
+//   1. Only on narrow-CPR days (today's CPR among the narrowest third of the last 20 days).
+//   2. Only in the direction of the opening gap (open vs yesterday's close).
+//   3. No sells when today's CPR is wholly above yesterday's, no buys when wholly below.
+//   4. Only on the volume side of the 30-day POC: buys above it, sells below it.
+//   5. BUY / SELL when price touches the first 15-minute candle's high / low, only before 10:00.
+//   6. Stop at the other side of the 15-minute range. BOOK HALF at 0.25 x the risk, move the stop to entry, trail
+//      the rest 1R behind the best price after +1R. Out by 3:15. One reversal trade if the first break loses
+//      (also before 10:00 and on the POC side).
+// Tested on 1-minute candles, 1 Jan - 9 Oct 2026, after costs (4 Nifty / 12 Sensex points a trade):
+//   Nifty  20 trades, 19 won / 1 lost, +886 / -66 points, net +820 (Jan-Jun +629, Jul-Oct +191).
+//   Sensex 16 trades, 16 won / 0 lost, net +1,254 (Jan-Jun +822, Jul-Oct +432).
+//   About one trade every 10 sessions. The POC and 10:00 adjustments were chosen by looking at 2026 itself
+//   (they helped in both halves of the year on both indices); treat them as promising, not proven.
+// MORE PROFIT, LOWER WIN RATE: Exit = "Trail 1R..." and the gap filter off (POC and 10:00 kept):
+//   Nifty 30 trades, 20 won / 10 lost, net +1,550. Sensex 27 trades, 21 won / 6 lost, net +4,700.
+// The profile here uses the chart's 5-minute candles; the test used 1-minute candles, so the POC can differ by a
+//   few points.
+// Reference implementation (same rules): trading-system/research/quant/y2026.py (breakout_live)
 // ============================================================================
-indicator("CPR Breakout", "CPRB", overlay = true, max_lines_count = 500, max_labels_count = 500, max_bars_back = 1500)
+indicator("CPR Breakout", "CPRB", overlay = true, max_lines_count = 500, max_labels_count = 500, max_bars_back = 2500)
 
 // ---------------- inputs ----------------
 G1 = "Rules"
 cprF   = input.string("Off", "Direction from the open vs the CPR", options = ["With the CPR", "Not against the CPR", "Off"], group = G1)
-pocF   = input.string("Off", "15-day profile filter", options = ["Off", "Beyond the POC", "Beyond the value area"], group = G1)
+pocF   = input.string("Beyond the POC", "Volume zone filter (buys above the POC, sells below)", options = ["Off", "Beyond the POC", "Beyond the value area"], group = G1)
+cutH   = input.int(10, "No new entries from (hour)", minval = 9, maxval = 15, group = G1)
+cutMn  = input.int(0, "No new entries from (minute)", minval = 0, maxval = 59, group = G1)
 emaF   = input.bool(false, "Only with the 5-minute EMA 50", group = G1)
 relF   = input.bool(true, "Not against today's CPR vs yesterday's (higher / lower value)", group = G1)
 widF   = input.string("Narrow only", "CPR width", options = ["Any", "Narrow only", "Skip narrow"], group = G1)
@@ -45,7 +43,10 @@ gapF   = input.bool(true, "Only in the direction of the opening gap (open vs yes
 revF   = input.bool(true, "Reversal trade when the first break fails", group = G1)
 costIn = input.float(0, "Cost per trade in index points (0 = auto: Nifty 4, Sensex 12)", step = 1, group = G1)
 G2 = "Display"
-showPrf = input.bool(true, "Show the 15-day POC and value area", group = G2)
+showPrf = input.bool(true, "Show the volume POC and value area", group = G2)
+G3 = "Volume zones"
+volSym  = input.symbol("NSE:NIFTYBEES", "Volume from (the index has none; the test used NIFTYBEES for both indices)", group = G3)
+profN   = input.int(30, "Volume profile: last N sessions", minval = 5, maxval = 30, group = G3)
 showEma = input.bool(true, "Show the EMA 50", group = G2)
 showBox = input.bool(true, "Show the status and results box", group = G2)
 
@@ -61,7 +62,7 @@ pts(x) => str.tostring(x, "+#,##0;-#,##0")
 minsOf(int t) => hour(t, TZ) * 60 + minute(t, TZ)
 cost = costIn > 0 ? costIn : close > 50000 ? 12.0 : 4.0
 BIN  = close > 50000 ? 16.0 : 5.0
-CUT  = 780     // last entry before 13:00
+CUT  = cutH * 60 + cutMn     // no new entries from this time
 TOUT = 915     // out at 15:15
 
 // ---------------- CPR: today's (from yesterday) and yesterday's (from the day before) ----------------
@@ -95,17 +96,20 @@ newDay = dayofmonth(time, TZ) != dayofmonth(time[1], TZ)
 lc(color col) => newDay ? na : col
 is5 = timeframe.isintraday and timeframe.multiplier == 5
 
-// ---------------- 15-day time-at-price profile (bars before today) ----------------
+// ---------------- volume profile of the last N sessions (bars before today) ----------------
+// NIFTYBEES volume spread over each index candle's range; time at price if that volume isn't available
+bv = request.security(volSym, timeframe.period, volume, lookahead = barmerge.lookahead_off)
+float vw = na(bv) or bv <= 0 ? 1.0 : bv
 var int[] dStart = array.new_int()
 var float poc = na
 var float vah = na
 var float val = na
 if newDay and is5
     n = array.size(dStart)
-    if n >= 15
-        first = array.get(dStart, n - 15)
+    if n >= profN
+        first = array.get(dStart, n - profN)
         nb = bar_index - first
-        if nb > 10 and nb < 1450
+        if nb > 10 and nb < 2450
             float lo0 = low[1]
             float hi0 = high[1]
             for i = 1 to nb
@@ -118,8 +122,9 @@ if newDay and is5
                 for i = 1 to nb
                     a = int((low[i] - lo0) / BIN)
                     z = int((high[i] - lo0) / BIN)
+                    float share = vw[i] / (z - a + 1)
                     for b = a to z
-                        array.set(hist, b, array.get(hist, b) + 1)
+                        array.set(hist, b, array.get(hist, b) + share)
                 k = array.indexof(hist, array.max(hist))
                 tot = array.sum(hist)
                 int a2 = k
@@ -140,7 +145,7 @@ if newDay and is5
                 vah := lo0 + (b2 + 1) * BIN
                 val := lo0 + a2 * BIN
     array.push(dStart, bar_index)
-    if array.size(dStart) > 20
+    if array.size(dStart) > 31
         array.shift(dStart)
 
 // ---------------- plots ----------------
@@ -149,7 +154,7 @@ pTop = plot(is5 ? top : na, "CPR top", color = lc(cprCol), linewidth = 2)
 pBot = plot(is5 ? bot : na, "CPR bottom", color = lc(cprCol), linewidth = 2)
 plot(is5 ? P : na, "Pivot P", color = lc(color.new(cprCol, 40)))
 fill(pTop, pBot, color = newDay ? na : color.new(cprCol, 82), title = "CPR band (orange = narrow)")
-plot(is5 and showPrf ? poc : na, "15-day POC", color = lc(PURPLE), linewidth = 2, style = plot.style_linebr)
+plot(is5 and showPrf ? poc : na, "Volume POC", color = lc(PURPLE), linewidth = 2, style = plot.style_linebr)
 plot(is5 and showPrf ? vah : na, "Value area high", color = lc(color.new(PURPLE, 60)), style = plot.style_linebr)
 plot(is5 and showPrf ? val : na, "Value area low", color = lc(color.new(PURPLE, 60)), style = plot.style_linebr)
 plot(is5 and showEma ? ema50 : na, "EMA 50", color = color.new(GREY, 30))
@@ -181,6 +186,14 @@ var int   nWon = 0
 var float totPts = 0.0
 var float winPts = 0.0
 var float lossPts = 0.0
+
+pocPass(int sd, float px) =>
+    bool ok = true
+    if pocF != "Off"
+        float ref = pocF == "Beyond the POC" ? poc : (sd > 0 ? vah : val)
+        if na(ref) or sd * (px - ref) <= 0
+            ok := false
+    ok
 
 passes(int sd, float px, float emaNow) =>
     bool ok = widOk
@@ -302,7 +315,7 @@ if is5 and n1 > 0
                     sd := 0
                 if sd != 0
                     float px = sd > 0 ? math.max(ok, orh) : math.min(ok, orl)
-                    if state == 2 or passes(sd, px, ema50[1])
+                    if state == 2 ? pocPass(sd, px) : passes(sd, px, ema50[1])
                         float s0 = stopFor(sd, px)
                         if sd * (px - s0) > 0
                             opened := true
@@ -326,7 +339,7 @@ if is5 and entF == "5-minute close beyond the range" and barstate.isconfirmed an
     if state == 2 and sd != -side
         sd := 0
     if sd != 0
-        if state == 2 or passes(sd, close, ema50)
+        if state == 2 ? pocPass(sd, close) : passes(sd, close, ema50)
             float s0 = stopFor(sd, close)
             if sd * (close - s0) > 0
                 opened := true
@@ -368,7 +381,7 @@ if barstate.islast and showBox
     cell(1, "Today's CPR", fmt(bot) + " - " + fmt(top) + (narrow ? " (narrow)" : ""), chart.fg_color)
     cell(2, "Bias", bias, cb > 0 ? GREEN : cb < 0 ? RED : chart.fg_color)
     cell(3, "15-minute range", na(orh) ? "-" : fmt(orl) + " - " + fmt(orh), chart.fg_color)
-    cell(4, "15-day POC / value area", na(poc) ? "-" : fmt(poc) + " / " + fmt(val) + " - " + fmt(vah), PURPLE)
+    cell(4, str.tostring(profN) + "-day volume POC / value area", na(poc) ? "-" : fmt(poc) + " / " + fmt(val) + " - " + fmt(vah), PURPLE)
     cell(5, "Today", todayMsg, chart.fg_color)
     cell(6, "On this chart", str.tostring(nTr) + " trades, " + str.tostring(nWon) + " won, " + str.tostring(nTr - nWon) + " lost", chart.fg_color)
     cell(7, "Points won / lost / net", pts(winPts) + " / " + pts(lossPts) + " / " + pts(totPts), totPts >= 0 ? GREEN : RED)

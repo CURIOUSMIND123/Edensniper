@@ -39,3 +39,5 @@ Costs: 4 Nifty points or 12 Sensex points per trade. `pip install pandas scikit-
 | `cpr_scalp.py` | Pure scalps at the CPR, pivot and 15-minute levels: 10-30 point targets, 10-40 point stops, time limits, up to 5 trades a day |
 | `pa_ml.py` | Price action + levels + machine learning: about 55 candle-shape, momentum, level, CPR and volatility measurements at every 5-minute close; learns which led to +25 before -15 (or ATR-sized); scored on 2026 only (e.g. `nifty`) |
 | `pa_ml_importance.py` | Which measurement groups the `pa_ml.py` model relied on in 2026 |
+| `y2026.py` | 2026 only: CPR Magnet and CPR Breakout trade by trade, what the losing trades had in common (real-volume zones from NIFTYBEES, 30-day Fibonacci, trend, volatility, time), and which adjustments helped in both halves of 2026; `breakout_live()` is the adjusted indicator rule |
+| `y2026_levels.py` | 2026 only: scalps taken at the volume zones and Fibonacci levels themselves |
