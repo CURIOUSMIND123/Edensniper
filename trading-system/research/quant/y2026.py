@@ -24,10 +24,11 @@ one, five, LV, DAY, days, COST = B.one, B.five, B.LV, B.DAY, B.days, B.COST
 IDX = {d: i for i, d in enumerate(days)}
 D26 = [d for d in C.TEST if d >= '2026-01-01']
 H1 = {d for d in D26 if d < '2026-07-01'}
-BIN = {'nifty': 5.0, 'sensex': 16.0}[B.name]
+BIN = {'nifty': 5.0, 'sensex': 16.0, 'btcist': 25.0}[B.name]
 
 # ---------------- real-volume profile (NIFTYBEES volume on the index's price range) ----------------
-bees = json.load(open('../.cache/niftybees_1m.json'))
+bees = json.load(open('../.cache/niftybees_1m.json')) if B.name != 'btcist' else \
+    {k: [0, 0, 0, 0, v] for k, v in json.load(open('../.cache/btcist_vol.json')).items()}   # Bitcoin: its own volume
 VH = {}
 for d in days:
     if d < '2025-10-01': continue

@@ -10,7 +10,7 @@ minute after entry, one trade at a time, closed by 15:25 at the latest. Costs: 4
 import json, collections, statistics as st, sys
 name = sys.argv[1] if len(sys.argv) > 1 else 'nifty'
 TF = int(sys.argv[2]) if len(sys.argv) > 2 else 3
-COST = {'nifty': 4.0, 'sensex': 12.0}[name]
+COST = {'nifty': 4.0, 'sensex': 12.0, 'btcist': 78.8}[name]
 THR, STEP_PCT, HISTORY = 65.0, 0.1, 5000
 raw = json.load(open(f'../.cache/{name}_1m.json'))
 by = collections.defaultdict(list)
@@ -84,9 +84,10 @@ def report(res, ndays, label):
     print(f"   {label}: {len(p)} trades ({len(p)/ndays:.0f}/day), target hit {100*tp/len(p):.0f}%, won after costs {100*len(w)/len(p):.0f}%, "
           f"avg win {st.mean(w) if w else 0:+.1f} / loss {st.mean(lo) if lo else 0:+.1f}, total {sum(p):+,.0f} pts, green days {sum(v > 0 for v in byd.values())}/{ndays}, median hold {st.median(r[3] for r in res):.0f} min")
 
-for label, (a, b) in (('LAST 30 DAYS', ('2026-09-07', '2026-10-07')), ('THE 12 MONTHS BEFORE', ('2025-09-01', '2026-09-04'))):
-    cs = calls_in(a, b); nd = len({x[0] for x in cs})
-    print(f"{name.upper()} {TF}-minute, {label} ({a} to {b}): {len(cs)} calls")
-    for entry in ('close', 'break'):
-        for k in (5, 10, 15, 20):
-            report(scalp(cs, k, entry), nd, f"enter at {'call close' if entry == 'close' else 'the break'}, stop {k} / target {2*k}")
+if __name__ == '__main__':
+    for label, (a, b) in (('LAST 30 DAYS', ('2026-09-07', '2026-10-07')), ('THE 12 MONTHS BEFORE', ('2025-09-01', '2026-09-04'))):
+        cs = calls_in(a, b); nd = len({x[0] for x in cs})
+        print(f"{name.upper()} {TF}-minute, {label} ({a} to {b}): {len(cs)} calls")
+        for entry in ('close', 'break'):
+            for k in (5, 10, 15, 20):
+                report(scalp(cs, k, entry), nd, f"enter at {'call close' if entry == 'close' else 'the break'}, stop {k} / target {2*k}")

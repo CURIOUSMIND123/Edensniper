@@ -12,7 +12,7 @@ Percent stops are of the index price (0.1% is about 22 Nifty points). Costs: 4 N
 """
 import json, collections, itertools, statistics as st, sys
 name = sys.argv[1] if len(sys.argv) > 1 else 'nifty'
-COST = {'nifty': 4.0, 'sensex': 12.0}[name]
+COST = {'nifty': 4.0, 'sensex': 12.0, 'btcist': 78.8}[name]   # btcist: Bitcoin in IST market hours, 0.11% of its 2026 median price
 T_OUT = 915                                                        # 15:15
 raw = json.load(open(f'../.cache/{name}_1m.json'))
 by = collections.defaultdict(list)

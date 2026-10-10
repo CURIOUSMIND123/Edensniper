@@ -46,3 +46,4 @@ Costs: 4 Nifty points or 12 Sensex points per trade. `pip install pandas scikit-
 | `y2026_rupees.py` | 2026 only: the daily plan in rupees for Rs 30,000 with 2 at-the-money option lots (delta 0.5, lots 65 / 20), by month, with drawdowns |
 | `btc_load.py` | Turns Binance's public 1-minute BTCUSDT futures archives (data.binance.vision) into `../.cache/btc_1m.json` (run with `python -I`) |
 | `btc_2026.py` | 2026 only: the daily-plan indicator on Bitcoin (UTC day as the session, Bitcoin's own volume), and Rs 30,000 at 1x to 150x leverage |
+| `btc_all.py` | 2026 only: every strategy built so far run on Bitcoin (as `btcist`: its candles in IST market hours, Binance costs), and Rs 30,000 at 1x-150x leverage |

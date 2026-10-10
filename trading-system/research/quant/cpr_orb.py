@@ -25,7 +25,7 @@ import numpy as np
 import cpr_backtest as B
 
 one, five, LV, TEST, COST, path = B.one, B.five, B.LV, B.TEST, B.COST, B.path
-BIN = {'nifty': 5.0, 'sensex': 16.0}[B.name]
+BIN = {'nifty': 5.0, 'sensex': 16.0, 'btcist': 25.0}[B.name]
 CUT, T_OUT = 780, 915
 
 # ---------------- 15-day time-at-price profile ----------------

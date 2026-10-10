@@ -500,6 +500,31 @@ Rs 30,000 traded with the Nifty settings, whole balance as margin:
 At 150x a move of about 0.27% against the position (1/150 minus Binance's 0.4% maintenance margin) liquidates it;
 Bitcoin moves that much in a few minutes on most days.
 
+## 2026: every strategy on Bitcoin
+
+Each strategy's own code, fed Bitcoin's 1-minute candles during Indian market hours (9:15 am - 3:30 pm IST, every
+day) so it has the open, overnight gap and previous day it was built for. Costs 0.11% of price a trade (Binance
+taker fee both sides plus slippage, about $79 at the 2026 median price). Rs 30,000 with the whole balance as
+margin, compounding.
+
+| Strategy, 2026 | Trades | Won / lost | Total after costs | Before costs | Rs 30,000 at 1x | 10x | 20x | 150x |
+|---|---|---|---|---|---|---|---|---|
+| Fair Price Reversal | 31 | 7 / 24 | −4.4% | −1.0% | Rs 28,700 | Rs 18,907 | Rs 11,432 | wiped out |
+| Liquidity Trap | 39 | 19 / 20 | −3.8% | +0.5% | Rs 28,877 | Rs 20,281 | Rs 13,396 | wiped out |
+| Breakout Retest | 598 | 108 / 490 | −57.3% | +8.5% | Rs 16,876 | wiped out | wiped out | wiped out |
+| 15-Day Levels | 102 | 20 / 82 | −13.3% | −2.1% | Rs 26,247 | Rs 7,354 | Rs 1,559 | wiped out |
+| Breakout Probability scalp | 7,002 | 2,468 / 4,534 | −703% | +66.7% | wiped out | wiped out | wiped out | wiped out |
+| CPR Magnet | 155 | 44 / 111 | −17.9% | −0.8% | Rs 25,035 | Rs 4,017 | Rs 359 | wiped out |
+| CPR Breakout, trail | 141 | 38 / 103 | −14.7% | +0.8% | Rs 25,879 | Rs 6,621 | Rs 1,355 | wiped out |
+| CPR Breakout, scalp mode | 73 | 8 / 65 | −7.3% | +0.8% | Rs 27,899 | Rs 14,394 | Rs 6,777 | wiped out |
+| CPR level scalp | 217 | 133 / 84 | −16.9% | +7.0% | Rs 25,329 | Rs 5,397 | Rs 922 | wiped out |
+| Daily plan (indicator default) | 126 | 9 / 117 | −14.6% | −0.8% | Rs 25,911 | Rs 6,802 | Rs 1,477 | wiped out |
+
+Every strategy lost money in both halves of 2026. The few that were positive before costs earned 0.01-0.03% of
+price a trade, well under the 0.11% a trade costs (and under the 0.04% even with maker fees on both sides).
+Leverage multiplied the losses; at 50x and above every one was wiped out, and at 150x most were gone in January or
+February. Liquidations are counted only from closing losses, so real ones would come sooner.
+
 ## How to re-check all of this
 
 - `python research/fair_price_backtest.py` downloads the candles and re-runs the Fair Price test.
