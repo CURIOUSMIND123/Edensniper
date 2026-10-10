@@ -18,7 +18,7 @@
 //   Out by 3:15.
 // Tested on 1-minute candles, 1 Jan - 9 Oct 2026 (191 sessions), after costs (4 Nifty / 12 Sensex points a trade):
 //   Nifty  99 trades on 99 days (about 10 a month), 81 won / 18 lost, +2,197 / -1,280, net +917
-//          (Jan-Jun +916, Jul-Oct +1). Breakout part: 27 won / 3 lost, +893. Magnet part: 56 won / 16 lost, +23.
+//          (Jan-Jun +916, Jul-Oct +1). Breakout part: 25 won / 2 lost, +893. Magnet part: 56 won / 16 lost, +23.
 //   Sensex 98 trades on 98 days, 85 won / 13 lost, +5,682 / -3,141, net +2,542 (Jan-Jun +1,026, Jul-Oct +1,516).
 // MORE PROFIT, LOWER WIN RATE: switch off "Magnet: book half" (full target at the CPR edge):
 //   Nifty 59 won / 40 lost, net +1,834. Sensex 60 won / 38 lost, net +5,514.
