@@ -52,3 +52,4 @@ Costs: 4 Nifty points or 12 Sensex points per trade. `pip install pandas scikit-
 | `btc_trend_basket.py` | The 4-hour trend-following versions from `btc_trend.py` traded together, 2026 and 2023-2025, 1x-150x |
 | `btc_vol_lines.py` | Bitcoin volume lines (3 / 7 / 15-day POC and high-volume peaks): break a line, target the next one; designed on 2023-2025, tested on 2026 |
 | `y2026_vol_lines.py` | 2026 only: the same volume-line breakouts on Nifty / Sensex with NIFTYBEES volume (e.g. `nifty`) |
+| `y2026_combo.py` | 2026 only: the CPR daily plan plus 3-day volume-line trades, side by side or one trade at a time, with rupees at 2 lots (e.g. `nifty`) |

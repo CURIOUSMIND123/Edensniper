@@ -18,7 +18,12 @@ File: [`cpr_breakout.pine`](cpr_breakout.pine). An indicator; reads 1-minute can
 - 2026 (1 Jan - 9 Oct): Nifty 63 trades, 56 won / 7 lost, +1,678 / −486, net +1,192; Sensex 66 trades, 62 won /
   4 lost, +4,558 / −960, net +3,597. With "skip days that open outside yesterday's high-low range" switched on:
   Nifty 44 won / 4 lost, net +1,181; Sensex 42 won / 1 lost, net +3,143.
-- Every filter is in Settings. `research/quant/y2026_losses.py` has the same plan in Python.
+- **Plus 3-day volume lines** (teal dots), in the same book, one trade at a time: a 5-minute close through a line
+  between 9:30 and 2:30 trades toward the next line, with the stop at the previous line, when the target is at
+  least 1.5x the stop away.
+  - 2026 with the volume lines: Nifty 99 trades (about 11 a month), 79 won / 20 lost, net +2,454 points; Sensex
+    116 trades (about 12 a month), 87 won / 29 lost, net +7,894.
+- Every filter is in Settings. `research/quant/y2026_combo.py` has the same plan in Python.
 
 ## CPR Magnet: Nifty or Sensex, any 1 to 15-minute chart, at most one trade a day
 

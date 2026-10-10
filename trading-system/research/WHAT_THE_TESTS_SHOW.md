@@ -584,6 +584,25 @@ on both indices:
 The neighbouring settings agree (1x, 1.5x and 2x targets all positive on Nifty), but this was found by looking at
 2026's 27 versions per index, so part of it may be luck.
 
+## 2026: the daily plan plus 3-day volume lines
+
+The CPR daily plan (indicator default) and the 3-day volume-line breakouts (stop at the previous line, target the
+next, target at least 1.5x the stop) in one book: one trade at a time, whichever signal comes first.
+
+| 2026 | Trades | Won / lost | Points won / lost | Net | Jan-Jun / Jul-Oct |
+|---|---|---|---|---|---|
+| Nifty, daily plan alone | 63 (6.8 a month) | 56 / 7 | +1,678 / −486 | +1,192 | +716 / +476 |
+| **Nifty, plan + volume lines** | 99 (10.6 a month) | 79 / 20 | +3,688 / −1,234 | **+2,454** | +1,925 / +529 |
+| Sensex, daily plan alone | 66 (7.1 a month) | 62 / 4 | +4,558 / −960 | +3,597 | +2,234 / +1,364 |
+| **Sensex, plan + volume lines** | 116 (12.5 a month) | 87 / 29 | +13,810 / −5,916 | **+7,894** | +6,349 / +1,545 |
+
+Running both side by side instead (both can be open at once) gave about the same (Nifty +2,519, Sensex +8,344).
+Taking volume-line trades with targets only 1x the stop gave more trades (14-16 a month) but less profit.
+
+In rupees, 2 lots a trade on both indices (delta 0.5, lots 65 / 20): Rs 30,000 -> about Rs 3,47,000, every month
+positive, lowest Rs 27,144, biggest fall from a high Rs 32,328. The same trades in random order fell below Rs 15,000
+4.7% of the time and below zero 0.3%. The volume-line part was chosen on 2026 itself, like the other adjustments.
+
 ## How to re-check all of this
 
 - `python research/fair_price_backtest.py` downloads the candles and re-runs the Fair Price test.

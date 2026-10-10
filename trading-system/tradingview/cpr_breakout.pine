@@ -17,17 +17,21 @@
 //     0.25 x the risk, stop to entry, trail the rest 1R behind the best price after +1R; one reversal trade if the
 //     first break loses (also before 10:00 and on the POC side).
 //   Out by 3:15.
+//   PLUS 3-DAY VOLUME LINES (same book, one trade at a time): every morning the volume profile of the last 3
+//     sessions gives the lines (point of control + every high-volume peak, lines within 0.15% merged; teal dots).
+//     A 5-minute close through a line (9:30-2:30, no trade open) -> trade that way at the close, TARGET the next
+//     line, STOP at the previous line; skipped when the target is less than 1.5x the stop away. Out by 3:15.
 // Tested on 1-minute candles, 1 Jan - 9 Oct 2026 (191 sessions), after costs (4 Nifty / 12 Sensex points a trade):
-//   Nifty  63 trades (about 7 a month), 56 won / 7 lost, +1,678 / -486, net +1,192 (Jan-Jun +716, Jul-Oct +476).
-//   Sensex 66 trades, 62 won / 4 lost, +4,558 / -960, net +3,597 (Jan-Jun +2,234, Jul-Oct +1,364).
-//   Before this change: Nifty 81 won / 18 lost, lost -1,280, net +917; Sensex 85 won / 13 lost, lost -3,141, net +2,542.
-// FEWEST LOSSES: also switch on "Magnet: skip days that open outside yesterday's high-low range":
-//   Nifty 48 trades, 44 won / 4 lost, lost -256, net +1,181. Sensex 43 trades, 42 won / 1 lost, lost -234, net +3,143.
-// The POC, 10:00, every-day and magnet-POC choices were made by looking at 2026 itself; treat them as promising,
-//   not proven.
+//   Nifty  99 trades on 86 days (about 11 a month), 79 won / 20 lost, +3,688 / -1,234, net +2,454
+//          (Jan-Jun +1,925, Jul-Oct +529). Without the volume lines: 63 trades, net +1,192.
+//   Sensex 116 trades on 90 days (about 12 a month), 87 won / 29 lost, +13,810 / -5,916, net +7,894
+//          (Jan-Jun +6,349, Jul-Oct +1,545). Without the volume lines: 66 trades, net +3,597.
+// FEWEST LOSSES: also switch on "Magnet: skip days that open outside yesterday's high-low range".
+// The POC, 10:00, every-day, magnet-POC and 3-day-volume-line choices were made by looking at 2026 itself; treat
+//   them as promising, not proven.
 // The profile here uses the chart's 5-minute candles; the test used 1-minute candles, so the POC can differ by a
 //   few points.
-// Reference implementation (same rules): trading-system/research/quant/y2026_losses.py (plan with poc=True)
+// Reference implementation (same rules): trading-system/research/quant/y2026_combo.py (one book, target >= 1.5x)
 // ============================================================================
 indicator("CPR Breakout", "CPRB", overlay = true, max_lines_count = 500, max_labels_count = 500, max_bars_back = 2500)
 
@@ -52,6 +56,11 @@ magStop = input.float(0.3, "Magnet: stop, % of price", step = 0.05, group = G4)
 magHalf = input.bool(true, "Magnet: book half at 0.25 x the risk, stop to entry, rest to the CPR edge", group = G4)
 magPoc  = input.bool(true, "Magnet: only on the volume side of the 30-day POC (buys above it, sells below)", group = G4)
 magIn   = input.bool(false, "Magnet: skip days that open outside yesterday's high-low range (fewer losses, fewer trades)", group = G4)
+G5 = "3-day volume lines (same book: one trade at a time)"
+vlOn   = input.bool(true, "Also trade a 5-minute close through a volume line (target the next line, stop at the previous line)", group = G5)
+vlN    = input.int(3, "Volume lines from the last N sessions", minval = 2, maxval = 15, group = G5)
+vlRR   = input.float(1.5, "Skip when the next line is less than this x the stop away", step = 0.25, group = G5)
+vlShow = input.bool(true, "Draw the volume lines", group = G5)
 costIn = input.float(0, "Cost per trade in index points (0 = auto: Nifty 4, Sensex 12)", step = 1, group = G1)
 G2 = "Display"
 showPrf = input.bool(true, "Show the volume POC and value area", group = G2)
@@ -68,6 +77,7 @@ GREY   = color.new(#787b86, 0)
 BLUE   = color.new(#2962ff, 0)
 ORANGE = color.new(#f57c00, 0)
 PURPLE = color.new(#7e57c2, 0)
+TEAL   = color.new(#00897b, 0)
 fmt(x) => str.tostring(x, "#,##0.##")
 pts(x) => str.tostring(x, "+#,##0;-#,##0")
 minsOf(int t) => hour(t, TZ) * 60 + minute(t, TZ)
@@ -112,6 +122,8 @@ is5 = timeframe.isintraday and timeframe.multiplier == 5
 bv = request.security(volSym, timeframe.period, volume, lookahead = barmerge.lookahead_off)
 float vw = na(bv) or bv <= 0 ? 1.0 : bv
 var int[] dStart = array.new_int()
+var float[] vLines = array.new_float()     // today's volume lines (from the last vlN sessions)
+var line[]  vlDraw = array.new_line()
 var float poc = na
 var float vah = na
 var float val = na
@@ -155,6 +167,54 @@ if newDay and is5
                 poc := lo0 + (k + 0.5) * BIN
                 vah := lo0 + (b2 + 1) * BIN
                 val := lo0 + a2 * BIN
+    // volume lines: point of control plus every high-volume peak of the last vlN sessions, lines within 0.15% merged
+    array.clear(vLines)
+    if n >= vlN
+        int vlFirst = array.get(dStart, n - vlN)
+        int vlBars = bar_index - vlFirst
+        if vlBars > 10 and vlBars < 2450
+            float vlLo = low[1]
+            float vlHi = high[1]
+            for i = 1 to vlBars
+                vlLo := math.min(vlLo, low[i])
+                vlHi := math.max(vlHi, high[i])
+            vlLo := math.floor(vlLo / BIN) * BIN
+            int vlNb = int((vlHi - vlLo) / BIN) + 2
+            if vlNb > 3 and vlNb < 3000
+                float[] vlHist = array.new_float(vlNb, 0.0)
+                for i = 1 to vlBars
+                    int va = int((low[i] - vlLo) / BIN)
+                    int vz = int((high[i] - vlLo) / BIN)
+                    float vshare = vw[i] / (vz - va + 1)
+                    for b = va to vz
+                        array.set(vlHist, b, array.get(vlHist, b) + vshare)
+                float[] vlSm = array.new_float(vlNb, 0.0)
+                float[] vlNz = array.new_float()
+                for b = 0 to vlNb - 1
+                    float vv = (array.get(vlHist, math.max(0, b - 1)) + array.get(vlHist, b) + array.get(vlHist, math.min(vlNb - 1, b + 1))) / 3
+                    array.set(vlSm, b, vv)
+                    if vv > 0
+                        array.push(vlNz, vv)
+                float vlThr = array.size(vlNz) > 0 ? array.percentile_nearest_rank(vlNz, 70) : 0.0
+                int vlK = array.indexof(vlHist, array.max(vlHist))
+                for b = 1 to vlNb - 2
+                    float vv = array.get(vlSm, b)
+                    if (vv >= vlThr and vv >= array.get(vlSm, b - 1) and vv >= array.get(vlSm, b + 1)) or b == vlK
+                        float vx = vlLo + (b + 0.5) * BIN
+                        int vln = array.size(vLines)
+                        if vln > 0 and vx - array.get(vLines, vln - 1) <= 0.0015 * vx
+                            array.set(vLines, vln - 1, (array.get(vLines, vln - 1) + vx) / 2)
+                        else
+                            array.push(vLines, vx)
+    if vlShow
+        if array.size(vlDraw) > 0
+            for ln in vlDraw
+                line.set_extend(ln, extend.none)
+                line.set_x2(ln, bar_index - 1)
+        array.clear(vlDraw)
+        if array.size(vLines) > 0
+            for x in vLines
+                array.push(vlDraw, line.new(bar_index, x, bar_index + 1, x, color = color.new(TEAL, 25), style = line.style_dotted, width = 2, extend = extend.right))
     array.push(dStart, bar_index)
     if array.size(dStart) > 31
         array.shift(dStart)
@@ -190,6 +250,17 @@ var bool  halfDone = false
 var float halfPts = na
 var int   gapDir = 0           // +1 opened above yesterday's close, -1 below
 var bool  isMag = false        // today's trade is a CPR Magnet trade
+var bool  volOpen = false      // a volume-line trade is open (same book: blocks plan entries until it closes)
+var int   vSide = 0
+var float vE = na
+var float vStp = na
+var float vTgt = na
+var int   vStart = 0
+var line  vlnS = na
+var line  vlnT = na
+var int   nVol = 0
+var int   nVolWon = 0
+var float volPts = 0.0
 var float tgt2 = na            // magnet: final target (the CPR edge)
 var line  lnS = na
 var line  lnT = na
@@ -240,6 +311,7 @@ if newDay
     tradeNo := 0
     cb := 0
     isMag := false
+    volOpen := false
     todayMsg := not widOk ? "No trade: CPR width filter" : "Building the 15-minute range"
 
 // a trade is opened by setting these, then drawn once below
@@ -259,7 +331,7 @@ if is5 and n1 > 0
         if mk == 555
             cb := ok > top ? 1 : ok < bot ? -1 : 0
             gapDir := ok > pC ? 1 : ok < pC ? -1 : 0
-            if magOn and not narrow and state == 0 and complete
+            if magOn and not narrow and state == 0 and complete and not volOpen
                 int ms = ok > top and ck >= top / (1 - magGap / 100) ? -1 : ok < bot and ck <= bot / (1 + magGap / 100) ? 1 : 0
                 if magPoc and (na(poc) or ms * (ck - poc) <= 0)
                     ms := 0
@@ -344,8 +416,44 @@ if is5 and n1 > 0
                     afterMin := mk + 1
                 else
                     state := 3
+        // volume-line trade exits
+        if volOpen and mk >= vStart
+            float vb1 = ck >= ok ? lk : hk
+            float vb2 = ck >= ok ? hk : lk
+            float vEx = na
+            string vWhy = ""
+            for j = 0 to 3
+                float q = j == 0 ? ok : j == 1 ? vb1 : j == 2 ? vb2 : ck
+                if na(vEx)
+                    if vSide * (q - vStp) <= 0
+                        vEx := vStp
+                        vWhy := "STOP"
+                    else if vSide * (q - vTgt) >= 0
+                        vEx := vTgt
+                        vWhy := "TARGET"
+            if na(vEx) and mk >= TOUT and complete
+                vEx := ck
+                vWhy := "3:15 EXIT"
+            if not na(vEx)
+                float vg = vSide * (vEx - vE) - cost
+                volOpen := false
+                nTr += 1
+                nWon += vg > 0 ? 1 : 0
+                totPts += vg
+                winPts += vg > 0 ? vg : 0
+                lossPts += vg > 0 ? 0 : vg
+                nVol += 1
+                nVolWon += vg > 0 ? 1 : 0
+                volPts += vg
+                label.new(bar_index, vEx, "VOL " + vWhy + " " + pts(vg) + " pts", style = label.style_label_left, color = color.new(vg > 0 ? GREEN : RED, 80), textcolor = vg > 0 ? GREEN : RED, size = size.small)
+                line.set_extend(vlnT, extend.none)
+                line.set_extend(vlnS, extend.none)
+                line.set_x2(vlnT, bar_index)
+                line.set_x2(vlnS, bar_index)
+                todayMsg := "Volume line: " + vWhy + " at " + fmt(vEx) + ", " + pts(vg) + " pts after costs"
+                alert("CPRB " + syminfo.ticker + " VOLUME-LINE " + vWhy + " at " + fmt(vEx) + " (" + pts(vg) + " pts after costs)", alert.freq_once_per_bar)
         // touch entries
-        if mk >= 570 and entF == "Touch of the range high / low" and mk < CUT and not na(orh) and (state == 0 or (state == 2 and mk >= afterMin))
+        if mk >= 570 and not volOpen and entF == "Touch of the range high / low" and mk < CUT and not na(orh) and (state == 0 or (state == 2 and mk >= afterMin))
             int sd = hk >= orh ? 1 : lk <= orl ? -1 : 0
             if state == 2 and sd != -side
                 sd := 0
@@ -370,7 +478,7 @@ if is5 and n1 > 0
                         state := 1
 
 // 5-minute close entries (at the close of this candle)
-if is5 and entF == "5-minute close beyond the range" and barstate.isconfirmed and not na(orh) and mins >= 570 and mins + 5 <= CUT and (state == 0 or (state == 2 and mins >= afterMin))
+if is5 and not volOpen and entF == "5-minute close beyond the range" and barstate.isconfirmed and not na(orh) and mins >= 570 and mins + 5 <= CUT and (state == 0 or (state == 2 and mins >= afterMin))
     int sd = close > orh ? 1 : close < orl ? -1 : 0
     if state == 2 and sd != -side
         sd := 0
@@ -393,6 +501,42 @@ if is5 and entF == "5-minute close beyond the range" and barstate.isconfirmed an
                 tradeNo += 1
                 state := 1
 
+// volume-line entries: a 5-minute close through a line, 9:30-2:30, when no trade is open
+if is5 and vlOn and barstate.isconfirmed and not volOpen and state != 1 and not opened and mins >= 570 and mins + 5 <= 870 and array.size(vLines) > 1
+    int vs = 0
+    float vx = na
+    for x in vLines
+        if vs == 0
+            if close[1] < x and x <= close
+                vs := 1
+                vx := x
+            else if close[1] > x and x >= close
+                vs := -1
+                vx := x
+    if vs != 0
+        float vt = na
+        float vp = na
+        for x in vLines
+            if vs * (x - vx) > 0
+                vt := na(vt) or math.abs(x - vx) < math.abs(vt - vx) ? x : vt
+            if vs * (vx - x) > 0
+                vp := na(vp) or math.abs(x - vx) < math.abs(vp - vx) ? x : vp
+        if not na(vt) and not na(vp)
+            float rk = vs * (close - vp)
+            float rw = vs * (vt - close)
+            if rk > 0 and rw >= vlRR * rk
+                volOpen := true
+                vSide := vs
+                vE := close
+                vStp := vp
+                vTgt := vt
+                vStart := mins + 5
+                label.new(bar_index, close, "VOL " + (vs > 0 ? "BUY " : "SELL ") + fmt(close) + "\nstop " + fmt(vp) + "\ntarget " + fmt(vt), style = vs > 0 ? label.style_label_up : label.style_label_down, color = TEAL, textcolor = color.white, size = size.small)
+                vlnS := line.new(bar_index, vp, bar_index + 1, vp, color = RED, style = line.style_dashed, extend = extend.right)
+                vlnT := line.new(bar_index, vt, bar_index + 1, vt, color = GREEN, style = line.style_dashed, extend = extend.right)
+                todayMsg := "Volume line " + (vs > 0 ? "BUY at " : "SELL at ") + fmt(close) + ", stop " + fmt(vp) + ", target " + fmt(vt)
+                alert("CPRB " + syminfo.ticker + " VOLUME-LINE " + (vs > 0 ? "BUY at " : "SELL at ") + fmt(close) + " | STOP " + fmt(vp) + " | TARGET " + fmt(vt), alert.freq_once_per_bar)
+
 if opened
     float t0 = isMag ? tgt : tgtFor(openSide, openPx, R)
     string tTxt = isMag ? (magHalf ? "book half at " + fmt(t0) + ", rest to CPR " + fmt(tgt2) : "target CPR " + fmt(tgt2)) : na(t0) ? "ride / trail" : halfMode ? "book half at " + fmt(t0) : "target " + fmt(t0)
@@ -407,7 +551,7 @@ plot(is5 and mins >= 570 ? orh : na, "15-min high", color = lc(color.new(GREEN, 
 plot(is5 and mins >= 570 ? orl : na, "15-min low", color = lc(color.new(RED, 30)), style = plot.style_linebr)
 
 // ---------------- status and results box ----------------
-var table tbl = table.new(position.top_right, 2, 8, bgcolor = color.new(chart.bg_color, 5), border_width = 1, border_color = color.new(GREY, 60), frame_width = 1, frame_color = GREY)
+var table tbl = table.new(position.top_right, 2, 9, bgcolor = color.new(chart.bg_color, 5), border_width = 1, border_color = color.new(GREY, 60), frame_width = 1, frame_color = GREY)
 cell(int r, string a, string b, color tc) =>
     table.cell(tbl, 0, r, a, text_color = GREY, text_size = size.small, text_halign = text.align_left)
     table.cell(tbl, 1, r, b, text_color = tc, text_size = size.small, text_halign = text.align_left)
@@ -421,3 +565,4 @@ if barstate.islast and showBox
     cell(5, "Today", todayMsg, chart.fg_color)
     cell(6, "On this chart", str.tostring(nTr) + " trades, " + str.tostring(nWon) + " won, " + str.tostring(nTr - nWon) + " lost", chart.fg_color)
     cell(7, "Points won / lost / net", pts(winPts) + " / " + pts(lossPts) + " / " + pts(totPts), totPts >= 0 ? GREEN : RED)
+    cell(8, "Of which volume-line trades", str.tostring(nVol) + " trades, " + str.tostring(nVolWon) + " won, " + pts(volPts) + " pts", volPts >= 0 ? GREEN : RED)
