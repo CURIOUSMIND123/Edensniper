@@ -7,3 +7,4 @@ STOP
 __pycache__/
 research/.cache/
 alerts/cprb_cache.json
+alerts/lightweight-charts-*.js

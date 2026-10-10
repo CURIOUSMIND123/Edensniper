@@ -17,6 +17,19 @@ or a login. It tells you:
 
 Alerts appear on the screen (with a beep) and, if you set it up, on your phone through Telegram (free).
 
+## The live chart (free)
+
+While the program runs, open **http://127.0.0.1:8000** in Chrome on the same phone. It's a live candle chart drawn
+from the same free Upstox prices: NIFTY / SENSEX buttons, 1 / 3 / 5 / 15-minute candles, the CPR as three pink lines
+(orange on a narrow day), the 30-day POC (purple), the 3-day volume lines (teal dots), the 15-minute high / low, the
+open trade's stop (SL) and target (T), and every trade as a small letter: B buy, S sell, T target or half booked,
+SL stop loss, BE stop at entry, X other exit. Under the chart: today's trades with entry, stop and result. It
+refreshes every 5 seconds; the program fetches new prices every 15 seconds. On a weekend it shows the last session.
+The chart library (TradingView's free open-source Lightweight Charts) is downloaded once and kept next to the
+program. `CHART = False` at the top switches the chart off.
+
+![The live chart on a phone, replaying 8 October 2026](chart-phone.png)
+
 ## Set up once
 
 1. **Python.** On a laptop: install Python 3 from [python.org](https://www.python.org/downloads/). On Windows,
@@ -63,6 +76,8 @@ Open a terminal in the folder (on Windows: in the folder's address bar type `cmd
     python cprb_alerts.py
 
 On a phone: open the file in Pydroid 3 and press the yellow Run button.
+
+Then open http://127.0.0.1:8000 in Chrome for the live chart.
 
 Start it any time before 9:15 and leave it running until 3:30. On a laptop, plug it in and stop it from sleeping.
 On a phone, keep Pydroid open and the screen on. If you start late, it shows what already happened as

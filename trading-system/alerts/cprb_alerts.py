@@ -11,6 +11,9 @@ book half and when to exit: on this screen, and on your phone through Telegram i
     python cprb_alerts.py --telegram-test       send a test message to your phone
     python cprb_alerts.py --telegram-chat-id    find your Telegram chat id (message your bot first)
 On a phone (Pydroid 3) just press Run: the settings below do the same (REPLAY_DAY for a replay).
+LIVE CHART: while it runs, open http://127.0.0.1:8000 in Chrome on the same phone: candles, the CPR (pink),
+the volume POC and lines, the 15-minute range, and every trade as a small B / S / T / SL letter. On a weekend it
+shows the last session.
 
 Needs Python 3.8 or newer and nothing else. The settings are just below.
 Times are the 1-minute candle in which something happened; the alert comes when that candle closes.
@@ -31,6 +34,8 @@ LADDER = False                    # volume-line ladder: at the next line book ha
 TELEGRAM_TOKEN = ''               # from @BotFather in Telegram (see the guide); leave empty for screen only
 TELEGRAM_CHAT_ID = ''             # found by itself once you've messaged your bot; then put it here
 REPLAY_DAY = ''                   # e.g. '2026-10-08' to replay a past day instead of running live
+CHART = True                      # live chart in the phone's browser: http://127.0.0.1:8000
+CHART_PORT = 8000
 
 # ---------------- fixed rules (as tested on 2026) ----------------
 SPEC = {
@@ -214,7 +219,7 @@ def context(spec, sess, vol, today, daily=None):
     poc, vah, val = poc_va(*combine([H[d] for d in days[-30:]]), spec['bin'])
     return dict(spec, today=today, prev=days[-1], lv=lv, rank=rank, narrow=rank < 1 / 3,
                 rel=1 if lv['bot'] > ylv['top'] else -1 if lv['top'] < ylv['bot'] else 0,
-                yc=D[days[-1]][3], poc=poc, vah=vah, val=val,
+                yc=D[days[-1]][3], poc=poc, vah=vah, val=val, yday=sess[days[-1]],
                 lines=vol_lines(*combine([H[d] for d in days[-3:]]), spec['bin']))
 
 
@@ -557,6 +562,193 @@ def now_ist():
     return dt.datetime.now(IST)
 
 
+# ---------------- live chart in the phone's browser ----------------
+CHART_DATA = {}                   # index -> what the chart page shows, refreshed by the main loop
+
+def mark_of(why):
+    return 'SL' if why == 'stop' else 'BE' if why == 'stop at entry' else 'T' if why.startswith('target') else 'X'
+
+def chart_update(n, cx, c_all, ts, got, day):
+    """Everything the chart page draws for one index: today's (and yesterday's) 1-minute candles, levels, marks."""
+    lv = cx['lv']
+    pink = '#ff9800' if cx['narrow'] else '#e91e63'
+    levels = [dict(p=lv['top'], c=pink, t='TC', s=0, w=2), dict(p=lv['p'], c=pink, t='P', s=0, w=1),
+              dict(p=lv['bot'], c=pink, t='BC', s=0, w=2), dict(p=cx['poc'], c='#9c6ade', t='POC', s=0, w=1)]
+    levels += [dict(p=x, c='#26a69a', t='', s=1, w=1) for x in cx['lines']]
+    first = [x for x in c_all if x[0] < RANGE_END]
+    if first and got >= RANGE_END - 1:
+        levels += [dict(p=max(x[2] for x in first), c='#4caf50', t='15m H', s=2, w=1),
+                   dict(p=min(x[3] for x in first), c='#f44336', t='15m L', s=2, w=1)]
+    marks, rows, open_t = [], [], None
+    for t in ts:
+        if not t['taken']:
+            continue
+        sd = t['side']
+        m0 = 555 if t['src'] == 'MAGNET' else t['m'] - 1 if t['src'] == 'VOLUME LINE' else t['m']
+        marks.append(dict(m=m0, pos='belowBar' if sd > 0 else 'aboveBar', c='#26a69a' if sd > 0 else '#ef5350', x='B' if sd > 0 else 'S'))
+        for ev in t['ev']:
+            if ev['kind'] == 'half':
+                marks.append(dict(m=ev['m'], pos='aboveBar' if sd > 0 else 'belowBar', c='#26a69a', x='T'))
+        x = t['exit']
+        if x:
+            k = mark_of(x['why'])
+            marks.append(dict(m=x['m'], pos=('belowBar' if sd > 0 else 'aboveBar') if k in ('SL', 'BE') else ('aboveBar' if sd > 0 else 'belowBar'),
+                              c='#9e9e9e' if k == 'BE' else '#26a69a' if x['pnl'] > 0 else '#ef5350', x=k))
+        else:
+            open_t = t
+        rows.append([hhmm(m0 + (1 if t['src'] == 'VOLUME LINE' else 0)), ('BUY' if sd > 0 else 'SELL') + ' ' + t['src'].lower(), f2(t['e']), f2(t['stp0']),
+                     (f"{x['why']} at {f2(x['px'])}: {x['pnl']:+.0f} pts" if x else f"open, stop now {f2(t['stp'])}")])
+    if open_t:
+        levels.append(dict(p=open_t['stp'], c='#ef5350', t='SL', s=2, w=1))
+        half = any(e['kind'] == 'half' for e in open_t['ev'])
+        sd = open_t['side']
+        if open_t['src'] == 'MAGNET':
+            tg = open_t['edge'] if half else open_t['t1']
+        elif open_t['src'] == 'VOLUME LINE':
+            tg = open_t['tgt2'] if half else open_t['tgt']
+        else:
+            tg = None if half else open_t['e'] + sd * 0.25 * open_t['R']      # after half: trailing, no target
+        if tg:
+            levels.append(dict(p=tg, c='#26a69a', t='T', s=2, w=1))
+    done_ = [t for t in ts if t['taken'] and t['exit']]
+    net = sum(t['exit']['pnl'] for t in done_)
+    last = c_all[-1] if c_all else None
+    status = (f"{cx['name']} {f2(last[4]) if last else '-'}" + (f" (data to {hhmm(last[0])})" if last else '') +
+              f" | CPR {f2(lv['bot'])} - {f2(lv['top'])} " + ('NARROW' if cx['narrow'] else '') +
+              f" | {open_note(cx, ts)} | today {len(done_)} trade{'' if len(done_) == 1 else 's'}, {net:+.0f} pts")
+    CHART_DATA[n] = dict(name=cx['name'], day=day, yday_date=cx['prev'], yday=[list(x) for x in cx['yday']],
+                         candles=[list(x) for x in c_all], levels=levels, marks=sorted(marks, key=lambda k: k['m']),
+                         rows=rows, status=status, updated=now_ist().strftime('%H:%M:%S'))
+
+CHART_HTML = """<!doctype html><html><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>CPRB live chart</title>
+<style>
+body{margin:0;background:#0f1419;color:#d1d4dc;font:14px system-ui,-apple-system,sans-serif}
+#bar{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:8px}
+button{background:#1e2530;color:#d1d4dc;border:1px solid #2a3240;border-radius:6px;padding:6px 12px;font:inherit}
+button.on{background:#2962ff;border-color:#2962ff;color:#fff}
+#st{width:100%;font-size:13px;color:#9aa4b2}
+#c{height:68vh}
+table{width:100%;border-collapse:collapse;font-size:13px}td,th{padding:5px 8px;border-bottom:1px solid #222a35;text-align:left}
+#key{font-size:12px;color:#7d8794;padding:6px 8px}
+</style></head><body>
+<div id="bar"></div><div id="c"></div>
+<div id="key">Pink: CPR (TC, P, BC; orange on a narrow day). Purple: 30-day POC. Teal dots: 3-day volume lines.
+Green / red dashed: 15-minute high / low, and the open trade's T / SL. Letters: B buy, S sell, T target or half booked,
+SL stop loss, BE stop at entry, X other exit.</div>
+<table><thead><tr><th>Time</th><th>Trade</th><th>Entry</th><th>Stop</th><th>Result</th></tr></thead><tbody id="list"></tbody></table>
+<script src="/lwc.js"></script>
+<script>
+const IDX = %INDICES%; let cur = IDX[0][0], tf = 5, plines = [], lastKey = '', fitted = '';
+const box = document.getElementById('c');
+if (!window.LightweightCharts) document.getElementById('bar').textContent = 'The chart library did not load: check the internet connection and reload.';
+const chart = LightweightCharts.createChart(box, {layout: {background: {color: '#0f1419'}, textColor: '#d1d4dc'},
+  grid: {vertLines: {color: '#18202a'}, horzLines: {color: '#18202a'}}, rightPriceScale: {borderColor: '#2a3240'},
+  timeScale: {timeVisible: true, secondsVisible: false, borderColor: '#2a3240', rightOffset: 6}, crosshair: {mode: 0},
+  localization: {locale: 'en-IN'}});
+const s = chart.addCandlestickSeries({upColor: '#26a69a', downColor: '#ef5350', borderVisible: false,
+  wickUpColor: '#26a69a', wickDownColor: '#ef5350', priceLineVisible: false});
+new ResizeObserver(() => chart.applyOptions({width: box.clientWidth, height: box.clientHeight})).observe(box);
+const ts = (day, m) => { const [y, mo, d] = day.split('-').map(Number); return Date.UTC(y, mo - 1, d) / 1000 + m * 60; };
+const bucket = m => 555 + Math.floor((m - 555) / tf) * tf;
+function agg(day, rows, out) {
+  for (const [m, o, h, l, c] of rows) {
+    const t = ts(day, bucket(m)), x = out[out.length - 1];
+    if (x && x.time === t) { x.high = Math.max(x.high, h); x.low = Math.min(x.low, l); x.close = c; }
+    else out.push({time: t, open: o, high: h, low: l, close: c});
+  }
+  return out;
+}
+function buttons() {
+  const bar = document.getElementById('bar'); bar.innerHTML = '';
+  for (const [k, name] of IDX) { const b = document.createElement('button'); b.textContent = name; b.className = k === cur ? 'on' : '';
+    b.onclick = () => { cur = k; lastKey = ''; fitted = ''; buttons(); load(); }; bar.appendChild(b); }
+  for (const f of [1, 3, 5, 15]) { const b = document.createElement('button'); b.textContent = f + 'm'; b.className = f === tf ? 'on' : '';
+    b.onclick = () => { tf = f; fitted = ''; buttons(); load(); }; bar.appendChild(b); }
+  const st = document.createElement('div'); st.id = 'st'; st.textContent = 'loading...'; bar.appendChild(st);
+}
+async function load() {
+  let d;
+  try { d = await (await fetch('/data?i=' + cur, {cache: 'no-store'})).json(); }
+  catch (e) { document.getElementById('st').textContent = 'The program is not running: start it in Pydroid 3.'; return; }
+  if (!d.day) return;
+  s.setData(agg(d.day, d.candles, agg(d.yday_date, d.yday, [])));
+  s.setMarkers(d.marks.map(k => ({time: ts(d.day, bucket(k.m)), position: k.pos, color: k.c, shape: k.pos === 'belowBar' ? 'arrowUp' : 'arrowDown', size: 0.4, text: k.x})));
+  const key = JSON.stringify(d.levels);
+  if (key !== lastKey) { plines.forEach(p => s.removePriceLine(p)); lastKey = key;
+    plines = d.levels.map(l => s.createPriceLine({price: l.p, color: l.c, lineWidth: l.w, lineStyle: l.s, axisLabelVisible: l.t !== '', title: l.t})); }
+  if (fitted !== cur + tf) { fitted = cur + tf; chart.timeScale().setVisibleLogicalRange({from: Math.max(0, s.data().length - 90), to: s.data().length + 6}); }
+  document.getElementById('st').textContent = d.status + ' | updated ' + d.updated;
+  document.getElementById('list').innerHTML = d.rows.map(r => '<tr>' + r.map(x => '<td>' + x + '</td>').join('') + '</tr>').join('') ||
+    '<tr><td colspan="5">No trades yet today.</td></tr>';
+}
+buttons(); load(); setInterval(load, 5000);
+</script></body></html>"""
+
+LWC_URL = 'https://cdn.jsdelivr.net/npm/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js'
+LWC_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'lightweight-charts-4.1.3.js')
+
+def chart_library():
+    """TradingView's free open-source chart library, downloaded once and kept next to this file."""
+    if not os.path.exists(LWC_FILE):
+        try:
+            req = urllib.request.Request(LWC_URL, headers={'User-Agent': 'curl/8.5.0'})
+            with urllib.request.urlopen(req, timeout=60) as r, open(LWC_FILE, 'wb') as f:
+                f.write(r.read())
+        except Exception as e:
+            print(f"  (chart library not downloaded: {e}; the page will try the internet directly)")
+            return None
+    with open(LWC_FILE, 'rb') as f:
+        return f.read()
+
+def serve_chart(names):
+    """Serve the chart page on this phone / computer only (127.0.0.1)."""
+    import http.server
+    import threading
+    page = CHART_HTML.replace('%INDICES%', json.dumps([[n, SPEC[n]['name']] for n in names]))
+    lib = chart_library()
+
+    class Handler(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):
+            if self.path.startswith('/lwc.js') and not lib:
+                self.send_response(302)
+                self.send_header('Location', LWC_URL)
+                self.end_headers()
+                return
+            if self.path.startswith('/lwc.js'):
+                body, ctype = lib, 'application/javascript'
+            elif self.path.startswith('/data'):
+                q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+                body, ctype = json.dumps(CHART_DATA.get(q.get('i', [names[0]])[0], {})).encode(), 'application/json'
+            else:
+                body, ctype = page.encode(), 'text/html; charset=utf-8'
+            self.send_response(200)
+            self.send_header('Content-Type', ctype)
+            self.send_header('Cache-Control', 'no-store')
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, *a):
+            pass
+
+    try:
+        srv = http.server.ThreadingHTTPServer(('127.0.0.1', CHART_PORT), Handler)
+    except OSError as e:
+        print(f"  (chart not started: {e})")
+        return False
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    print(f"LIVE CHART: open http://127.0.0.1:{CHART_PORT} in Chrome on this phone.")
+    return True
+
+def keep_serving(text):
+    print(text + " The chart stays open; press Stop in Pydroid 3 (or Ctrl+C) to end.")
+    try:
+        while True:
+            time.sleep(3600)
+    except KeyboardInterrupt:
+        pass
+
+
 # ---------------- running ----------------
 def load(names, today):
     """Contexts for each index for the session `today` (a date string)."""
@@ -591,6 +783,9 @@ def replay(names, day, lots, ladder):
                     seen.add(mid)
                     print(('>>> ' if push else '    ') + text)
         print('    ' + day_summary(cx, ts, lots))
+        chart_update(n, cx, c_all, ts, CLOSE - 1, day)
+    if CHART and CHART_DATA and serve_chart(names):
+        keep_serving(f"Replay of {day} is on the chart.")
 
 def live(names, lots, ladder, plan_only=False):
     now = now_ist()
@@ -605,8 +800,15 @@ def live(names, lots, ladder, plan_only=False):
         return
     if now.weekday() >= 5:
         print("Market closed today (weekend). The plan above is for the next session.")
+        if CHART:
+            print(f"Showing the last session ({cxs[names[0]]['prev']}) on the chart.")
+            replay(names, cxs[names[0]]['prev'], lots, ladder)
         return
-    seen, first, last_ts, waited = set(), True, {}, False
+    if CHART:
+        serve_chart(names)
+        for n in names:
+            chart_update(n, cxs[n], [], [], OPEN - 1, today)
+    seen, first, last_ts, waited, shown = set(), True, {}, False, {}
     while True:
         now = now_ist()
         mnow = now.hour * 60 + now.minute
@@ -627,13 +829,17 @@ def live(names, lots, ladder, plan_only=False):
             except Exception as e:
                 print(f"  {cx['name']}: data error ({e}); trying again next minute")
                 continue
-            c1 = [(m,) + tuple(rows[m][:4]) for m in sorted(rows) if m <= upto]
+            c_all = [(m,) + tuple(rows[m][:4]) for m in sorted(rows)]       # includes the minute still forming
+            c1 = [x for x in c_all if x[0] <= upto]
             if not c1:
-                if mnow >= OPEN + 10:
+                if mnow >= OPEN + 10 and shown.get(n) != 'none':
                     print(f"  {cx['name']}: no candles yet today ({hhmm(mnow)}). Market holiday or a data problem?")
+                    shown[n] = 'none'
                 continue
             if c1[-1][0] < upto and now.second < 40:
                 late = True                                   # the last minute isn't in yet: look again soon
+                if CHART:
+                    chart_update(n, cx, c_all, last_ts.get(n, []), c1[-1][0], today)
                 continue
             got = min(upto, c1[-1][0])                        # data complete up to here (the source can lag)
             ts = day_trades(cx, c1, got, got == CLOSE - 1, ladder)
@@ -646,16 +852,22 @@ def live(names, lots, ladder, plan_only=False):
                     print('    [earlier today] ' + text)
                 else:
                     alert(text, push)
-            print(f"  {hhmm(mnow)} {cx['name']} {f2(c1[-1][4])} (data to {hhmm(c1[-1][0])}) | {open_note(cx, ts)}", flush=True)
+            if CHART:
+                chart_update(n, cx, c_all, ts, got, today)
+            if shown.get(n) != got:
+                shown[n] = got
+                print(f"  {hhmm(mnow)} {cx['name']} {f2(c1[-1][4])} (data to {hhmm(c1[-1][0])}) | {open_note(cx, ts)}", flush=True)
         first = False if not late else first
         if mnow >= CLOSE:
             for n in names:
                 if n in last_ts:
                     alert(day_summary(cxs[n], last_ts[n], lots))
             print("Market closed. Run it again tomorrow before 9:15.")
+            if CHART:
+                keep_serving("")
             return
         now = now_ist()
-        time.sleep(5 if late else max(2, 63 - now.second))
+        time.sleep(5 if late else max(2, min(15, 63 - now.second)) if CHART else max(2, 63 - now.second))
 
 def find_chat_id():
     """The chat id of the last message sent to your bot (Telegram keeps them for about a day)."""
