@@ -44,3 +44,5 @@ Costs: 4 Nifty points or 12 Sensex points per trade. `pip install pandas scikit-
 | `y2026_daily.py` | 2026 only: the daily plan (CPR Breakout on narrow days; CPR Magnet or the breakout on other days), with and without half booking, by half-year and month |
 | `y2026_losses.py` | 2026 only: every losing trade of the daily plan, and which CPR Magnet changes (stop size, time stop, gap size, open inside yesterday's range, confirmation, POC side, volatility) cut losses |
 | `y2026_rupees.py` | 2026 only: the daily plan in rupees for Rs 30,000 with 2 at-the-money option lots (delta 0.5, lots 65 / 20), by month, with drawdowns |
+| `btc_load.py` | Turns Binance's public 1-minute BTCUSDT futures archives (data.binance.vision) into `../.cache/btc_1m.json` (run with `python -I`) |
+| `btc_2026.py` | 2026 only: the daily-plan indicator on Bitcoin (UTC day as the session, Bitcoin's own volume), and Rs 30,000 at 1x to 150x leverage |

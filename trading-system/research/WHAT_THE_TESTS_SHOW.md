@@ -474,6 +474,32 @@ books half), costs included, no compounding. Time decay and the extra brokerage 
   third of the account.
 - These settings were chosen on 2026 itself, so live trading will very likely do worse than this.
 
+## 2026: the daily plan on Bitcoin
+
+Binance BTCUSDT futures, every 1-minute candle from January to 9 October 2026 (Binance's public archive). Bitcoin
+trades around the clock, so each UTC day (5:30 am IST) is a "session": CPR from the previous UTC day, opening
+range 00:00-00:15 UTC, a 30-day volume POC from Bitcoin's own volume, no gap filter (there's no overnight gap).
+Costs: 0.05% taker fee each side plus 0.01% slippage, 0.11% of the position per trade.
+
+| 2026 | Trades | Won / lost | Total, % of price |
+|---|---|---|---|
+| Nifty settings (entries within 45 min, magnet 0.2% / 0.3%, out after 6 hours) | 169 (18 a month) | 24 / 145 | −24.7% |
+| Magnet sized 3x for Bitcoin's volatility | 148 | 30 / 118 | −21.5% |
+| Entries within 2 hours, magnet 3x | 188 | 36 / 152 | −26.0% |
+| Nifty settings with no fees at all | 165 | 131 / 34 | −5.9% |
+
+Every version lost money in both halves of 2026. The scalp's typical gain (about 0.05-0.1% of price) is smaller
+than Binance's fees, and even with no fees it lost.
+
+Rs 30,000 traded with the Nifty settings, whole balance as margin:
+
+| Leverage | 1x | 2x | 5x | 10x | 20x | 50x | 100x | 125x | 150x |
+|---|---|---|---|---|---|---|---|---|---|
+| End of 2026 | Rs 23,396 | Rs 18,174 | Rs 8,289 | Rs 1,964 | wiped out 6 Feb | wiped out 6 Feb | wiped out 19 Jan | wiped out 19 Jan | wiped out 2 Jan |
+
+At 150x a move of about 0.27% against the position (1/150 minus Binance's 0.4% maintenance margin) liquidates it;
+Bitcoin moves that much in a few minutes on most days.
+
 ## How to re-check all of this
 
 - `python research/fair_price_backtest.py` downloads the candles and re-runs the Fair Price test.
