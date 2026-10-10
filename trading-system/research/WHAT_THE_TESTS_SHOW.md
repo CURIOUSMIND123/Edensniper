@@ -820,6 +820,31 @@ most 150 / 45, target 1-2x the stop:
 The pullback entry made money in both halves of 2026 on both indices with small stops and short holds (21 of 64
 Sensex versions, 18 of 64 Nifty). It trades about 3 times a month per index.
 
+## 2026: only trades with reward at least 3x the risk (1:3)
+
+Stops at most 0.07% / 0.14% / 0.21% of price (Sensex about 50 / 100 / 150 points, Nifty 16 / 31 / 47). Targets: the
+first key level in the trade's direction, taken only if it is at least 3x the stop away; or a fixed 3x / 4x the
+stop. Key levels: CPR and pivots, the last 7 sessions' highs / lows / opens / closes, the 7-day volume profile, the
+3-day volume lines and the 30-day POC. Setups: the pullback entry, CPR Magnet, volume lines, rejection candles at
+key levels, 5-minute closes through key levels (`y2026_rr.py`, 378 versions per index).
+
+- **Price action at key levels lost money** in every version on both indices, rejections and breakouts, with or
+  without the day's direction (middle versions Nifty −1,551 to −3,085, Sensex −5,395 to −7,960).
+- **"Only if the next level is 3x away" almost never happens**: the levels are close together. 0-8 trades in the
+  year.
+- **A fixed 3x / 4x target works for the pullback entry and CPR Magnet, if the trade can run.** Within 60 minutes
+  the target is rarely reached (Sensex: 6 of 97 trades), so most trades end on time.
+
+| 2026, stop at most 0.21% of price (`y2026_rr_combo.py`) | Nifty | Sensex |
+|---|---|---|
+| Pullback, target 4x, out at the target, stop or 3:15 | 33 trades, 58% won, avg win +109 / loss −51, net +1,362 | 28 trades, 54% won, avg win +336 / loss −164, net +2,901 |
+| Pullback + Magnet, target 4x, to 3:15 | 55 trades, 44% won, net +1,344, worst fall −428 | 53 trades, 43% won, net +4,419, worst fall −1,048 |
+| Pullback + Magnet + volume lines, target 4x, to 3:15 | 82 trades, 35% won, net +734 | 89 trades, 40% won, avg win +410 / loss −146, net +6,997, worst fall −1,228 |
+| Pullback + Magnet + volume lines, target 3x, out within 60 min | 87 trades, 48% won, net −144 | 97 trades, 58% won, net +3,604 |
+| For comparison: small stops, out within 60 min (current default) | 150 trades, 53% won, net +842 | 170 trades, 54% won, net +4,708 |
+
+All versions shown were positive in both halves of 2026 except where the net is negative.
+
 ## How to re-check all of this
 
 - `python research/fair_price_backtest.py` downloads the candles and re-runs the Fair Price test.

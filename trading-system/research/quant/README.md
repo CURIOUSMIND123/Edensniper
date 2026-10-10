@@ -64,3 +64,5 @@ Costs: 4 Nifty points or 12 Sensex points per trade. `pip install pandas scikit-
 | `y2026_short.py` | 2026 only: the indicator with stops capped at 100 / 150 Sensex (30 / 45 Nifty) points, no trailing, out within 15 / 30 / 60 minutes, plain targets, and taking the breakout again after a stop |
 | `y2026_reversal.py` | 2026 only: reversals at key levels (7-day opens / closes, highs / lows, 7-day volume profile, CPR and pivots) and entering on the pullback after the 9:30 breakout, with stops of 100-150 Sensex / 30-45 Nifty and 30-60 minute holds |
 | `y2026_short_combo.py` | 2026 only: pullback entry + CPR Magnet + volume lines with small stops and 30 / 60 minute holds, together |
+| `y2026_rr.py` | 2026 only: trades only when the reward is at least 3x the risk: stops 0.07-0.21% of price, targets at the first key level (if 3x away) or 3x / 4x, for the pullback, Magnet, volume lines, rejections at key levels and closes through key levels |
+| `y2026_rr_combo.py` | 2026 only: the 1:3 / 1:4 setups that held up, put together, with 60 / 120 minute limits or to 3:15 |
