@@ -1047,6 +1047,34 @@ volume line; within an hour), or for a pullback of 10 / 20 / 30 Nifty (30 / 60 /
 - The best winners did not come back: with the retest 18 Nifty winners (+805 points) and 18 Sensex winners
   (+3,288) would have been missed, among them the biggest volume-line and breakout trades.
 
+## 2026: booking the profit instead of the stop at entry / trailing stop, or trading again from the stop
+
+In the default (original rules + volume check), the breakout and Magnet trades book half at 0.25x the risk, move the
+stop to entry and then trail (breakout) or ride to the CPR edge (Magnet). Most of them (Nifty 32 of 44, Sensex 28 of
+37) ended at the stop at entry or the trailing stop with a small profit. `y2026_exits.py`:
+
+| 2026, whole indicator, net points | Nifty | Sensex |
+|---|---|---|
+| Now | +2,214 (Jan-Jun +1,790, Jul-Oct +423), 87% won, worst fall −138 | +8,001 (+6,789 / +1,211), 82% won, worst fall −336 |
+| Book the whole trade at the half level (0.25R) | +1,968 | +7,536 |
+| Book half, the rest at 1R / 2R / 3R instead of trailing | +2,061 / +2,236 / +2,273 | +7,833 / +7,852 / +7,839 |
+| Book half, no trailing, the rest to 3:15 | +2,396 | +8,103 |
+| Book half but keep the original stop | +2,421, worst fall −168 | +8,676, worst fall −336 |
+| Re-run: no booking half, the whole trade at 1R / 2R / 3R / 4R, original stop | +2,290 / +2,798 / **+2,998** / +3,141 | +9,426 / +10,072 / **+10,719** / +10,124 |
+| Re-run, 3R: details | 66% won, Jan-Jun +2,273, Jul-Oct +725, worst fall −267, worst trade −186 | 68% won, Jan-Jun +8,461, Jul-Oct +2,258, worst fall −686, worst trade −686 |
+| Reverse at the stop at entry / trailing stop (stop beyond the best price, target 2x) | 32 new trades, 9 won, −318 | 28 new trades, 11 won, −153 |
+| Enter again the same way when price comes back through the stop | 28 new trades, 14 won, −189 | 21 new trades, 9 won, −619 |
+
+- Trading again from the stop lost on both indices, both ways.
+- Booking everything early (0.25R) doubled the small profits of the trades that ended at the stop at entry, but cut
+  the big ones, so it made less overall.
+- **The whole trade at a fixed target, with the original stop, beat booking half in both halves on both indices**
+  at every target from 2x to 5x (and without the volume check too: 3R Nifty +3,246, Sensex +11,012). The price: the
+  win rate falls from about 85% to about 67%, the worst fall doubles, and the worst single trade is a full breakout
+  stop (Sensex −686). Both indices at 5 lots: Rs 10.2 lakh in 2026 instead of Rs 7.6 lakh, but 2 losing months (June
+  −27k, August −3k), worst day −Rs 64,600; Rs 30,000 at 2 lots, 5 from Rs 75,000: Rs 9.2 lakh, below Rs 15,000 in 6.0%
+  of random orders (0.4% now). Not the default yet.
+
 ## How to re-check all of this
 
 - `python research/fair_price_backtest.py` downloads the candles and re-runs the Fair Price test.

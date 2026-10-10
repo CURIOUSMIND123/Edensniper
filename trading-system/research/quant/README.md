@@ -73,4 +73,5 @@ Costs: 4 Nifty points or 12 Sensex points per trade. `pip install pandas scikit-
 | `y2026_sdzones.py` | 2026 only: reversal patterns (morning / evening star, engulfing, piercing, harami, tweezer, hammer, shooting star) at 15 / 60-minute supply and demand zones, with break of structure and retest, alone and added to the indicator |
 | `y2026_stopcap.py` | 2026 only: the default with every stop held to 20 / 30 / 45 Nifty (60 / 100 / 150 Sensex) points, moved in or skipped |
 | `y2026_retest.py` | 2026 only: every trade of the default replayed as if we had waited for a retest of the broken level or a small pullback; trade by trade in `research/RETEST_TRADES.md` |
+| `y2026_exits.py` | 2026 only: booking the profit instead of the stop at entry / trailing stop (whole trade at a target, the rest at 1-3R, to 3:15), or reversing / entering again from the stop; the whole indicator re-run with each exit |
 | `y2026_report.py` | 2026 only: the full report of what the indicator / alerts trade now (default, original without sweeps, 1:4, small stops): trades, points, setups, exits, months, rupees, and what Rs 30,000 becomes |
