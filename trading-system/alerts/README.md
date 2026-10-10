@@ -36,7 +36,8 @@ Alerts appear on the screen (with a beep) and, if you set it up, on your phone t
 
 ## On a Samsung phone (no computer needed)
 
-1. From the Play Store install **Pydroid 3**, **Telegram** and **TradingView**.
+1. From the Play Store install **Pydroid 3** and **Telegram**. That's all: the live prices come from Upstox's free
+   public data, which the program fetches by itself (no Upstox app, account or login). TradingView is optional.
 2. Open the copy page on the phone, tap **Copy program**. In Pydroid 3: menu, New, paste, Save as `cprb_alerts.py`.
 3. Telegram alerts: do step 3 above (BotFather, then the token in the file). In Pydroid 3, open the file and press
    the yellow Run button once: it prints your chat id. Put it in `TELEGRAM_CHAT_ID`, save, and Run again: "CPR
@@ -46,7 +47,7 @@ Alerts appear on the screen (with a beep) and, if you set it up, on your phone t
    - Settings > Apps > Pydroid 3 > Battery > **Unrestricted**.
    - Keep the phone on the charger from 9:10 to 3:30. If it still stops when the screen is off, keep Pydroid 3 open
      in split screen or a pop-up window next to Groww.
-5. The chart: open tradingview.com in Chrome (in DeX, or on the phone with "Desktop site" ticked), Pine Editor,
+5. Optional, the chart: open tradingview.com in Chrome (in DeX, or on the phone with "Desktop site" ticked), Pine Editor,
    paste the indicator, Save, Add to chart. After saving it once it is also in the TradingView app under
    Indicators > My scripts. Free TradingView is 15 minutes late, but the CPR, POC and volume lines come from
    earlier days, so they are right; the live signals come from the alerts.
