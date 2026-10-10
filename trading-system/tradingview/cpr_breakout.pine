@@ -35,7 +35,8 @@ relF   = input.bool(true, "Not against today's CPR vs yesterday's (higher / lowe
 widF   = input.string("Narrow only", "CPR width", options = ["Any", "Narrow only", "Skip narrow"], group = G1)
 entF   = input.string("Touch of the range high / low", "Entry", options = ["5-minute close beyond the range", "Touch of the range high / low"], group = G1)
 stopF  = input.string("Other side of the 15-minute range", "Stop", options = ["Other side of the 15-minute range", "Middle of the 15-minute range", "0.2% of price"], group = G1)
-exitF  = input.string("Trail 1R behind the best price after +1R", "Exit", options = ["Target 3 x risk", "Ride: stop to entry at +1R, out at 3:15", "Trail 1R behind the best price after +1R"], group = G1)
+exitF  = input.string("Trail 1R behind the best price after +1R", "Exit", options = ["Scalp: book half at 0.25R, stop to entry, trail the rest", "Target 3 x risk", "Ride: stop to entry at +1R, out at 3:15", "Trail 1R behind the best price after +1R"], group = G1)
+gapF   = input.bool(false, "Only in the direction of the opening gap (open vs yesterday's close)", group = G1)
 revF   = input.bool(true, "Reversal trade when the first break fails", group = G1)
 costIn = input.float(0, "Cost per trade in index points (0 = auto: Nifty 4, Sensex 12)", step = 1, group = G1)
 G2 = "Display"
@@ -164,6 +165,9 @@ var float stp = na
 var float tgt = na
 var float R = na
 var float best = na
+var bool  halfDone = false
+var float halfPts = na
+var int   gapDir = 0           // +1 opened above yesterday's close, -1 below
 var line  lnS = na
 var line  lnT = na
 var string todayMsg = ""
@@ -181,6 +185,8 @@ passes(int sd, float px, float emaNow) =>
         ok := false
     if relF and sd == -relBias
         ok := false
+    if gapF and sd != gapDir
+        ok := false
     if emaF and sd * (px - emaNow) <= 0
         ok := false
     if pocF != "Off"
@@ -192,9 +198,9 @@ passes(int sd, float px, float emaNow) =>
 stopFor(int sd, float px) =>
     stopF == "Other side of the 15-minute range" ? (sd > 0 ? orl : orh) : stopF == "Middle of the 15-minute range" ? (orh + orl) / 2 : px - sd * 0.002 * px
 
-// 1 = stop, 2 = target, 0 = neither
-hitAt(float px, int sd, float s, float t) =>
-    sd * (px - s) <= 0 ? 1 : not na(t) and sd * (px - t) >= 0 ? 2 : 0
+halfMode = exitF == "Scalp: book half at 0.25R, stop to entry, trail the rest"
+tgtFor(int sd, float px, float r) =>
+    exitF == "Target 3 x risk" ? px + sd * 3 * r : halfMode ? px + sd * 0.25 * r : na
 
 if newDay
     orh := na
@@ -220,46 +226,64 @@ if is5 and n1 > 0
         complete = k < n1 - 1 or barstate.isconfirmed
         if mk == 555
             cb := ok > top ? 1 : ok < bot ? -1 : 0
+            gapDir := ok > pC ? 1 : ok < pC ? -1 : 0
         if mk < 570
             orh := na(orh) ? hk : math.max(orh, hk)
             orl := na(orl) ? lk : math.min(orl, lk)
         else
             // exits
             if state == 1 and mk >= startMin
+                // order of prices inside a 1-minute candle: green open-low-high-close, red open-high-low-close
                 float a1 = ck >= ok ? lk : hk
                 float a2 = ck >= ok ? hk : lk
-                int r = hitAt(ok, side, stp, tgt)
-                if r == 0
-                    r := hitAt(a1, side, stp, tgt)
-                if r == 0
-                    r := hitAt(a2, side, stp, tgt)
-                if r == 0
-                    r := hitAt(ck, side, stp, tgt)
-                bool isOut = r > 0
+                bool isOut = false
+                float ex = na
+                string why = ""
+                for j = 0 to 3
+                    float q = j == 0 ? ok : j == 1 ? a1 : j == 2 ? a2 : ck
+                    if not isOut
+                        if side * (q - stp) <= 0
+                            isOut := true
+                            ex := stp
+                            why := side * (stp - e) > 0 ? "TRAIL STOP" : stp == e ? "STOP AT ENTRY" : "STOP"
+                        else if not na(tgt) and side * (q - tgt) >= 0
+                            if halfMode and not halfDone
+                                halfDone := true
+                                halfPts := side * (tgt - e)
+                                if side * (e - stp) > 0
+                                    stp := e
+                                label.new(bar_index, tgt, "HALF BOOKED +" + str.tostring(halfPts, "#,##0"), style = label.style_label_left, color = color.new(GREEN, 80), textcolor = GREEN, size = size.tiny)
+                                alert("CPRB " + syminfo.ticker + " BOOK HALF at " + fmt(tgt) + ", move stop to " + fmt(stp), alert.freq_once_per_bar)
+                                tgt := na
+                            else
+                                isOut := true
+                                ex := tgt
+                                why := "TARGET"
                 if not isOut
                     best := side > 0 ? math.max(best, hk) : math.min(best, lk)
                     if exitF == "Ride: stop to entry at +1R, out at 3:15" and side * (best - e) >= R and side * (e - stp) > 0
                         stp := e
-                    if exitF == "Trail 1R behind the best price after +1R" and side * (best - e) >= R
+                    if (exitF == "Trail 1R behind the best price after +1R" or halfMode) and side * (best - e) >= R
                         float ns = best - side * R
                         if side * (ns - stp) > 0
                             stp := ns
-                    isOut := mk >= TOUT and complete
+                    if mk >= TOUT and complete
+                        isOut := true
+                        ex := ck
+                        why := "3:15 EXIT"
                 if isOut
-                    float ex = r == 1 ? stp : r == 2 ? tgt : ck
-                    float g = side * (ex - e) - cost
+                    float g = (halfDone ? (halfPts + side * (ex - e)) / 2 : side * (ex - e)) - cost
                     nTr += 1
                     nWon += g > 0 ? 1 : 0
                     totPts += g
                     winPts += g > 0 ? g : 0
                     lossPts += g > 0 ? 0 : g
-                    why = r == 1 ? "STOP" : r == 2 ? "TARGET" : "3:15 EXIT"
                     label.new(bar_index, ex, why + " " + pts(g) + " pts", style = label.style_label_left, color = color.new(g > 0 ? GREEN : RED, 80), textcolor = g > 0 ? GREEN : RED, size = size.small)
                     line.set_extend(lnT, extend.none)
                     line.set_extend(lnS, extend.none)
                     line.set_x2(lnT, bar_index)
                     line.set_x2(lnS, bar_index)
-                    todayMsg := why + " at " + fmt(ex) + ": " + pts(g) + " pts after costs"
+                    todayMsg := why + " at " + fmt(ex) + ": " + pts(g) + " pts after costs" + (halfDone ? " (half booked earlier)" : "")
                     alert("CPRB " + syminfo.ticker + " " + why + " at " + fmt(ex) + " (" + pts(g) + " pts after costs)", alert.freq_once_per_bar)
                     if tradeNo == 1 and g <= 0 and revF
                         state := 2
@@ -283,7 +307,9 @@ if is5 and n1 > 0
                             e := px
                             stp := s0
                             R := sd * (px - s0)
-                            tgt := exitF == "Target 3 x risk" ? px + sd * 3 * R : na
+                            tgt := tgtFor(sd, px, R)
+                            halfDone := false
+                            halfPts := na
                             best := px
                             startMin := mk + 1
                             tradeNo += 1
@@ -305,19 +331,23 @@ if is5 and entF == "5-minute close beyond the range" and barstate.isconfirmed an
                 e := close
                 stp := s0
                 R := sd * (close - s0)
-                tgt := exitF == "Target 3 x risk" ? close + sd * 3 * R : na
+                tgt := tgtFor(sd, close, R)
+                halfDone := false
+                halfPts := na
                 best := close
                 startMin := mins + 5
                 tradeNo += 1
                 state := 1
 
 if opened
-    txt = (openSide > 0 ? "BUY " : "SELL ") + fmt(openPx) + (tradeNo == 2 ? " (reversal)" : "") + "\nstop " + fmt(stp) + (na(tgt) ? "\nride / trail" : "\ntarget " + fmt(tgt))
+    float t0 = tgtFor(openSide, openPx, R)
+    string tTxt = na(t0) ? "ride / trail" : halfMode ? "book half at " + fmt(t0) : "target " + fmt(t0)
+    txt = (openSide > 0 ? "BUY " : "SELL ") + fmt(openPx) + (tradeNo == 2 ? " (reversal)" : "") + "\nstop " + fmt(stp) + "\n" + tTxt
     label.new(bar_index, openPx, txt, style = openSide > 0 ? label.style_label_up : label.style_label_down, color = openSide > 0 ? GREEN : RED, textcolor = color.white, size = size.small)
     lnS := line.new(bar_index, stp, bar_index + 1, stp, color = RED, style = line.style_dashed, extend = extend.right)
-    lnT := line.new(bar_index, na(tgt) ? openPx : tgt, bar_index + 1, na(tgt) ? openPx : tgt, color = na(tgt) ? GREY : GREEN, style = line.style_dashed, extend = extend.right)
-    todayMsg := (openSide > 0 ? "BUY at " : "SELL at ") + fmt(openPx) + ", stop " + fmt(stp) + (na(tgt) ? "" : ", target " + fmt(tgt))
-    alert("CPRB " + syminfo.ticker + (openSide > 0 ? " BUY at " : " SELL at ") + fmt(openPx) + " | STOP " + fmt(stp) + (na(tgt) ? " | ride" : " | TARGET " + fmt(tgt)), alert.freq_once_per_bar)
+    lnT := line.new(bar_index, na(t0) ? openPx : t0, bar_index + 1, na(t0) ? openPx : t0, color = na(t0) ? GREY : GREEN, style = line.style_dashed, extend = extend.right)
+    todayMsg := (openSide > 0 ? "BUY at " : "SELL at ") + fmt(openPx) + ", stop " + fmt(stp) + ", " + tTxt
+    alert("CPRB " + syminfo.ticker + (openSide > 0 ? " BUY at " : " SELL at ") + fmt(openPx) + " | STOP " + fmt(stp) + " | " + tTxt, alert.freq_once_per_bar)
 
 plot(is5 and mins >= 570 ? orh : na, "15-min high", color = lc(color.new(GREEN, 30)), style = plot.style_linebr)
 plot(is5 and mins >= 570 ? orl : na, "15-min low", color = lc(color.new(RED, 30)), style = plot.style_linebr)

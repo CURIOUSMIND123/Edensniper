@@ -33,3 +33,7 @@ Costs: 4 Nifty points or 12 Sensex points per trade. `pip install pandas scikit-
 | `cpr_orb.py` | Open vs the CPR, the first 15-minute candle's high / low break, the 15-day point of control and value area, EMA 50: how often each idea held, then 3,888 combined breakout versions at 1:3, ride or trail (e.g. `nifty`) |
 | `cpr_orb_pick.py` | Which `cpr_orb.py` versions made money on both indices, every year, and in a walk-forward split (run `cpr_orb.py` for both first) |
 | `cpr_orb_lastn.py` | The chosen CPR Breakout version trade by trade over the last N sessions (e.g. `nifty 90`) |
+| `cpr_orb_winrate.py` | How high the CPR Breakout's win rate can go while it still makes money: targets 0.1R-3R, trail, half booked early, seven trend filters |
+| `cpr_winrate_pick.py` | Reads the `cpr_orb_winrate.py` results for both indices: versions with 70 / 80 / 90%+ wins, and which of them made money |
+| `cpr_scalp_lastn.py` | The highest-win-rate version that made money on both indices, trade by trade over the last N sessions |
+| `cpr_scalp.py` | Pure scalps at the CPR, pivot and 15-minute levels: 10-30 point targets, 10-40 point stops, time limits, up to 5 trades a day |

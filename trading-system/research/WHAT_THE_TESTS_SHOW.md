@@ -298,6 +298,40 @@ optional reversal trade after a failed break.
 
 It's in `tradingview/cpr_breakout.pine`.
 
+## Can it win 90%?
+
+![Win rate vs profit](win-rate-vs-profit.png)
+
+Yes, if the target is small enough, but then it stops making money. The CPR Breakout above, with only the exit
+changed (since February 2023, narrow-CPR days, with the reversal trade):
+
+| Exit | Nifty: won / total | Sensex: won / total |
+|---|---|---|
+| Target 0.1R (about 8 Nifty points) | 79%, −1,164 | 86%, −2,484 |
+| Target 0.25R | 78%, −1,149 | 83%, +1,216 |
+| Target 0.5R | 67%, −213 | 70%, +2,676 |
+| Target 1R | 53%, +320 | 54%, +2,357 |
+| Target 3R | 42%, +866 | 46%, +7,272 |
+| Trail | 51%, +1,896 | 53%, +7,296 |
+
+In the last 90 sessions alone the 0.1R target won 97% (Nifty) and 100% (Sensex). Over 3¾ years it won 79-86%
+and lost money: the few losses (a full stop, about −80 points) wiped out many +4-point wins.
+
+I also tried 3,072 versions with trend filters (20-day and 5-day trend, yesterday's candle, the opening gap, the
+first 15-minute candle, price beyond the CPR at entry, EMA 50) and with booking half early:
+
+- 248 Nifty and 369 Sensex versions won 90%+ in the last 90 sessions. Only 26 and 104 of those also made money
+  since 2023, and none on Nifty (4 on Sensex) kept a 90% win rate since 2023.
+- Highest win rate that made money on both indices in both periods: **narrow-CPR days, only in the direction of
+  the opening gap, book half at 0.25R, move the stop to entry, trail the rest.**
+  - Last 90 sessions: Nifty 19 trades, 17 won / 2 lost, +232 / −135, net +97. Sensex 16 trades, 16 won / 0 lost,
+    net +577.
+  - Since 2023: Nifty 137 trades, 76% won, +549; Sensex 132 trades, 82% won, +1,654. Both lost in 2023 and 2025.
+  - It trades about once a week (only 1 trade in the last 30 sessions), and it earns about +4 Nifty points a
+    trade after costs over 3¾ years, so a little slippage would erase it.
+
+`research/quant/cpr_orb_winrate.py`, `cpr_winrate_pick.py` and `cpr_scalp_lastn.py` reproduce this.
+
 ## How to re-check all of this
 
 - `python research/fair_price_backtest.py` downloads the candles and re-runs the Fair Price test.
