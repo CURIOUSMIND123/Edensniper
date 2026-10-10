@@ -2,9 +2,9 @@
 //@version=5
 // ============================================================================
 // CPR Breakout: NIFTY or SENSEX, 5-MINUTE chart (1-minute data is read underneath for exits)
-// Draws the CPR (orange = narrow), pivot, the first 15-minute candle's high / low, the 30-day volume point of
-// control (POC: the price where the most volume traded; volume from NIFTYBEES because the index has none) with its
-// value area, and the 5-minute EMA 50. Every filter is in Settings.
+// Draws the CPR (three pink lines; orange on narrow days), the first 15-minute candle's high / low, the 30-day
+// volume point of control (POC: the price where the most volume traded; volume from NIFTYBEES because the index has
+// none) with its value area, and the 5-minute EMA 50. Every filter is in Settings.
 // DEFAULTS = DAILY PLAN (one plan per day), adjusted on 2026:
 //   NARROW-CPR DAY -> CPR BREAKOUT scalp. OTHER DAY -> CPR MAGNET at 9:16 if the open qualifies, otherwise the
 //   same CPR BREAKOUT scalp.
@@ -23,13 +23,17 @@
 //     line, STOP at the previous line; skipped when the target is less than 1.5x the stop away. Out by 3:15.
 //     Optional LADDER (Settings, off by default): at the next line book half, move the stop to the broken line,
 //     ride the rest to the line after.
-// Tested on 1-minute candles, 1 Jan - 9 Oct 2026 (191 sessions), after costs (4 Nifty / 12 Sensex points a trade):
-//   Nifty  99 trades on 86 days (about 11 a month), 79 won / 20 lost, +3,688 / -1,234, net +2,454
-//          (Jan-Jun +1,925, Jul-Oct +529). Without the volume lines: 63 trades, net +1,192.
-//   Sensex 116 trades on 90 days (about 12 a month), 87 won / 29 lost, +13,810 / -5,916, net +7,894
-//          (Jan-Jun +6,349, Jul-Oct +1,545). Without the volume lines: 66 trades, net +3,597.
-//   With the LADDER on: Nifty 98 trades, 78 won / 20 lost, net +2,373 (Jan-Jun +1,843, Jul-Oct +529);
-//          Sensex 114 trades, 87 won / 27 lost, +13,916 / -5,305, net +8,612 (Jan-Jun +7,144, Jul-Oct +1,467).
+// THE CPR: three lines from yesterday's official high, low and close: TC (top), the pivot P (middle), BC
+//   (bottom). Pink; orange on narrow days (the narrowest third of the last 20). Drawn on any intraday chart,
+//   with its width each morning. The trades and the volume levels need a 5-minute chart.
+// Tested on 1-minute candles, 1 Jan - 9 Oct 2026 (191 sessions), after costs (4 Nifty / 12 Sensex points a trade),
+// CPR from the official daily close, as drawn here:
+//   Nifty  101 trades on 90 days (about 11 a month), 79 won / 22 lost, +3,633 / -1,359, net +2,274
+//          (Jan-Jun +1,802, Jul-Oct +472). Without the volume lines: 64 trades, net +1,056.
+//   Sensex 114 trades on 90 days (about 12 a month), 85 won / 29 lost, +14,110 / -6,008, net +8,102
+//          (Jan-Jun +6,582, Jul-Oct +1,520). Without the volume lines: 62 trades, net +3,675.
+//   With the LADDER on: Nifty 100 trades, 78 won / 22 lost, net +2,193 (Jan-Jun +1,721, Jul-Oct +472);
+//          Sensex 112 trades, 85 won / 27 lost, +14,216 / -5,396, net +8,819 (Jan-Jun +7,377, Jul-Oct +1,443).
 // FEWEST LOSSES: also switch on "Magnet: skip days that open outside yesterday's high-low range".
 // The POC, 10:00, every-day, magnet-POC and 3-day-volume-line choices were made by looking at 2026 itself; treat
 //   them as promising, not proven.
@@ -69,6 +73,9 @@ vlLad  = input.bool(false, "Ladder: at the next line book half, move the stop to
 vlShow = input.bool(true, "Draw the volume lines", group = G5)
 costIn = input.float(0, "Cost per trade in index points (0 = auto: Nifty 4, Sensex 12)", step = 1, group = G1)
 G2 = "Display"
+cprPink = input.color(color.new(#e91e63, 0), "CPR colour", group = G2)
+cprNar  = input.color(color.new(#f57c00, 0), "CPR colour on narrow days", group = G2)
+cprLbl  = input.bool(true, "Show the CPR width each morning", group = G2)
 showPrf = input.bool(true, "Show the volume POC and value area", group = G2)
 G3 = "Volume zones"
 volSym  = input.symbol("NSE:NIFTYBEES", "Volume from (the index has none; the test used NIFTYBEES for both indices)", group = G3)
@@ -80,8 +87,6 @@ TZ     = "Asia/Kolkata"
 GREEN  = color.new(#089981, 0)
 RED    = color.new(#f23645, 0)
 GREY   = color.new(#787b86, 0)
-BLUE   = color.new(#2962ff, 0)
-ORANGE = color.new(#f57c00, 0)
 PURPLE = color.new(#7e57c2, 0)
 TEAL   = color.new(#00897b, 0)
 fmt(x) => str.tostring(x, "#,##0.##")
@@ -226,11 +231,17 @@ if newDay and is5
         array.shift(dStart)
 
 // ---------------- plots ----------------
-cprCol = narrow ? ORANGE : BLUE
-pTop = plot(is5 ? top : na, "CPR top", color = lc(cprCol), linewidth = 2)
-pBot = plot(is5 ? bot : na, "CPR bottom", color = lc(cprCol), linewidth = 2)
-plot(is5 ? P : na, "Pivot P", color = lc(color.new(cprCol, 40)))
-fill(pTop, pBot, color = newDay ? na : color.new(cprCol, 82), title = "CPR band (orange = narrow)")
+// the CPR on any intraday chart: TC, pivot P and BC
+cprCol = narrow ? cprNar : cprPink
+cprOn = timeframe.isintraday
+pTop = plot(cprOn ? top : na, "CPR top (TC)", color = lc(cprCol), linewidth = 2)
+pBot = plot(cprOn ? bot : na, "CPR bottom (BC)", color = lc(cprCol), linewidth = 2)
+plot(cprOn ? P : na, "Pivot P", color = lc(cprCol), linewidth = 1)
+fill(pTop, pBot, color = newDay ? na : color.new(cprCol, 85), title = "CPR band")
+if cprOn and cprLbl and newDay
+    string wTxt = narrow ? "NARROW" : nNar * 3 >= 40 ? "wide" : "normal"
+    label.new(bar_index, top, "CPR " + str.tostring(top - bot, "#,##0") + " pts (" + str.tostring((top - bot) / P * 100, "0.00") + "%) " + wTxt,
+              style = label.style_label_lower_left, color = color.new(cprCol, 85), textcolor = cprCol, size = size.small)
 plot(is5 and showPrf ? poc : na, "Volume POC", color = lc(PURPLE), linewidth = 2, style = plot.style_linebr)
 plot(is5 and showPrf ? vah : na, "Value area high", color = lc(color.new(PURPLE, 60)), style = plot.style_linebr)
 plot(is5 and showPrf ? val : na, "Value area low", color = lc(color.new(PURPLE, 60)), style = plot.style_linebr)

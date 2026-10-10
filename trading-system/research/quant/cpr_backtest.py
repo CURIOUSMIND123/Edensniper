@@ -27,6 +27,13 @@ for d in days:
     for m, o, h, l, c in one[d]: g.setdefault((m - 555) // 5, []).append((m, o, h, l, c))
     five[d] = [(555 + 5 * k, ch[0][1], max(x[2] for x in ch), min(x[3] for x in ch), ch[-1][4]) for k, ch in g.items()]
 DAY = {d: (one[d][0][1], max(x[2] for x in one[d]), min(x[3] for x in one[d]), one[d][-1][4]) for d in days}
+# The exchange's official daily high / low / close (what TradingView and every CPR indicator use) where we have it
+# (from November 2025). The official close often differs from the last 1-minute candle (Nifty by up to ~30 points,
+# Sensex ~130). CPR_CLOSE=last1m in the environment gives the old numbers.
+import os
+if os.environ.get('CPR_CLOSE') != 'last1m' and os.path.exists(f'../.cache/{name}_daily.json'):
+    for d, r in json.load(open(f'../.cache/{name}_daily.json')).items():
+        if d in DAY: DAY[d] = (DAY[d][0], r[2], r[3], r[4])
 
 def levels(prev):
     h, l, c = DAY[prev][1:]

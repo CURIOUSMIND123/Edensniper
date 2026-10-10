@@ -669,7 +669,26 @@ On Bitcoin every version lost in 2026.
   it means the obvious changes don't reliably help. Every setting was chosen by looking at 2026, so live results
   will very likely be lower.
 
+## 2026: the CPR from the official close
+
+A CPR is three lines from yesterday's high, low and close: TC (top), the pivot P (middle) and BC (bottom). TradingView
+and other CPR indicators use the exchange's **official** close. Until now the backtests used the last 1-minute
+candle's close, which differs from the official close on most days (184 of 232 Nifty sessions since November 2025,
+by up to ~30 points; Sensex up to ~130 points). The TradingView indicator already used the official close; the
+backtest and the live alerts now do too (`fetch_daily.py`; `CPR_CLOSE=last1m` gives the old numbers).
+
+| 2026, whole indicator (one book) | Nifty | Sensex |
+|---|---|---|
+| Last 1-minute close (earlier sections) | 99 trades, 79 won / 20 lost, net +2,454 | 116 trades, 87 won / 29 lost, net +7,894 |
+| **Official close (now)** | 101 trades, 79 won / 22 lost, net **+2,274** (Jan-Jun +1,802, Jul-Oct +472) | 114 trades, 85 won / 29 lost, net **+8,102** (Jan-Jun +6,582, Jul-Oct +1,520) |
+| Official close, ladder on | 100 trades, net +2,193 | 112 trades, net +8,819 |
+| Daily plan alone (no volume lines) | 64 trades, 56 won / 8 lost, net +1,056 | 62 trades, 59 won / 3 lost, net +3,675 |
+
+The conclusions above don't change. The tables in the sections before this one used the last 1-minute close.
+
 ## 2026: pivot levels (S1, R1 and the rest), and the big days the filters skip
+
+(CPR and pivots from the official close.)
 
 **Friday 9 October.** Sensex rose from 71,739 to 72,669 (Nifty from 22,295 to 22,581) and the indicator took no
 trade:
@@ -685,31 +704,33 @@ the same unfiltered breakout lost −391 and −96.
 
 | 2026, net points | Nifty | Sensex |
 |---|---|---|
-| As now (gap, CPR vs yesterday, POC) | +1,192 (7 losses) | +3,597 (4 losses) |
-| No POC filter | +998 | +4,030 (better in both halves) |
-| No CPR-vs-yesterday filter | +582 | +3,497 |
-| No gap filter | +1,125 | +3,794 |
-| No filters at all | +37 (30 losses) | +4,050 (21 losses) |
+| As now (gap, CPR vs yesterday, POC) | +1,056 (8 losses) | +3,675 (3 losses) |
+| No POC filter | +874 | +4,420 (better in both halves) |
+| No CPR-vs-yesterday filter | +419 | +3,110 |
+| No gap filter | +1,126 | +4,019 |
+| No filters at all | +22 (30 losses) | +4,554 (20 losses) |
 
-Each filter skips some big winning days, but on Nifty it skips more losing points than winning points. On Sensex
-the POC filter cost money in 2026.
+Each filter skips some big winning days, but on Nifty the CPR-vs-yesterday and POC filters skip more losing points
+than winning points. On Sensex the POC filter cost money in 2026.
 
 **Pivot-level trades** (`y2026_pivots.py`): a 5-minute close through a pivot level (S3 to R3, BC / P / TC, or those
 plus the 3-day volume lines) starts a trade that way. 864 versions were tested: two start times, three stops,
 four exits, four direction filters and three reward-to-stop limits.
-- Most lost money in 2026: the middle version made −1,119 points on Nifty and −2,763 on Sensex. 34 versions made
-  money on Nifty, 152 on Sensex. Only 2 made money in both halves of 2026 on both indices.
-- Over the last 7 sessions, the pivot rules with no filter did make money on Nifty (+443), as it looks on the
-  chart. Over all of 2026 the same rule made −36. On Sensex the same rule lost −364 in those 7 sessions.
-- The best version that held up: a 5-minute close through any pivot level from 9:30, stop at the level behind,
+- Most lost money in 2026: the middle version made −1,341 points on Nifty and −2,651 on Sensex. 120 versions made
+  money on Nifty, 109 on Sensex. Only 2 made money in both halves of 2026 on both indices.
+- Over the last 7 sessions, the pivot rule with no filter made +443 on Nifty, as it looks on the chart (2026:
+  +1,412, almost all in January-June). On Sensex the same rule lost −308 in those 7 sessions (2026: +3,096, but
+  −615 in July-October).
+- The results moved a lot when the CPR changed by only a few points (with the last 1-minute close, 34 Nifty
+  versions made money instead of 120). That means much of it is chance.
+- The best version that held up: a 5-minute close through any pivot level from 9:20, stop at the level behind,
   trail 1R behind the best price after +1R, only when the next level is at least 1x the stop away, and not against
-  today's CPR vs yesterday's (so it skipped Friday too). Alone: Nifty 141 trades, 47% won, +828; Sensex 153 trades,
-  52% won, +1,689.
-- Added to the indicator (one trade at a time, pivots before volume lines): Nifty +2,600 instead of +2,454, Sensex
-  +8,403 instead of +7,894. Both halves of 2026 were better on both indices, but trades went from 215 to 458 and
-  losing trades from 49 to 178. At 5 lots that is about Rs 49,000 more in 2026, with bigger falls (Nifty Rs 71,700
-  instead of Rs 57,200; Sensex Rs 85,100 instead of Rs 76,000). With only 2 of 864 versions holding up, this may
-  well be luck.
+  today's CPR vs yesterday's (so it skipped Friday too). Alone: Nifty 150 trades, 50% won, +1,160; Sensex 170
+  trades, 51% won, +3,330.
+- Added to the indicator (one trade at a time, pivots before volume lines): Nifty +2,973 instead of +2,274 (better
+  in both halves); Sensex +9,515 instead of +8,102, but less in July-October (+1,341 instead of +1,520). Trades
+  went from 215 to 470 and losing trades from 51 to 184. At 5 lots that is about Rs 1.8 lakh more in 2026, with
+  bigger falls (Nifty Rs 89,700 instead of Rs 57,200; Sensex Rs 84,600 instead of Rs 71,900).
 
 ## How to re-check all of this
 

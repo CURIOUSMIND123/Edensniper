@@ -4,8 +4,11 @@
 
 File: [`cpr_breakout.pine`](cpr_breakout.pine). An indicator; reads 1-minute candles underneath for exits.
 
-- Draws the CPR (orange = narrow), the pivot, the first 15-minute candle's high and low, the 30-day volume point
-  of control (purple, the price where the most NIFTYBEES volume traded) with its value area, and the EMA 50.
+- Draws the CPR as three pink lines: TC (top), the pivot P (middle) and BC (bottom), from yesterday's official
+  high, low and close; orange on narrow days, with its width each morning ("CPR 55 pts (0.25%) normal"). The CPR
+  shows on any intraday chart; the trades need a 5-minute chart. Also the first 15-minute candle's high and low,
+  the 30-day volume point of control (purple, the price where the most NIFTYBEES volume traded) with its value
+  area, and the EMA 50.
 - **Default = daily plan, one plan per day.** Narrow-CPR day: CPR Breakout scalp. Other day: CPR Magnet at 9:16
   if the open is 0.2%+ beyond the CPR, otherwise the CPR Breakout scalp.
   - CPR Magnet: trade back toward the CPR, stop 0.3%, book half at 0.25 x the risk, stop to entry, rest to the
@@ -15,16 +18,16 @@ File: [`cpr_breakout.pine`](cpr_breakout.pine). An indicator; reads 1-minute can
     the risk, stop to entry, trail the rest.
 - CPR Magnet also trades only on the volume side of the 30-day POC (sells below it, buys above). In 2026 that cut
   most of the losing trades.
-- 2026 (1 Jan - 9 Oct): Nifty 63 trades, 56 won / 7 lost, +1,678 / −486, net +1,192; Sensex 66 trades, 62 won /
-  4 lost, +4,558 / −960, net +3,597. With "skip days that open outside yesterday's high-low range" switched on:
-  Nifty 44 won / 4 lost, net +1,181; Sensex 42 won / 1 lost, net +3,143.
+- 2026 (1 Jan - 9 Oct, CPR from the official close): Nifty 64 trades, 56 won / 8 lost, +1,623 / −567, net +1,056;
+  Sensex 62 trades, 59 won / 3 lost, +4,391 / −716, net +3,675. With "skip days that open outside yesterday's
+  high-low range" switched on: Nifty 44 won / 5 lost, net +1,039; Sensex 42 won / 1 lost, net +3,010.
 - **Plus 3-day volume lines** (teal dots), in the same book, one trade at a time: a 5-minute close through a line
   between 9:30 and 2:30 trades toward the next line, with the stop at the previous line, when the target is at
   least 1.5x the stop away.
-  - 2026 with the volume lines: Nifty 99 trades (about 11 a month), 79 won / 20 lost, net +2,454 points; Sensex
-    116 trades (about 12 a month), 87 won / 29 lost, net +7,894.
+  - 2026 with the volume lines: Nifty 101 trades (about 11 a month), 79 won / 22 lost, net +2,274 points; Sensex
+    114 trades (about 12 a month), 85 won / 29 lost, net +8,102.
   - Optional **ladder** (off by default): at the next line book half, move the stop to the broken line, ride the
-    rest to the line after. 2026: Sensex net +8,612 (instead of +7,894), Nifty +2,373 (instead of +2,454); all of
+    rest to the line after. 2026: Sensex net +8,819 (instead of +8,102), Nifty +2,193 (instead of +2,274); all of
     the gain came in January-June.
 - Every filter is in Settings. `research/quant/y2026_combo.py` has the same plan in Python.
 - **No live data on free TradingView?** [`alerts/cprb_alerts.py`](../alerts/cprb_alerts.py) runs the same rules on

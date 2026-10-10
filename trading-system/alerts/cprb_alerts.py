@@ -77,6 +77,12 @@ def fetch_range(key, a, b):
         time.sleep(0.3)
     return out
 
+def fetch_daily(key, a, b):
+    """The exchange's official daily candles (dates a to b): {date: (open, high, low, close)}. The official close
+    often differs from the last 1-minute candle; the CPR uses the official one, as TradingView does."""
+    url = f"https://api.upstox.com/v3/historical-candle/{urllib.parse.quote(key, safe='')}/days/1/{b}/{a}"
+    return {r[0][:10]: (r[1], r[2], r[3], r[4]) for r in http_json(url)['data']['candles']}
+
 def fetch_today(key):
     q = urllib.parse.quote(key, safe='')
     try:
@@ -190,12 +196,16 @@ def vol_lines(base, p, bin_):
             out.append(x)
     return out
 
-def context(spec, sess, vol, today):
-    """Everything known before the open. sess: {date: [(minute, o, h, l, c)]}, vol: {date: {minute: NIFTYBEES volume}}."""
+def context(spec, sess, vol, today, daily=None):
+    """Everything known before the open. sess: {date: [(minute, o, h, l, c)]}, vol: {date: {minute: NIFTYBEES volume}},
+    daily: {date: official (o, h, l, c)} for the CPR."""
     days = sorted(d for d in sess if d < today and len(sess[d]) >= 300)[-60:]
     if len(days) < 31:
         raise SystemExit(f"Not enough earlier sessions ({len(days)}); need 31.")
     D = {d: (sess[d][0][1], max(x[2] for x in sess[d]), min(x[3] for x in sess[d]), sess[d][-1][4]) for d in days}
+    for d in days:
+        if daily and d in daily:
+            D[d] = (D[d][0],) + tuple(daily[d][1:])
     lv = levels(*D[days[-1]][1:])
     past = [levels(*D[d][1:])['w'] for d in days[-21:-1]]
     rank = sum(x < lv['w'] for x in past) / 20
@@ -557,7 +567,8 @@ def load(names, today):
     out = {}
     for n in names:
         sess = {d: [(m,) + tuple(mm[m][:4]) for m in sorted(mm)] for d, mm in data[SPEC[n]['key']].items()}
-        out[n] = context(SPEC[n], sess, vol, today)
+        daily = fetch_daily(SPEC[n]['key'], t0 - dt.timedelta(days=80), t0 - dt.timedelta(days=1))
+        out[n] = context(SPEC[n], sess, vol, today, daily)
     return out
 
 def replay(names, day, lots, ladder):

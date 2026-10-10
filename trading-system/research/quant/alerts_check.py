@@ -16,7 +16,8 @@ spec = A.SPEC[Y.B.name]
 sess = {d: Y.one[d] for d in Y.days}
 vol = collections.defaultdict(dict)
 for k, v in Y.bees.items(): vol[k[:10]][int(k[11:13]) * 60 + int(k[14:16])] = v[4]
-CX = {d: A.context(spec, sess, vol, d) for d in Y.D26}
+daily = {d: Y.DAY[d] for d in Y.days}                 # official daily high / low / close, as the backtest uses
+CX = {d: A.context(spec, sess, vol, d, daily) for d in Y.D26}
 
 bad = collections.Counter()
 for d in Y.D26:

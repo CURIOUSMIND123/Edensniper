@@ -56,8 +56,9 @@ On a phone, put the date in `REPLAY_DAY = '2026-10-08'` at the top and press Run
 ## Checked
 
 `research/quant/alerts_check.py` runs it on every 2026 session, minute by minute as it runs live. It took exactly the
-backtest's trades (Nifty 99 trades, net +2,454 points; Sensex 116 trades, net +7,894; with the ladder +2,373 /
-+8,612). Nothing it had already said changed later in the day.
+backtest's trades (Nifty 101 trades, net +2,274 points; Sensex 114 trades, net +8,102; with the ladder +2,193 /
++8,819). Nothing it had already said changed later in the day. The CPR uses the exchange's official daily close
+(downloaded each morning), like TradingView; the official close often differs from the last 1-minute candle.
 
 ## Limits
 

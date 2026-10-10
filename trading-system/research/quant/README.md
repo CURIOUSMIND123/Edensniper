@@ -57,3 +57,4 @@ Costs: 4 Nifty points or 12 Sensex points per trade. `pip install pandas scikit-
 | `y2026_improve.py` | 2026 only: exit changes from that review (magnet rest to the far edge / trail / hold, breakout trail 1.5R / 2R / hold, volume-line breakeven stop and line-to-line ladder), alone and in all 64 combinations |
 | `alerts_check.py` | Checks that `alerts/cprb_alerts.py` (live alerts) takes exactly the backtest's 2026 trades, also minute by minute as it runs live |
 | `y2026_pivots.py` | 2026 only: why the indicator skipped big days (its filters switched off one by one) and 864 versions of pivot-level trades (S3-R3, BC / P / TC, with or without the volume lines), alone and added to the indicator |
+| `fetch_daily.py` | Downloads the official daily high / low / close (November 2025 on) that `cpr_backtest.py` uses for the CPR and pivots; `CPR_CLOSE=last1m` uses the last 1-minute candle instead |
