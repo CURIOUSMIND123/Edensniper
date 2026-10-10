@@ -559,6 +559,31 @@ equally:
   advance: it lost money in one of the design years.
 - Looking at the basket was my choice after seeing 2026, so treat even the +7% as a hint, not a proven result.
 
+## Volume lines: break one, ride to the next (3, 7 or 15 days)
+
+Every morning: the volume profile of the last 3, 7 or 15 days, and its lines (the point of control plus every
+high-volume peak, lines within 0.15% merged). A close through a line starts a trade that way; the target is the next
+line; the stop is 0.5 or 1 ATR behind the broken line, or the previous line; trades whose target is less than 1 /
+1.5 / 2 times the stop away are skipped.
+
+**Bitcoin** (hourly candles, real volume, fees and funding; designed on 2023-2025, tested on 2026): 53 of 54
+versions lost in 2026, average −19%. The one version picked on 2023-2025 (7-day lines, previous-line stop, buys only)
+lost −15.7% in 2026.
+
+**Nifty and Sensex, 2026** (NIFTYBEES volume, 5-minute closes, 9:30-2:30, out by 3:15): 7- and 15-day lines mostly
+lost, especially on Sensex. **3-day lines with the stop at the previous line** made money in both halves of the year
+on both indices:
+
+| 2026, 3-day lines, stop at the previous line | Trades | Won / lost | Points won / lost | Net | Worst fall |
+|---|---|---|---|---|---|
+| Nifty, target at least 1.5x the stop | 38 (4.1 a month) | 24 / 14 | +2,119 / −792 | **+1,327** | −205 |
+| Sensex, target at least 1.5x the stop | 53 (5.7 a month) | 27 / 26 | +10,039 / −5,292 | **+4,747** | −1,334 |
+| Nifty, target at least 1x | 71 | 39 / 32 | +3,080 / −1,970 | +1,110 | −313 |
+| Sensex, target at least 1x | 88 | 41 / 47 | +12,775 / −9,679 | +3,096 | −1,782 |
+
+The neighbouring settings agree (1x, 1.5x and 2x targets all positive on Nifty), but this was found by looking at
+2026's 27 versions per index, so part of it may be luck.
+
 ## How to re-check all of this
 
 - `python research/fair_price_backtest.py` downloads the candles and re-runs the Fair Price test.

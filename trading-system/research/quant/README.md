@@ -50,3 +50,5 @@ Costs: 4 Nifty points or 12 Sensex points per trade. `pip install pandas scikit-
 | `btc_h1_load.py` | Binance public archives -> hourly BTCUSDT candles and funding rates, Jan 2023 - Oct 2026 (run with `python -I`) |
 | `btc_trend.py` | Bitcoin strategies built for Bitcoin (Donchian breakout, EMA trend, daily volatility breakout, dip buying; 60 versions), designed on 2023-2025 and tested on 2026, with fees, funding and leverage |
 | `btc_trend_basket.py` | The 4-hour trend-following versions from `btc_trend.py` traded together, 2026 and 2023-2025, 1x-150x |
+| `btc_vol_lines.py` | Bitcoin volume lines (3 / 7 / 15-day POC and high-volume peaks): break a line, target the next one; designed on 2023-2025, tested on 2026 |
+| `y2026_vol_lines.py` | 2026 only: the same volume-line breakouts on Nifty / Sensex with NIFTYBEES volume (e.g. `nifty`) |
