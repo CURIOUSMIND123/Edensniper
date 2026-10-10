@@ -21,17 +21,22 @@
 //     sessions gives the lines (point of control + every high-volume peak, lines within 0.15% merged; teal dots).
 //     A 5-minute close through a line (9:30-2:30, no trade open) -> trade that way at the close, TARGET the next
 //     line, STOP at the previous line; skipped when the target is less than 1.5x the stop away. Out by 3:15.
+//     Optional LADDER (Settings, off by default): at the next line book half, move the stop to the broken line,
+//     ride the rest to the line after.
 // Tested on 1-minute candles, 1 Jan - 9 Oct 2026 (191 sessions), after costs (4 Nifty / 12 Sensex points a trade):
 //   Nifty  99 trades on 86 days (about 11 a month), 79 won / 20 lost, +3,688 / -1,234, net +2,454
 //          (Jan-Jun +1,925, Jul-Oct +529). Without the volume lines: 63 trades, net +1,192.
 //   Sensex 116 trades on 90 days (about 12 a month), 87 won / 29 lost, +13,810 / -5,916, net +7,894
 //          (Jan-Jun +6,349, Jul-Oct +1,545). Without the volume lines: 66 trades, net +3,597.
+//   With the LADDER on: Nifty 98 trades, 78 won / 20 lost, net +2,373 (Jan-Jun +1,843, Jul-Oct +529);
+//          Sensex 114 trades, 87 won / 27 lost, +13,916 / -5,305, net +8,612 (Jan-Jun +7,144, Jul-Oct +1,467).
 // FEWEST LOSSES: also switch on "Magnet: skip days that open outside yesterday's high-low range".
 // The POC, 10:00, every-day, magnet-POC and 3-day-volume-line choices were made by looking at 2026 itself; treat
 //   them as promising, not proven.
 // The profile here uses the chart's 5-minute candles; the test used 1-minute candles, so the POC can differ by a
 //   few points.
-// Reference implementation (same rules): trading-system/research/quant/y2026_combo.py (one book, target >= 1.5x)
+// Reference implementation (same rules): trading-system/research/quant/y2026_combo.py (one book, target >= 1.5x);
+//   ladder: y2026_improve.py (volume lines: ladder)
 // ============================================================================
 indicator("CPR Breakout", "CPRB", overlay = true, max_lines_count = 500, max_labels_count = 500, max_bars_back = 2500)
 
@@ -60,6 +65,7 @@ G5 = "3-day volume lines (same book: one trade at a time)"
 vlOn   = input.bool(true, "Also trade a 5-minute close through a volume line (target the next line, stop at the previous line)", group = G5)
 vlN    = input.int(3, "Volume lines from the last N sessions", minval = 2, maxval = 15, group = G5)
 vlRR   = input.float(1.5, "Skip when the next line is less than this x the stop away", step = 0.25, group = G5)
+vlLad  = input.bool(false, "Ladder: at the next line book half, move the stop to the broken line, ride the rest to the line after", group = G5, tooltip = "2026 test, whole indicator: Sensex net +8,612 instead of +7,894 (all of the gain in Jan-Jun), Nifty +2,373 instead of +2,454. Booking half needs at least 2 lots.")
 vlShow = input.bool(true, "Draw the volume lines", group = G5)
 costIn = input.float(0, "Cost per trade in index points (0 = auto: Nifty 4, Sensex 12)", step = 1, group = G1)
 G2 = "Display"
@@ -255,6 +261,10 @@ var int   vSide = 0
 var float vE = na
 var float vStp = na
 var float vTgt = na
+var float vTgt2 = na           // ladder: the line after the target
+var float vBroken = na         // the line that was broken (ladder stop after half is booked)
+var bool  vHalf = false
+var float vHalfPts = na
 var int   vStart = 0
 var line  vlnS = na
 var line  vlnT = na
@@ -427,15 +437,33 @@ if is5 and n1 > 0
                 if na(vEx)
                     if vSide * (q - vStp) <= 0
                         vEx := vStp
-                        vWhy := "STOP"
+                        vWhy := vHalf ? "STOP AT BROKEN LINE" : "STOP"
                     else if vSide * (q - vTgt) >= 0
-                        vEx := vTgt
-                        vWhy := "TARGET"
+                        if vlLad and not vHalf and not na(vTgt2)
+                            // ladder: book half at the next line, stop to the broken line, aim for the line after
+                            vHalf := true
+                            vHalfPts := vSide * (vTgt - vE)
+                            label.new(bar_index, vTgt, "VOL HALF BOOKED +" + str.tostring(vHalfPts, "#,##0"), style = label.style_label_left, color = color.new(GREEN, 80), textcolor = GREEN, size = size.tiny)
+                            alert("CPRB " + syminfo.ticker + " VOLUME-LINE BOOK HALF at " + fmt(vTgt) + ", move stop to " + fmt(vBroken) + ", rest to " + fmt(vTgt2), alert.freq_once_per_bar)
+                            vStp := vBroken
+                            vTgt := vTgt2
+                            line.set_extend(vlnT, extend.none)
+                            line.set_extend(vlnS, extend.none)
+                            line.set_x2(vlnT, bar_index)
+                            line.set_x2(vlnS, bar_index)
+                            vlnS := line.new(bar_index, vStp, bar_index + 1, vStp, color = RED, style = line.style_dashed, extend = extend.right)
+                            vlnT := line.new(bar_index, vTgt, bar_index + 1, vTgt, color = GREEN, style = line.style_dashed, extend = extend.right)
+                            if vSide * (q - vTgt) >= 0
+                                vEx := vTgt
+                                vWhy := "TARGET 2"
+                        else
+                            vEx := vTgt
+                            vWhy := vHalf ? "TARGET 2" : "TARGET"
             if na(vEx) and mk >= TOUT and complete
                 vEx := ck
                 vWhy := "3:15 EXIT"
             if not na(vEx)
-                float vg = vSide * (vEx - vE) - cost
+                float vg = (vHalf ? (vHalfPts + vSide * (vEx - vE)) / 2 : vSide * (vEx - vE)) - cost
                 volOpen := false
                 nTr += 1
                 nWon += vg > 0 ? 1 : 0
@@ -450,7 +478,7 @@ if is5 and n1 > 0
                 line.set_extend(vlnS, extend.none)
                 line.set_x2(vlnT, bar_index)
                 line.set_x2(vlnS, bar_index)
-                todayMsg := "Volume line: " + vWhy + " at " + fmt(vEx) + ", " + pts(vg) + " pts after costs"
+                todayMsg := "Volume line: " + vWhy + " at " + fmt(vEx) + ", " + pts(vg) + " pts after costs" + (vHalf ? " (half booked earlier)" : "")
                 alert("CPRB " + syminfo.ticker + " VOLUME-LINE " + vWhy + " at " + fmt(vEx) + " (" + pts(vg) + " pts after costs)", alert.freq_once_per_bar)
         // touch entries
         if mk >= 570 and not volOpen and entF == "Touch of the range high / low" and mk < CUT and not na(orh) and (state == 0 or (state == 2 and mk >= afterMin))
@@ -521,6 +549,11 @@ if is5 and vlOn and barstate.isconfirmed and not volOpen and state != 1 and not 
                 vt := na(vt) or math.abs(x - vx) < math.abs(vt - vx) ? x : vt
             if vs * (vx - x) > 0
                 vp := na(vp) or math.abs(x - vx) < math.abs(vp - vx) ? x : vp
+        float vt2 = na
+        if not na(vt)
+            for x in vLines
+                if vs * (x - vt) > 0
+                    vt2 := na(vt2) or math.abs(x - vt) < math.abs(vt2 - vt) ? x : vt2
         if not na(vt) and not na(vp)
             float rk = vs * (close - vp)
             float rw = vs * (vt - close)
@@ -530,12 +563,17 @@ if is5 and vlOn and barstate.isconfirmed and not volOpen and state != 1 and not 
                 vE := close
                 vStp := vp
                 vTgt := vt
+                vTgt2 := vt2
+                vBroken := vx
+                vHalf := false
+                vHalfPts := na
                 vStart := mins + 5
-                label.new(bar_index, close, "VOL " + (vs > 0 ? "BUY " : "SELL ") + fmt(close) + "\nstop " + fmt(vp) + "\ntarget " + fmt(vt), style = vs > 0 ? label.style_label_up : label.style_label_down, color = TEAL, textcolor = color.white, size = size.small)
+                string vLadTxt = vlLad and not na(vt2) ? " (book half), then " + fmt(vt2) : ""
+                label.new(bar_index, close, "VOL " + (vs > 0 ? "BUY " : "SELL ") + fmt(close) + "\nstop " + fmt(vp) + "\ntarget " + fmt(vt) + vLadTxt, style = vs > 0 ? label.style_label_up : label.style_label_down, color = TEAL, textcolor = color.white, size = size.small)
                 vlnS := line.new(bar_index, vp, bar_index + 1, vp, color = RED, style = line.style_dashed, extend = extend.right)
                 vlnT := line.new(bar_index, vt, bar_index + 1, vt, color = GREEN, style = line.style_dashed, extend = extend.right)
-                todayMsg := "Volume line " + (vs > 0 ? "BUY at " : "SELL at ") + fmt(close) + ", stop " + fmt(vp) + ", target " + fmt(vt)
-                alert("CPRB " + syminfo.ticker + " VOLUME-LINE " + (vs > 0 ? "BUY at " : "SELL at ") + fmt(close) + " | STOP " + fmt(vp) + " | TARGET " + fmt(vt), alert.freq_once_per_bar)
+                todayMsg := "Volume line " + (vs > 0 ? "BUY at " : "SELL at ") + fmt(close) + ", stop " + fmt(vp) + ", target " + fmt(vt) + vLadTxt
+                alert("CPRB " + syminfo.ticker + " VOLUME-LINE " + (vs > 0 ? "BUY at " : "SELL at ") + fmt(close) + " | STOP " + fmt(vp) + " | TARGET " + fmt(vt) + vLadTxt, alert.freq_once_per_bar)
 
 if opened
     float t0 = isMag ? tgt : tgtFor(openSide, openPx, R)

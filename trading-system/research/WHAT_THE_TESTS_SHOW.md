@@ -636,6 +636,38 @@ Changes tested on the whole indicator (one at a time, then all 64 combinations):
   other. None of the 64 combinations was better in both halves of 2026 on both indices; the best gained 2-7%.
 - So the exits stay as they are. The remaining losses are mostly trades that are wrong from the first minutes,
   which only a better entry filter (like the POC rule) can remove.
+- The ladder is in the indicator as an option, off by default ("Ladder" under the volume-line settings): at the
+  next line book half, move the stop to the broken line, ride the rest to the line after. Sensex 114 trades, 87 won /
+  27 lost, +13,916 / −5,305, net +8,612 (Jan-Jun +7,144, Jul-Oct +1,467); Nifty 98 trades, 78 won / 20 lost, net
+  +2,373 (Jan-Jun +1,843, Jul-Oct +529). All of its gain came in January-June.
+
+## 2026: is this the best of everything tested?
+
+Every Nifty / Sensex strategy with a 2026 result, net points after costs (1 January to 9 October, 191 sessions):
+
+| 2026, net points | Nifty | Sensex |
+|---|---|---|
+| Price-action model, best version | +273 | −1,441 |
+| CPR Magnet alone | +941 | +3,560 |
+| CPR Breakout, trail | +918 | +4,401 |
+| CPR Breakout, trail, POC side, before 10:00 | +1,550 | +4,700 |
+| Daily plan (Magnet or Breakout scalp, POC side) | +1,192 | +3,597 |
+| 3-day volume lines alone | +1,327 | +4,747 |
+| **Daily plan + 3-day volume lines (indicator default)** | **+2,454** | +7,894 |
+| Same, with the volume-line ladder | +2,373 | **+8,612** |
+
+On Bitcoin every version lost in 2026.
+
+- The indicator default made the most on Nifty, and the ladder version the most on Sensex. Both have about 11-12
+  trades a month per index and win about 3 trades in 4.
+- **The second part of the year was much weaker.** Per session: Nifty +16 points in January-June but +7.5 in
+  July-October; Sensex +53 and +22.
+- In rupees at 5 lots on both indices (delta 0.5): about Rs 7.9 lakh in 2026 so far (Rs 8.2 lakh with the ladder),
+  a pace of about Rs 10.4 lakh a year. At the July-October pace it is about Rs 5.7 lakh a year. Time decay is left
+  out.
+- No tested change made it better in both halves of 2026 on both indices. That doesn't mean it can't be improved;
+  it means the obvious changes don't reliably help. Every setting was chosen by looking at 2026, so live results
+  will very likely be lower.
 
 ## How to re-check all of this
 
