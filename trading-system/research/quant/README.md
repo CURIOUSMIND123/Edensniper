@@ -37,3 +37,5 @@ Costs: 4 Nifty points or 12 Sensex points per trade. `pip install pandas scikit-
 | `cpr_winrate_pick.py` | Reads the `cpr_orb_winrate.py` results for both indices: versions with 70 / 80 / 90%+ wins, and which of them made money |
 | `cpr_scalp_lastn.py` | The highest-win-rate version that made money on both indices, trade by trade over the last N sessions |
 | `cpr_scalp.py` | Pure scalps at the CPR, pivot and 15-minute levels: 10-30 point targets, 10-40 point stops, time limits, up to 5 trades a day |
+| `pa_ml.py` | Price action + levels + machine learning: about 55 candle-shape, momentum, level, CPR and volatility measurements at every 5-minute close; learns which led to +25 before -15 (or ATR-sized); scored on 2026 only (e.g. `nifty`) |
+| `pa_ml_importance.py` | Which measurement groups the `pa_ml.py` model relied on in 2026 |

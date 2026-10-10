@@ -349,6 +349,40 @@ filter. Up to 5 trades a day; 3,072 versions per index.
 
 `research/quant/cpr_scalp.py` and `cpr_scalp_pick.py` reproduce this.
 
+## Price action and candle types, read by a model (2026 only)
+
+Instead of testing one idea at a time, a model looked at every 5-minute candle and about 55 measurements:
+- candle shape (body, wicks, where it closed, size, engulfing, pin bar, inside / outside bar, doji, runs of
+  same-colour candles);
+- momentum and EMA 20 / 50;
+- distance to every level (CPR, pivot, R1-R2 / S1-S2, the 15-minute high / low, yesterday's high / low / close,
+  the 15-day POC and value area);
+- CPR width and direction, time of day, the day's range, and volatility.
+
+It learned which of them came before **+25 before −15** (or the same sized to volatility: +1.67 ATR before
+−1 ATR). It was retrained every month on earlier months only, then scored January to 9 October 2026, which it
+hadn't seen. It traded only its top-scoring 1%, 3% or 10% of moments, one trade at a time.
+
+From a random moment, +25 comes before −15 only 34% of the time. After costs, 25 / 15 needs 47.5% to break even.
+
+| 2026, top 1% of scores | Trades | +25 first | Won / lost | Points after costs | Last 90 sessions |
+|---|---|---|---|---|---|
+| Nifty, 25 / 15 | 105 | 42% | 44 / 61 | −196 | −62 |
+| Nifty, 25 / 15, then let it run | 105 | 42% | 44 / 61 | −159 | −74 |
+| Nifty, sized to volatility | 117 | 44% (random 31%) | 54 / 63 | **+273** | −76 |
+| Sensex, 25 / 15 | 154 | 35% | 56 / 98 | −2,089 | −792 |
+| Sensex, sized to volatility | 112 | 35% | 42 / 70 | −1,441 | −1,051 |
+
+Taking more trades (top 3% or 10%) lost more on both indices.
+
+- On Nifty the model did find better moments: +25 came first 42-44% of the time, against 31-34% at random. That's
+  real skill, but it's short of the 47.5% needed after costs. The one profitable version made its money in
+  January to April and lost in the last 90 sessions.
+- On Sensex it found almost nothing.
+- **What it relied on:** mostly volatility (how fast the market was moving), which says how likely either side is
+  to be hit, not which side. Candle shapes added almost nothing (scrambling them barely changed its accuracy:
+  0.003 on Nifty, 0.0004 on Sensex, on a scale where 0.5 is a coin toss).
+
 ## How to re-check all of this
 
 - `python research/fair_price_backtest.py` downloads the candles and re-runs the Fair Price test.
