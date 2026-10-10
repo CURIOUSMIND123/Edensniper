@@ -6,7 +6,18 @@
 // Draws the CPR (three pink lines; orange on narrow days), the first 15-minute candle's high / low, the 30-day
 // volume point of control (POC: the price where the most volume traded; volume from NIFTYBEES because the index has
 // none) with its value area, and the 5-minute EMA 50. Every filter is in Settings.
-// DEFAULTS = DAILY PLAN (one plan per day), adjusted on 2026:
+// DEFAULT RULES = SMALL STOPS, OUT WITHIN 60 MINUTES (Settings > Trade style; "Original" gives the rules below):
+//   Every stop at most 150 Sensex / 45 Nifty points, every trade out after 60 minutes at the latest, the whole
+//   position at the target, no booking half, no trailing. One trade at a time.
+//   CPR MAGNET at 9:16 (as below), target the CPR edge.
+//   BREAKOUT ON THE PULLBACK: when price touches the 15-minute high / low before 10:00 (same filters as below) and
+//     then goes 0.1% beyond it, a LIMIT order goes back at the broken level (blue dashed line, until 12:00); stop at
+//     the other side of the range or 150 / 45 points, target 2x the stop.
+//   3-DAY VOLUME LINES (as below), stop at the previous line or 150 / 45 points, target the next line.
+//   2026 (1 Jan - 9 Oct), after costs: Nifty 150 trades, 53% won, net +842, worst trade -49, worst fall -317;
+//   Sensex 170 trades, 54% won, net +4,708, worst trade -162, worst fall -1,134.
+//   Reference implementation: research/quant/y2026_short_combo.py (and alerts/cprb_alerts.py, RULES = 'small').
+// ORIGINAL RULES = DAILY PLAN (one plan per day), adjusted on 2026:
 //   NARROW-CPR DAY -> CPR BREAKOUT scalp. OTHER DAY -> CPR MAGNET at 9:16 if the open qualifies, otherwise the
 //   same CPR BREAKOUT scalp.
 //   CPR Magnet: the 9:15 one-minute candle opens beyond the CPR and closes 0.2%+ beyond it -> trade back toward
@@ -33,8 +44,8 @@
 //   entry to stop, from the entry candle until the trade closes, with the prices and the result written inside.
 //   Settings > "How trades are drawn" can switch to small letters instead (B buy, S sell, T target or half booked,
 //   SL stop loss, BE stop at entry, X other exit) or show both.
-// Tested on 1-minute candles, 1 Jan - 9 Oct 2026 (191 sessions), after costs (4 Nifty / 12 Sensex points a trade),
-// CPR from the official daily close, as drawn here:
+// ORIGINAL RULES tested on 1-minute candles, 1 Jan - 9 Oct 2026 (191 sessions), after costs (4 Nifty / 12 Sensex
+// points a trade), CPR from the official daily close, as drawn here:
 //   Nifty  101 trades on 90 days (about 11 a month), 79 won / 22 lost, +3,633 / -1,359, net +2,274
 //          (Jan-Jun +1,802, Jul-Oct +472). Without the volume lines: 64 trades, net +1,056.
 //   Sensex 114 trades on 90 days (about 12 a month), 85 won / 29 lost, +14,110 / -6,008, net +8,102
@@ -52,6 +63,12 @@
 indicator("CPR Breakout", "CPRB", overlay = true, max_lines_count = 500, max_labels_count = 500, max_boxes_count = 500, max_bars_back = 2500)
 
 // ---------------- inputs ----------------
+G0 = "Trade style"
+rulesIn  = input.string("Small stops, out within 60 min", "Rules", options = ["Small stops, out within 60 min", "Original (wider stops, trailing)"], group = G0,
+                         tooltip = "Small stops: every stop at most 150 Sensex / 45 Nifty points, out after 60 minutes at the latest, all at the target, no trailing. The breakout is traded on the pullback (a limit order back at the broken 15-minute level), not at the break.")
+smallCap = input.float(0, "Small stops: the largest stop in points (0 = Sensex 150, Nifty 45)", step = 5, group = G0)
+holdMin  = input.int(60, "Small stops: out after this many minutes at the latest", minval = 5, maxval = 375, group = G0)
+pbMult   = input.float(2.0, "Small stops: the pullback trade's target = this x its stop", step = 0.25, group = G0)
 G1 = "Rules"
 cprF   = input.string("Off", "Direction from the open vs the CPR", options = ["With the CPR", "Not against the CPR", "Off"], group = G1)
 pocF   = input.string("Beyond the POC", "Volume zone filter (buys above the POC, sells below)", options = ["Off", "Beyond the POC", "Beyond the value area"], group = G1)
@@ -102,6 +119,9 @@ RED    = color.new(#f23645, 0)
 GREY   = color.new(#787b86, 0)
 PURPLE = color.new(#7e57c2, 0)
 TEAL   = color.new(#00897b, 0)
+BLUE   = color.new(#2962ff, 0)
+shortMode = rulesIn == "Small stops, out within 60 min"
+hhmm(int m) => str.format("{0,number,00}:{1,number,00}", math.floor(m / 60), m % 60)
 fmt(x) => str.tostring(x, "#,##0.##")
 pts(x) => str.tostring(x, "+#,##0;-#,##0")
 // small chart marks (tap one for the details): B / S entry, T target or half booked, SL stop loss, BE stop at
@@ -152,6 +172,7 @@ cost = costIn > 0 ? costIn : close > 50000 ? 12.0 : 4.0
 BIN  = close > 50000 ? 16.0 : 5.0
 CUT  = cutH * 60 + cutMn     // no new entries from this time
 TOUT = 915     // out at 15:15
+CAP  = smallCap > 0 ? smallCap : close > 50000 ? 150.0 : 45.0     // small stops: the largest stop
 
 // ---------------- CPR: today's (from yesterday) and yesterday's (from the day before) ----------------
 cprWidth(float h, float l, float c) =>
@@ -339,6 +360,16 @@ var int   state = 0         // 0 waiting, 1 in a trade, 2 waiting for the revers
 var int   side = 0
 var int   tradeNo = 0
 var int   afterMin = 0
+var int   lastMin = 0            // small stops: the open plan trade's time limit (minute of the day)
+var int   vLast = 0              // small stops: the volume-line trade's time limit
+var int   lastExitMin = -1       // the minute the last trade closed (a new one can't start in that minute)
+var int   pullState = 0          // small stops, pullback: 0 waiting for the breakout, 1 waiting for the pullback, 2 done
+var int   pullSide = 0
+var float pullLv = na
+var float pullFar = na
+var int   pullAfter = 0
+var bool  pullArmed = false
+var line  pullLine = na
 var int   startMin = 0
 var float e = na
 var float stp = na
@@ -433,6 +464,12 @@ if newDay
         line.set_x2(vlnS, bar_index - 1)
         line.set_x2(vlnT, bar_index - 1)
         posGrow(vbT, vbR, vbH, bar_index - 1)
+    if pullArmed and pullState == 1
+        line.set_extend(pullLine, extend.none)
+        line.set_x2(pullLine, bar_index - 1)
+    pullState := 0
+    pullArmed := false
+    lastExitMin := -1
     orh := na
     orl := na
     state := 0
@@ -471,10 +508,11 @@ if is5 and n1 > 0
                     openPx := ck
                     side := ms
                     e := ck
-                    R := magStop / 100 * ck
+                    R := shortMode ? math.min(magStop / 100 * ck, CAP) : magStop / 100 * ck
                     stp := ck - ms * R
                     tgt2 := ms < 0 ? top : bot
-                    tgt := magHalf ? ck + ms * 0.25 * R : tgt2
+                    tgt := shortMode ? tgt2 : magHalf ? ck + ms * 0.25 * R : tgt2
+                    lastMin := 555 + holdMin
                     halfDone := false
                     halfPts := na
                     best := ck
@@ -501,7 +539,7 @@ if is5 and n1 > 0
                         ex := stp
                         why := side * (stp - e) > 0 ? "TRAIL STOP" : stp == e ? "STOP AT ENTRY" : "STOP"
                     else if not na(tgt) and side * (q - tgt) >= 0
-                        if (isMag ? magHalf : halfMode) and not halfDone
+                        if not shortMode and (isMag ? magHalf : halfMode) and not halfDone
                             halfDone := true
                             halfPts := side * (tgt - e)
                             if side * (e - stp) > 0
@@ -518,21 +556,22 @@ if is5 and n1 > 0
                             why := "TARGET"
             if not isOut
                 best := side > 0 ? math.max(best, hk) : math.min(best, lk)
-                if not isMag and exitF == "Ride: stop to entry at +1R, out at 3:15" and side * (best - e) >= R and side * (e - stp) > 0
+                if not shortMode and not isMag and exitF == "Ride: stop to entry at +1R, out at 3:15" and side * (best - e) >= R and side * (e - stp) > 0
                     stp := e
-                if not isMag and (exitF == "Trail 1R behind the best price after +1R" or halfMode) and side * (best - e) >= R
+                if not shortMode and not isMag and (exitF == "Trail 1R behind the best price after +1R" or halfMode) and side * (best - e) >= R
                     float ns = best - side * R
                     if side * (ns - stp) > 0
                         stp := ns
-                if mk >= TOUT and complete
+                if mk >= (shortMode ? math.min(lastMin, TOUT) : TOUT) and complete
                     isOut := true
                     ex := ck
-                    why := "3:15 EXIT"
+                    why := mk >= TOUT ? "3:15 EXIT" : "TIME LIMIT"
             if isOut
                 float g = (halfDone ? (halfPts + side * (ex - e)) / 2 : side * (ex - e)) - cost
                 lastG := g
                 lastEx := ex
                 lastWhy := why
+                lastExitMin := mk
                 nTr += 1
                 nWon += g > 0 ? 1 : 0
                 totPts += g
@@ -548,7 +587,7 @@ if is5 and n1 > 0
                     posEnd(pbT, pbR, pbH, pbTt, pbRt, g, why + " " + pts(g) + " pts", ex)
                 todayMsg := why + " at " + fmt(ex) + ": " + pts(g) + " pts after costs" + (halfDone ? " (half booked earlier)" : "")
                 alert("CPRB " + syminfo.ticker + " " + why + " at " + fmt(ex) + " (" + pts(g) + " pts after costs)", alert.freq_once_per_bar)
-                if tradeNo == 1 and g <= 0 and revF and not isMag
+                if not shortMode and tradeNo == 1 and g <= 0 and revF and not isMag
                     state := 2
                     afterMin := mk + 1
                 else
@@ -589,10 +628,11 @@ if is5 and n1 > 0
                         else
                             vEx := vTgt
                             vWhy := vHalf ? "TARGET 2" : "TARGET"
-            if na(vEx) and mk >= TOUT and complete
+            if na(vEx) and mk >= (shortMode ? math.min(vLast, TOUT) : TOUT) and complete
                 vEx := ck
-                vWhy := "3:15 EXIT"
+                vWhy := mk >= TOUT ? "3:15 EXIT" : "TIME LIMIT"
             if not na(vEx)
+                lastExitMin := mk
                 float vg = (vHalf ? (vHalfPts + vSide * (vEx - vE)) / 2 : vSide * (vEx - vE)) - cost
                 volOpen := false
                 nTr += 1
@@ -614,7 +654,7 @@ if is5 and n1 > 0
                 todayMsg := "Volume line: " + vWhy + " at " + fmt(vEx) + ", " + pts(vg) + " pts after costs" + (vHalf ? " (half booked earlier)" : "")
                 alert("CPRB " + syminfo.ticker + " VOLUME-LINE " + vWhy + " at " + fmt(vEx) + " (" + pts(vg) + " pts after costs)", alert.freq_once_per_bar)
         // touch entries
-        if mk >= 570 and not volOpen and entF == "Touch of the range high / low" and mk < CUT and not na(orh) and (state == 0 or (state == 2 and mk >= afterMin))
+        if not shortMode and mk >= 570 and not volOpen and entF == "Touch of the range high / low" and mk < CUT and not na(orh) and (state == 0 or (state == 2 and mk >= afterMin))
             int sd = hk >= orh ? 1 : lk <= orl ? -1 : 0
             if state == 2 and sd != -side
                 sd := 0
@@ -638,8 +678,64 @@ if is5 and n1 > 0
                         tradeNo += 1
                         state := 1
 
+        // small stops: the pullback after the 9:30 breakout, a limit order back at the broken 15-minute level (until 12:00)
+        if shortMode and mk >= 570 and not na(orh)
+            if pullState == 0 and mk < CUT
+                int pls = hk >= orh ? 1 : lk <= orl ? -1 : 0
+                if pls != 0
+                    float plx = pls > 0 ? math.max(ok, orh) : math.min(ok, orl)
+                    if pls != -relBias and gapDir == pls and not na(poc) and pls * (plx - poc) > 0
+                        pullState := 1
+                        pullSide := pls
+                        pullLv := pls > 0 ? orh : orl
+                        pullFar := pullLv
+                        pullAfter := mk + 1
+                        todayMsg := "Broke the 15-minute " + (pls > 0 ? "high " : "low ") + fmt(pullLv) + ": waiting for the pullback"
+                        alert("CPRB " + syminfo.ticker + " broke the 15-minute " + (pls > 0 ? "high " : "low ") + fmt(pullLv) + ". Don't chase: once price is 0.1% beyond, place a " + (pls > 0 ? "BUY" : "SELL") + " LIMIT at " + fmt(pullLv + pls * 0.0005 * pullLv) + " until 12:00", alert.freq_once_per_bar)
+            else if pullState == 1 and mk >= pullAfter
+                float plTol = 0.0005 * pullLv
+                float plPx0 = pullLv + pullSide * plTol
+                if mk >= 720
+                    pullState := 2
+                    if pullArmed
+                        line.set_extend(pullLine, extend.none)
+                        line.set_x2(pullLine, bar_index)
+                        todayMsg := "No pullback by 12:00: limit order cancelled"
+                else
+                    pullFar := pullSide > 0 ? math.max(pullFar, hk) : math.min(pullFar, lk)
+                    if pullSide * (pullFar - pullLv) >= 0.001 * pullLv
+                        if not pullArmed
+                            pullArmed := true
+                            pullLine := line.new(bar_index, plPx0, bar_index + 1, plPx0, color = BLUE, style = line.style_dashed, width = 2, extend = extend.right)
+                            todayMsg := (pullSide > 0 ? "BUY" : "SELL") + " LIMIT at " + fmt(plPx0) + " (till 12:00)"
+                            alert("CPRB " + syminfo.ticker + " place a " + (pullSide > 0 ? "BUY" : "SELL") + " LIMIT order at " + fmt(plPx0) + " (pullback to the broken 15-minute level), valid until 12:00", alert.freq_once_per_bar)
+                        if pullSide > 0 ? lk <= pullLv + plTol : hk >= pullLv - plTol
+                            pullState := 2
+                            line.set_extend(pullLine, extend.none)
+                            line.set_x2(pullLine, bar_index)
+                            float plPx = pullSide > 0 ? math.min(ok, plPx0) : math.max(ok, plPx0)
+                            float plRk = pullSide * (plPx - (pullSide > 0 ? orl : orh))
+                            if plRk > 0 and state != 1 and not volOpen and mk > lastExitMin
+                                plRk := math.min(plRk, CAP)
+                                opened := true
+                                openSide := pullSide
+                                openPx := plPx
+                                side := pullSide
+                                e := plPx
+                                stp := plPx - pullSide * plRk
+                                R := plRk
+                                tgt := plPx + pullSide * pbMult * plRk
+                                halfDone := false
+                                halfPts := na
+                                best := plPx
+                                startMin := mk + 1
+                                lastMin := mk + holdMin
+                                isMag := false
+                                tradeNo += 1
+                                state := 1
+
 // 5-minute close entries (at the close of this candle)
-if is5 and not volOpen and entF == "5-minute close beyond the range" and barstate.isconfirmed and not na(orh) and mins >= 570 and mins + 5 <= CUT and (state == 0 or (state == 2 and mins >= afterMin))
+if is5 and not shortMode and not volOpen and entF == "5-minute close beyond the range" and barstate.isconfirmed and not na(orh) and mins >= 570 and mins + 5 <= CUT and (state == 0 or (state == 2 and mins >= afterMin))
     int sd = close > orh ? 1 : close < orl ? -1 : 0
     if state == 2 and sd != -side
         sd := 0
@@ -689,26 +785,30 @@ if is5 and vlOn and barstate.isconfirmed and not volOpen and state != 1 and not 
                     vt2 := na(vt2) or math.abs(x - vt) < math.abs(vt2 - vt) ? x : vt2
         if not na(vt) and not na(vp)
             float rk = vs * (close - vp)
+            if shortMode
+                rk := math.min(rk, CAP)
             float rw = vs * (vt - close)
             if rk > 0 and rw >= vlRR * rk
                 volOpen := true
                 vSide := vs
                 vE := close
-                vStp := vp
+                vStp := shortMode ? close - vs * rk : vp
                 vTgt := vt
-                vTgt2 := vt2
+                vTgt2 := shortMode ? na : vt2
+                vLast := mins + 4 + holdMin
                 vBroken := vx
                 vHalf := false
                 vHalfPts := na
                 vStart := mins + 5
-                string vLadTxt = vlLad and not na(vt2) ? " (book half), then " + fmt(vt2) : ""
+                string vLadTxt = shortMode ? ", out by " + hhmm(vLast) : vlLad and not na(vt2) ? " (book half), then " + fmt(vt2) : ""
+                vp := vStp
                 mark(vs > 0 ? "B" : "S", vs < 0, vs > 0 ? GREEN : RED, "Volume line " + (vs > 0 ? "BUY " : "SELL ") + fmt(close) + "\nstop " + fmt(vp) + "\ntarget " + fmt(vt) + vLadTxt)
                 vlnS := line.new(bar_index, vp, bar_index + 1, vp, color = lnRed, style = line.style_dashed, extend = extend.right)
                 vlnT := line.new(bar_index, vt, bar_index + 1, vt, color = lnGreen, style = line.style_dashed, extend = extend.right)
                 if showBoxes
-                    bool vLad = vlLad and not na(vt2)
-                    vbTt := (vLad ? "TARGET (line after) " + fmt(vt2) + "\nbook half at " + fmt(vt) : "TARGET (next volume line) " + fmt(vt))
-                    vbRt := "STOP (previous volume line) " + fmt(vp)
+                    bool vLad = not shortMode and vlLad and not na(vt2)
+                    vbTt := (vLad ? "TARGET (line after) " + fmt(vt2) + "\nbook half at " + fmt(vt) : "TARGET (next volume line) " + fmt(vt)) + (shortMode ? "\nout by " + hhmm(vLast) : "")
+                    vbRt := (shortMode ? "STOP " : "STOP (previous volume line) ") + fmt(vp)
                     [vb1x, vb2x, vb3x] = posNew(vs, close, vLad ? vt2 : vt, vp, vLad ? vt : na, vbTt, vbRt, "Volume line " + (vs > 0 ? "BUY " : "SELL ") + fmt(close) + "\nstop " + fmt(vp) + "\ntarget " + fmt(vt) + vLadTxt)
                     vbT := vb1x
                     vbR := vb2x
@@ -717,17 +817,18 @@ if is5 and vlOn and barstate.isconfirmed and not volOpen and state != 1 and not 
                 alert("CPRB " + syminfo.ticker + " VOLUME-LINE " + (vs > 0 ? "BUY at " : "SELL at ") + fmt(close) + " | STOP " + fmt(vp) + " | TARGET " + fmt(vt) + vLadTxt, alert.freq_once_per_bar)
 
 if opened
-    float t0 = isMag ? tgt : tgtFor(openSide, openPx, R)
-    string tTxt = isMag ? (magHalf ? "book half at " + fmt(t0) + ", rest to CPR " + fmt(tgt2) : "target CPR " + fmt(tgt2)) : na(t0) ? "ride / trail" : halfMode ? "book half at " + fmt(t0) : "target " + fmt(t0)
-    txt = (isMag ? "MAGNET " : "") + (openSide > 0 ? "BUY " : "SELL ") + fmt(openPx) + (tradeNo == 2 ? " (reversal)" : "") + "\nstop " + fmt(stp) + "\n" + tTxt
+    float t0 = shortMode or isMag ? tgt : tgtFor(openSide, openPx, R)
+    string tTxt = shortMode ? "target " + fmt(tgt) + ", out by " + hhmm(lastMin) : isMag ? (magHalf ? "book half at " + fmt(t0) + ", rest to CPR " + fmt(tgt2) : "target CPR " + fmt(tgt2)) : na(t0) ? "ride / trail" : halfMode ? "book half at " + fmt(t0) : "target " + fmt(t0)
+    txt = (isMag ? "MAGNET " : shortMode ? "PULLBACK " : "") + (openSide > 0 ? "BUY " : "SELL ") + fmt(openPx) + (tradeNo == 2 ? " (reversal)" : "") + "\nstop " + fmt(stp) + "\n" + tTxt
     mark(openSide > 0 ? "B" : "S", openSide < 0, openSide > 0 ? GREEN : RED, txt)
     lnS := line.new(bar_index, stp, bar_index + 1, stp, color = lnRed, style = line.style_dashed, extend = extend.right)
     lnT := line.new(bar_index, na(t0) ? openPx : t0, bar_index + 1, na(t0) ? openPx : t0, color = showBoxes ? lnGreen : na(t0) ? GREY : GREEN, style = line.style_dashed, extend = extend.right)
     if showBoxes
         bool t3 = not isMag and exitF == "Target 3 x risk"
-        float tMain = isMag ? tgt2 : openPx + openSide * (t3 ? 3 : 1) * R
-        float tHalf = isMag ? (magHalf ? t0 : na) : halfMode ? openPx + openSide * 0.25 * R : na
-        pbTt := (isMag ? "TARGET (CPR edge) " : t3 ? "TARGET " : "+1R, then trail the stop ") + fmt(tMain) + (na(tHalf) ? "" : "\nbook half at " + fmt(tHalf))
+        float tMain = shortMode ? tgt : isMag ? tgt2 : openPx + openSide * (t3 ? 3 : 1) * R
+        float tHalf = shortMode ? na : isMag ? (magHalf ? t0 : na) : halfMode ? openPx + openSide * 0.25 * R : na
+        pbTt := shortMode ? (isMag ? "TARGET (CPR edge) " : "TARGET (" + str.tostring(pbMult) + "x the stop) ") + fmt(tMain) + "\nout by " + hhmm(lastMin) :
+                 (isMag ? "TARGET (CPR edge) " : t3 ? "TARGET " : "+1R, then trail the stop ") + fmt(tMain) + (na(tHalf) ? "" : "\nbook half at " + fmt(tHalf))
         pbRt := "STOP " + fmt(stp)
         [pb1x, pb2x, pb3x] = posNew(openSide, openPx, tMain, stp, tHalf, pbTt, pbRt, txt)
         pbT := pb1x
@@ -776,6 +877,8 @@ if barstate.islast and cprOn
         if is5 and vlShow
             for x in vLines
                 edgeName(edgeLbl, x1, x, "vol", TEAL, size.tiny)
+        if pullState == 1 and pullArmed
+            edgeName(edgeLbl, x1, pullLv + pullSide * 0.0005 * pullLv, (pullSide > 0 ? "LIMIT BUY " : "LIMIT SELL ") + fmt(pullLv + pullSide * 0.0005 * pullLv), BLUE, size.small)
         if state == 1 and not showBoxes
             edgeName(edgeLbl, x1, stp, "SL", RED, size.small)
             edgeName(edgeLbl, x1, tgt, "T", GREEN, size.small)

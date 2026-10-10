@@ -4,6 +4,20 @@
 
 File: [`cpr_breakout.pine`](cpr_breakout.pine). An indicator; reads 1-minute candles underneath for exits.
 
+**Default rules now: small stops, out within 60 minutes** (Settings > Trade style > Rules; "Original" gives the
+rules described further down). Every stop at most 150 Sensex / 45 Nifty points, every trade out after 60 minutes
+at the latest, all at the target, no booking half, no trailing, one trade at a time:
+- **CPR Magnet** at 9:16 (same conditions as below), target the CPR edge.
+- **Breakout on the pullback**: when price touches the 15-minute high / low before 10:00 (same filters) and goes 0.1%
+  beyond it, a limit order goes back at the broken level (blue dashed line, until 12:00). Stop at the other side of
+  the range or 150 / 45 points, target 2x the stop.
+- **3-day volume lines**: stop at the previous line or 150 / 45 points, target the next line.
+- 2026: Nifty 150 trades, 53% won, net +842, worst trade −49; Sensex 170 trades, 54% won, net +4,708, worst trade
+  −162 (`research/quant/y2026_short_combo.py`). The original rules made more (Nifty +2,274, Sensex +8,102) with
+  bigger single losses (−105 / −471).
+
+The rest of this section describes the original rules.
+
 - Draws the CPR as three pink lines: TC (top), the pivot P (middle) and BC (bottom), from yesterday's official
   high, low and close; orange on narrow days, with its width in the box ("55 pts (0.25%) normal"). The CPR
   shows on any intraday chart; the trades need a 5-minute chart. Also the first 15-minute candle's high and low,

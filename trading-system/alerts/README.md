@@ -17,6 +17,12 @@ or a login. It tells you:
 
 Alerts appear on the screen (with a beep) and, if you set it up, on your phone through Telegram (free).
 
+**Rules** (top of the file): `RULES = 'small'` (default) = stops of at most 150 Sensex / 45 Nifty points
+(`STOP_CAP`), out within 60 minutes (`HOLD_MIN`), all at the target, no trailing; the breakout is traded on the
+pullback: at the break it tells you where the limit order will go, once price is 0.1% beyond it says "place a BUY /
+SELL LIMIT at X", and at 12:00 it tells you to cancel it if it didn't fill. `RULES = 'classic'` = the original
+rules. The chart shows a waiting limit order as a blue "LIMIT" line.
+
 ## The live chart (free)
 
 While the program runs, open **http://127.0.0.1:8000** in Chrome on the same phone. It's a live candle chart drawn
@@ -28,7 +34,7 @@ refreshes every 5 seconds; the program fetches new prices every 15 seconds. On a
 The chart library (TradingView's free open-source Lightweight Charts) is downloaded once and kept next to the
 program. `CHART = False` at the top switches the chart off.
 
-![The live chart on a phone, replaying 15 September 2026](chart-phone.png)
+![The live chart on a phone, replaying 6 October 2026 (Sensex, small-stop rules)](chart-phone.png)
 
 ## Set up once
 
@@ -93,8 +99,8 @@ On a phone, put the date in `REPLAY_DAY = '2026-10-08'` at the top and press Run
 ## Checked
 
 `research/quant/alerts_check.py` runs it on every 2026 session, minute by minute as it runs live. It took exactly the
-backtest's trades (Nifty 101 trades, net +2,274 points; Sensex 114 trades, net +8,102; with the ladder +2,193 /
-+8,819). Nothing it had already said changed later in the day. The CPR uses the exchange's official daily close
+backtest's trades: small-stop rules Nifty 150 trades, net +842 points, Sensex 170 trades, net +4,708; original rules
+Nifty 101 trades, net +2,274, Sensex 114 trades, net +8,102 (with the ladder +2,193 / +8,819). Nothing it had already said changed later in the day. The CPR uses the exchange's official daily close
 (downloaded each morning), like TradingView; the official close often differs from the last 1-minute candle.
 
 ## Limits

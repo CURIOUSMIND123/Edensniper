@@ -1,4 +1,5 @@
-"""Check that alerts/cprb_alerts.py trades exactly like the 2026 backtest (y2026_combo.py / y2026_improve.py).
+"""Check that alerts/cprb_alerts.py trades exactly like the 2026 backtest (y2026_combo.py / y2026_improve.py for the
+classic rules, y2026_short.py + y2026_reversal.py for the small-stop rules).
 
     python alerts_check.py nifty        (or sensex)
 
@@ -8,7 +9,7 @@
    day it has the same trades as on the whole day.
 """
 import collections, sys
-import y2026 as Y, y2026_combo as K, y2026_improve as I, y2026_vol_lines as V, cpr_orb as C
+import y2026 as Y, y2026_combo as K, y2026_improve as I, y2026_vol_lines as V, cpr_orb as C, y2026_short as S, y2026_reversal as RV
 sys.path.insert(0, '../../alerts')
 import cprb_alerts as A
 
@@ -30,10 +31,10 @@ for d in Y.D26:
     bad['lines'] += len(L) != len(cx['lines']) or any(abs(a - b) > 1e-9 for a, b in zip(L, cx['lines']))
 print(f"{Y.B.name.upper()} levels on {len(Y.D26)} days, mismatches: {dict(bad) or 'none'}")
 
-def mine(ladder):
+def mine(ladder, rules='classic'):
     out = collections.defaultdict(list)
     for d in Y.D26:
-        for t in A.day_trades(CX[d], Y.one[d], 929, True, ladder):
+        for t in A.day_trades(CX[d], Y.one[d], 929, True, ladder, rules):
             if t['taken']: out[d].append((t['m'], round(t['exit']['pnl'], 6)))
     return out
 
@@ -42,21 +43,29 @@ for t in K.one_book(K.plan_trades() + K.vol_trades(1.5)): ref[t[0]].append((t[2]
 ref_l = collections.defaultdict(list)
 for t in I.one_book([x for d in Y.D26 for x in I.plan(d, 'edge', 1.0)] + [x for d in Y.D26 for x in I.vol(d, 'ladder')]):
     ref_l[t['d']].append((t['m'], round(t['pnl'], 6)))
-for label, a, b in (('default', mine(False), ref), ('ladder', mine(True), ref_l)):
+CAP = spec['cap']
+P = (CAP, 'tighten', A.HOLD_MIN, 'target', False)
+PB = dict(fam='B', entry='limit', target=f"{A.PULLBACK_R:g}R", hold=A.HOLD_MIN, cap=CAP, mode='tighten')
+ref_s = collections.defaultdict(list)
+for t in S.one_book([dict(t, src='BO') for d in Y.D26 for t in RV.pullback(d, PB)] + [t for d in Y.D26 for t in (S.magnet(d, P) or [])] +
+                    [t for d in Y.D26 for t in S.vol(d, P)]):
+    ref_s[t['d']].append((t['m'], round(t['pnl'], 6)))
+for label, a, b in (('classic', mine(False), ref), ('ladder', mine(True), ref_l), ('small', mine(False, 'small'), ref_s)):
     diff = [d for d in Y.D26 if sorted(a[d]) != sorted(b[d])]
     n = sum(len(v) for v in a.values()); net = sum(p for v in a.values() for _, p in v)
     print(f"  {label:8} alerts: {n} trades, net {net:+,.0f} | backtest: {sum(len(v) for v in b.values())} trades, "
           f"net {sum(p for v in b.values() for _, p in v):+,.0f} | days that differ: {len(diff)} {diff[:5]}")
     for d in diff[:3]: print(f"     {d} alerts {a[d]} backtest {b[d]}")
 
-changed = 0
-for d in Y.D26:
-    cx, said = CX[d], {}
-    for upto in range(555, 930):
-        c1 = [x for x in Y.one[d] if x[0] <= upto]
-        for mid, mk, text, push in A.messages(cx, A.day_trades(cx, c1, upto, upto == 929, False), c1, upto, 5):
-            if mid in said and said[mid] != text: changed += 1
-            said[mid] = text
-    full = A.messages(cx, A.day_trades(cx, Y.one[d], 929, True, False), Y.one[d], 929, 5)
-    changed += {m: t for m, _, t, _ in full} != said
-print(f"  minute by minute: days where something already said changed later: {changed}")
+for rules in ('classic', 'small'):
+    changed = 0
+    for d in Y.D26:
+        cx, said = CX[d], {}
+        for upto in range(555, 930):
+            c1 = [x for x in Y.one[d] if x[0] <= upto]
+            for mid, mk, text, push in A.messages(cx, A.day_trades(cx, c1, upto, upto == 929, False, rules), c1, upto, 5):
+                if mid in said and said[mid] != text: changed += 1
+                said[mid] = text
+        full = A.messages(cx, A.day_trades(cx, Y.one[d], 929, True, False, rules), Y.one[d], 929, 5)
+        changed += {m: t for m, _, t, _ in full} != said
+    print(f"  {rules} rules, minute by minute: days where something already said changed later: {changed}")
