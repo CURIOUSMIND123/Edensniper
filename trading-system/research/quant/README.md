@@ -47,3 +47,6 @@ Costs: 4 Nifty points or 12 Sensex points per trade. `pip install pandas scikit-
 | `btc_load.py` | Turns Binance's public 1-minute BTCUSDT futures archives (data.binance.vision) into `../.cache/btc_1m.json` (run with `python -I`) |
 | `btc_2026.py` | 2026 only: the daily-plan indicator on Bitcoin (UTC day as the session, Bitcoin's own volume), and Rs 30,000 at 1x to 150x leverage |
 | `btc_all.py` | 2026 only: every strategy built so far run on Bitcoin (as `btcist`: its candles in IST market hours, Binance costs), and Rs 30,000 at 1x-150x leverage |
+| `btc_h1_load.py` | Binance public archives -> hourly BTCUSDT candles and funding rates, Jan 2023 - Oct 2026 (run with `python -I`) |
+| `btc_trend.py` | Bitcoin strategies built for Bitcoin (Donchian breakout, EMA trend, daily volatility breakout, dip buying; 60 versions), designed on 2023-2025 and tested on 2026, with fees, funding and leverage |
+| `btc_trend_basket.py` | The 4-hour trend-following versions from `btc_trend.py` traded together, 2026 and 2023-2025, 1x-150x |

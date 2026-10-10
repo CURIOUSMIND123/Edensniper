@@ -525,6 +525,40 @@ price a trade, well under the 0.11% a trade costs (and under the 0.04% even with
 Leverage multiplied the losses; at 50x and above every one was wiped out, and at 150x most were gone in January or
 February. Liquidations are counted only from closing losses, so real ones would come sooner.
 
+## A strategy built for Bitcoin, tested on 2026
+
+Hourly BTCUSDT futures candles and Binance's actual funding payments, January 2023 to 9 October 2026. Costs 0.11%
+of the position a trade plus funding every 8 hours. Four families that hold for hours to days, so a typical move is
+several times the fees: Donchian breakouts, EMA trend, daily volatility breakouts, and buying dips in an uptrend;
+60 versions in all, each long-and-short or long-only.
+
+The test was set up before looking at 2026: keep versions that made money in each of 2023, 2024 and 2025, pick the
+best from each family by profit against worst fall, then see what 2026 does.
+
+| Picked on 2023-2025 | 2023-2025 | 2026 (unseen) |
+|---|---|---|
+| Donchian, 4-hour, 55 candles, 3 ATR trailing stop, long only | 49 trades, +105% | 16 trades, 4 won, **−9.4%** |
+| EMA 50 / 200, 4-hour, long only | 15 trades, +134% | 5 trades, 1 won, **−12.3%** |
+| Dip buying, RSI(2) under 5, out after 24 hours, long only | 234 trades, +27% | 49 trades, 17 won, **−8.6%** |
+| Daily volatility breakout | no version made money in all three years | - |
+
+All three picks lost in 2026; Bitcoin itself fell 5.7% over the same time.
+
+What did hold up was the 4-hour trend-following family as a whole: all 20 of its versions made money over
+2023-2025, and 13 of 20 made money in 2026 (average +9.0% per version at 1x). Traded together with Rs 30,000 split
+equally:
+
+| Leverage | 1x | 2x | 3x | 5x | 10x | 20x | 150x |
+|---|---|---|---|---|---|---|---|
+| 2026 | Rs 31,969 | Rs 32,533 | Rs 31,861 | Rs 27,832 | Rs 12,854 | Rs 144 | Rs 0 |
+| 2023-2025 | Rs 59,049 | Rs 89,352 | Rs 1,15,159 | Rs 1,40,174 | Rs 27,777 | Rs 0 | Rs 0 |
+
+- A small profit in a year Bitcoin fell, at 1x-3x. From 5x up, the swings inside each trade cost more than the
+  extra size made, and from 20x most versions were liquidated.
+- The best single version in 2026 (EMA 20 / 50, 4-hour, long and short, +47.8%) would not have been picked in
+  advance: it lost money in one of the design years.
+- Looking at the basket was my choice after seeing 2026, so treat even the +7% as a hint, not a proven result.
+
 ## How to re-check all of this
 
 - `python research/fair_price_backtest.py` downloads the candles and re-runs the Fair Price test.
