@@ -58,3 +58,6 @@ Costs: 4 Nifty points or 12 Sensex points per trade. `pip install pandas scikit-
 | `alerts_check.py` | Checks that `alerts/cprb_alerts.py` (live alerts) takes exactly the backtest's 2026 trades, also minute by minute as it runs live |
 | `y2026_pivots.py` | 2026 only: why the indicator skipped big days (its filters switched off one by one) and 864 versions of pivot-level trades (S3-R3, BC / P / TC, with or without the volume lines), alone and added to the indicator |
 | `fetch_daily.py` | Downloads the official daily high / low / close (November 2025 on) that `cpr_backtest.py` uses for the CPR and pivots; `CPR_CLOSE=last1m` uses the last 1-minute candle instead |
+| `fetch_pcr.py` | Daily put-call ratio and the strikes with the most call / put open interest, from the NSE and BSE F&O bhavcopy files (Nifty and Sensex) |
+| `y2026_tci_pcr.py` | 2026 only: the TCI zone breakout (`tci/rules.py`) alone and added to the indicator, and the put-call ratio as a direction (does it call the next day, as a filter, as the breakout direction, as its own trade) |
+| `y2026_money.py` | 2026 only: what Rs 30,000 becomes with the indicator on both indices at 2 lots, 5 lots, or 2 growing to 5, with a random-order risk check |

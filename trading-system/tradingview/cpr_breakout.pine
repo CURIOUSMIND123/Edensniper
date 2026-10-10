@@ -25,7 +25,9 @@
 //     ride the rest to the line after.
 // THE CPR: three lines from yesterday's official high, low and close: TC (top), the pivot P (middle), BC
 //   (bottom). Pink; orange on narrow days (the narrowest third of the last 20). Drawn on any intraday chart,
-//   with its width each morning. The trades and the volume levels need a 5-minute chart.
+//   with its width in the box. The trades and the volume levels need a 5-minute chart.
+// CHART MARKS (small letters by the candles; tap one for the details): B buy, S sell, T target or half booked,
+//   SL stop loss, BE stop at entry, X any other exit (trailing stop or 3:15). Dashed lines: red stop, green target.
 // Tested on 1-minute candles, 1 Jan - 9 Oct 2026 (191 sessions), after costs (4 Nifty / 12 Sensex points a trade),
 // CPR from the official daily close, as drawn here:
 //   Nifty  101 trades on 90 days (about 11 a month), 79 won / 22 lost, +3,633 / -1,359, net +2,274
@@ -75,12 +77,12 @@ costIn = input.float(0, "Cost per trade in index points (0 = auto: Nifty 4, Sens
 G2 = "Display"
 cprPink = input.color(color.new(#e91e63, 0), "CPR colour", group = G2)
 cprNar  = input.color(color.new(#f57c00, 0), "CPR colour on narrow days", group = G2)
-cprLbl  = input.bool(true, "Show the CPR width each morning", group = G2)
+cprLbl  = input.bool(false, "Also write the CPR width on the chart each morning (it is always in the box)", group = G2)
 showPrf = input.bool(true, "Show the volume POC and value area", group = G2)
 G3 = "Volume zones"
 volSym  = input.symbol("NSE:NIFTYBEES", "Volume from (the index has none; the test used NIFTYBEES for both indices)", group = G3)
 profN   = input.int(30, "Volume profile: last N sessions", minval = 5, maxval = 30, group = G3)
-showEma = input.bool(true, "Show the EMA 50", group = G2)
+showEma = input.bool(false, "Show the EMA 50", group = G2)
 showBox = input.bool(true, "Show the status and results box", group = G2)
 
 TZ     = "Asia/Kolkata"
@@ -91,6 +93,13 @@ PURPLE = color.new(#7e57c2, 0)
 TEAL   = color.new(#00897b, 0)
 fmt(x) => str.tostring(x, "#,##0.##")
 pts(x) => str.tostring(x, "+#,##0;-#,##0")
+// small chart marks (tap one for the details): B / S entry, T target or half booked, SL stop loss, BE stop at
+// entry, X any other exit (trailing stop or 3:15)
+mark(string txt, bool above, color col, string tip) =>
+    label.new(bar_index, above ? high : low, txt, yloc = above ? yloc.abovebar : yloc.belowbar, style = label.style_none,
+              textcolor = col, size = size.small, tooltip = tip)
+exitMark(string why) =>
+    why == "STOP" ? "SL" : why == "STOP AT ENTRY" ? "BE" : str.startswith(why, "TARGET") ? "T" : "X"
 minsOf(int t) => hour(t, TZ) * 60 + minute(t, TZ)
 cost = costIn > 0 ? costIn : close > 50000 ? 12.0 : 4.0
 BIN  = close > 50000 ? 16.0 : 5.0
@@ -225,7 +234,7 @@ if newDay and is5
         array.clear(vlDraw)
         if array.size(vLines) > 0
             for x in vLines
-                array.push(vlDraw, line.new(bar_index, x, bar_index + 1, x, color = color.new(TEAL, 25), style = line.style_dotted, width = 2, extend = extend.right))
+                array.push(vlDraw, line.new(bar_index, x, bar_index + 1, x, color = color.new(TEAL, 45), style = line.style_dotted, width = 1, extend = extend.right))
     array.push(dStart, bar_index)
     if array.size(dStart) > 31
         array.shift(dStart)
@@ -399,7 +408,7 @@ if is5 and n1 > 0
                             halfPts := side * (tgt - e)
                             if side * (e - stp) > 0
                                 stp := e
-                            label.new(bar_index, tgt, "HALF BOOKED +" + str.tostring(halfPts, "#,##0"), style = label.style_label_left, color = color.new(GREEN, 80), textcolor = GREEN, size = size.tiny)
+                            mark("T", side > 0, GREEN, "Book half at " + fmt(tgt) + " (" + pts(halfPts) + " pts). Stop to " + fmt(stp))
                             alert("CPRB " + syminfo.ticker + " BOOK HALF at " + fmt(tgt) + ", move stop to " + fmt(stp), alert.freq_once_per_bar)
                             tgt := na
                         else
@@ -425,7 +434,8 @@ if is5 and n1 > 0
                 totPts += g
                 winPts += g > 0 ? g : 0
                 lossPts += g > 0 ? 0 : g
-                label.new(bar_index, ex, why + " " + pts(g) + " pts", style = label.style_label_left, color = color.new(g > 0 ? GREEN : RED, 80), textcolor = g > 0 ? GREEN : RED, size = size.small)
+                string xm = exitMark(why)
+                mark(xm, (xm == "SL" or xm == "BE") ? side < 0 : side > 0, xm == "BE" ? GREY : g > 0 ? GREEN : RED, why + " at " + fmt(ex) + ": " + pts(g) + " pts after costs")
                 line.set_extend(lnT, extend.none)
                 line.set_extend(lnS, extend.none)
                 line.set_x2(lnT, bar_index)
@@ -454,7 +464,7 @@ if is5 and n1 > 0
                             // ladder: book half at the next line, stop to the broken line, aim for the line after
                             vHalf := true
                             vHalfPts := vSide * (vTgt - vE)
-                            label.new(bar_index, vTgt, "VOL HALF BOOKED +" + str.tostring(vHalfPts, "#,##0"), style = label.style_label_left, color = color.new(GREEN, 80), textcolor = GREEN, size = size.tiny)
+                            mark("T", vSide > 0, GREEN, "Volume line: book half at " + fmt(vTgt) + " (" + pts(vHalfPts) + " pts). Stop to " + fmt(vBroken) + ", rest to " + fmt(vTgt2))
                             alert("CPRB " + syminfo.ticker + " VOLUME-LINE BOOK HALF at " + fmt(vTgt) + ", move stop to " + fmt(vBroken) + ", rest to " + fmt(vTgt2), alert.freq_once_per_bar)
                             vStp := vBroken
                             vTgt := vTgt2
@@ -484,7 +494,8 @@ if is5 and n1 > 0
                 nVol += 1
                 nVolWon += vg > 0 ? 1 : 0
                 volPts += vg
-                label.new(bar_index, vEx, "VOL " + vWhy + " " + pts(vg) + " pts", style = label.style_label_left, color = color.new(vg > 0 ? GREEN : RED, 80), textcolor = vg > 0 ? GREEN : RED, size = size.small)
+                string vm = exitMark(vWhy)
+                mark(vm, vm == "SL" ? vSide < 0 : vSide > 0, vg > 0 ? GREEN : RED, "Volume line: " + vWhy + " at " + fmt(vEx) + ": " + pts(vg) + " pts after costs")
                 line.set_extend(vlnT, extend.none)
                 line.set_extend(vlnS, extend.none)
                 line.set_x2(vlnT, bar_index)
@@ -580,7 +591,7 @@ if is5 and vlOn and barstate.isconfirmed and not volOpen and state != 1 and not 
                 vHalfPts := na
                 vStart := mins + 5
                 string vLadTxt = vlLad and not na(vt2) ? " (book half), then " + fmt(vt2) : ""
-                label.new(bar_index, close, "VOL " + (vs > 0 ? "BUY " : "SELL ") + fmt(close) + "\nstop " + fmt(vp) + "\ntarget " + fmt(vt) + vLadTxt, style = vs > 0 ? label.style_label_up : label.style_label_down, color = TEAL, textcolor = color.white, size = size.small)
+                mark(vs > 0 ? "B" : "S", vs < 0, vs > 0 ? GREEN : RED, "Volume line " + (vs > 0 ? "BUY " : "SELL ") + fmt(close) + "\nstop " + fmt(vp) + "\ntarget " + fmt(vt) + vLadTxt)
                 vlnS := line.new(bar_index, vp, bar_index + 1, vp, color = RED, style = line.style_dashed, extend = extend.right)
                 vlnT := line.new(bar_index, vt, bar_index + 1, vt, color = GREEN, style = line.style_dashed, extend = extend.right)
                 todayMsg := "Volume line " + (vs > 0 ? "BUY at " : "SELL at ") + fmt(close) + ", stop " + fmt(vp) + ", target " + fmt(vt) + vLadTxt
@@ -590,7 +601,7 @@ if opened
     float t0 = isMag ? tgt : tgtFor(openSide, openPx, R)
     string tTxt = isMag ? (magHalf ? "book half at " + fmt(t0) + ", rest to CPR " + fmt(tgt2) : "target CPR " + fmt(tgt2)) : na(t0) ? "ride / trail" : halfMode ? "book half at " + fmt(t0) : "target " + fmt(t0)
     txt = (isMag ? "MAGNET " : "") + (openSide > 0 ? "BUY " : "SELL ") + fmt(openPx) + (tradeNo == 2 ? " (reversal)" : "") + "\nstop " + fmt(stp) + "\n" + tTxt
-    label.new(bar_index, openPx, txt, style = openSide > 0 ? label.style_label_up : label.style_label_down, color = openSide > 0 ? GREEN : RED, textcolor = color.white, size = size.small)
+    mark(openSide > 0 ? "B" : "S", openSide < 0, openSide > 0 ? GREEN : RED, txt)
     lnS := line.new(bar_index, stp, bar_index + 1, stp, color = RED, style = line.style_dashed, extend = extend.right)
     lnT := line.new(bar_index, na(t0) ? openPx : t0, bar_index + 1, na(t0) ? openPx : t0, color = na(t0) ? GREY : GREEN, style = line.style_dashed, extend = extend.right)
     todayMsg := (openSide > 0 ? "BUY at " : "SELL at ") + fmt(openPx) + ", stop " + fmt(stp) + ", " + tTxt
@@ -607,7 +618,7 @@ cell(int r, string a, string b, color tc) =>
 if barstate.islast and showBox
     bias = cprF == "Off" ? "both ways" : cb > 0 ? "opened above the CPR: buys" : cb < 0 ? "opened below the CPR: sells" : (cprF == "With the CPR" ? "opened inside the CPR: no trade" : "opened inside: both ways")
     cell(0, "CPR Breakout", is5 ? syminfo.ticker : "Use a 5-minute chart", is5 ? chart.fg_color : RED)
-    cell(1, "Today's CPR", fmt(bot) + " - " + fmt(top) + (narrow ? " (narrow)" : ""), chart.fg_color)
+    cell(1, "Today's CPR", fmt(bot) + " - " + fmt(top) + ", " + str.tostring(top - bot, "#,##0") + " pts (" + str.tostring((top - bot) / P * 100, "0.00") + "%) " + (narrow ? "NARROW" : nNar * 3 >= 40 ? "wide" : "normal"), narrow ? cprNar : cprPink)
     cell(2, "Bias", bias, cb > 0 ? GREEN : cb < 0 ? RED : chart.fg_color)
     cell(3, "15-minute range", na(orh) ? "-" : fmt(orl) + " - " + fmt(orh), chart.fg_color)
     cell(4, str.tostring(profN) + "-day volume POC / value area", na(poc) ? "-" : fmt(poc) + " / " + fmt(val) + " - " + fmt(vah), PURPLE)

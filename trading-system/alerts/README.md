@@ -34,6 +34,27 @@ Alerts appear on the screen (with a beep) and, if you set it up, on your phone t
 4. **Your lots.** Change `LOTS = 5` at the top if needed. It's used only for the rupee estimates (option moves are
    estimated at half the index move). `LADDER = True` switches on the volume-line ladder.
 
+## On a Samsung phone (no computer needed)
+
+1. From the Play Store install **Pydroid 3**, **Telegram** and **TradingView**.
+2. Open the copy page on the phone, tap **Copy program**. In Pydroid 3: menu, New, paste, Save as `cprb_alerts.py`.
+3. Telegram alerts: do step 3 above (BotFather, then the token in the file). In Pydroid 3, open the file and press
+   the yellow Run button once: it prints your chat id. Put it in `TELEGRAM_CHAT_ID`, save, and Run again: "CPR
+   Breakout alerts started" arrives in Telegram.
+4. Stop Android from closing it during the day:
+   - Settings > Battery > Background usage limits > **Never sleeping apps** > add Pydroid 3.
+   - Settings > Apps > Pydroid 3 > Battery > **Unrestricted**.
+   - Keep the phone on the charger from 9:10 to 3:30. If it still stops when the screen is off, keep Pydroid 3 open
+     in split screen or a pop-up window next to Groww.
+5. The chart: open tradingview.com in Chrome (in DeX, or on the phone with "Desktop site" ticked), Pine Editor,
+   paste the indicator, Save, Add to chart. After saving it once it is also in the TradingView app under
+   Indicators > My scripts. Free TradingView is 15 minutes late, but the CPR, POC and volume lines come from
+   earlier days, so they are right; the live signals come from the alerts.
+
+**Samsung DeX** turns the phone into a desktop on a monitor or TV (cable or wireless) with a keyboard and mouse.
+It is not needed, but it helps: Pydroid 3, TradingView and Groww open side by side in their own windows, so the
+alerts program stays on screen all day.
+
 ## Every trading day
 
 Open a terminal in the folder (on Windows: in the folder's address bar type `cmd` and press Enter). Then run:

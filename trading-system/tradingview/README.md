@@ -5,10 +5,10 @@
 File: [`cpr_breakout.pine`](cpr_breakout.pine). An indicator; reads 1-minute candles underneath for exits.
 
 - Draws the CPR as three pink lines: TC (top), the pivot P (middle) and BC (bottom), from yesterday's official
-  high, low and close; orange on narrow days, with its width each morning ("CPR 55 pts (0.25%) normal"). The CPR
+  high, low and close; orange on narrow days, with its width in the box ("55 pts (0.25%) normal"). The CPR
   shows on any intraday chart; the trades need a 5-minute chart. Also the first 15-minute candle's high and low,
   the 30-day volume point of control (purple, the price where the most NIFTYBEES volume traded) with its value
-  area, and the EMA 50.
+  area, and (if switched on) the EMA 50.
 - **Default = daily plan, one plan per day.** Narrow-CPR day: CPR Breakout scalp. Other day: CPR Magnet at 9:16
   if the open is 0.2%+ beyond the CPR, otherwise the CPR Breakout scalp.
   - CPR Magnet: trade back toward the CPR, stop 0.3%, book half at 0.25 x the risk, stop to entry, rest to the
@@ -29,6 +29,9 @@ File: [`cpr_breakout.pine`](cpr_breakout.pine). An indicator; reads 1-minute can
   - Optional **ladder** (off by default): at the next line book half, move the stop to the broken line, ride the
     rest to the line after. 2026: Sensex net +8,819 (instead of +8,102), Nifty +2,193 (instead of +2,274); all of
     the gain came in January-June.
+- Chart marks are small letters by the candles: **B** buy, **S** sell, **T** target or half booked, **SL** stop
+  loss, **BE** stop at entry, **X** any other exit. Tap a letter for the prices and points. Dashed red / green
+  lines show the open trade's stop and target.
 - Every filter is in Settings. `research/quant/y2026_combo.py` has the same plan in Python.
 - **No live data on free TradingView?** [`alerts/cprb_alerts.py`](../alerts/cprb_alerts.py) runs the same rules on
   free live data and sends the alerts to your phone through Telegram. Setup: [`alerts/README.md`](../alerts/README.md).

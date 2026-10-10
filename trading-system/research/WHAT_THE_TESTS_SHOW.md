@@ -732,6 +732,33 @@ four exits, four direction filters and three reward-to-stop limits.
   went from 215 to 470 and losing trades from 51 to 184. At 5 lots that is about Rs 1.8 lakh more in 2026, with
   bigger falls (Nifty Rs 89,700 instead of Rs 57,200; Sensex Rs 84,600 instead of Rs 71,900).
 
+## 2026 in plain numbers, and TCI / PCR for days like 9 October
+
+**The indicator as it is now** (daily plan + 3-day volume lines, CPR from the official close), Nifty and Sensex
+together, 1 January to 9 October 2026 (`y2026_money.py`):
+- 215 trades, about 23 a month; 164 won, 51 lost (76%). Many wins are small: half is booked at a quarter of the
+  risk.
+- Rs 30,000 at 2 lots a trade -> about Rs 3,40,000. Biggest fall from a high Rs 32,328; lowest Rs 27,144; no losing
+  month. The same trades in random order fell below Rs 15,000 in 5.7% of runs and below zero in 0.3%.
+- At 5 lots from the start -> about Rs 8,05,000, but the biggest fall was Rs 80,821 and in random order the account
+  went below zero in 9.5% of runs.
+- 2 lots until the account reaches Rs 75,000, then 5 lots -> about Rs 6,94,000, with the same risk at the start as
+  2 lots.
+- Months: January to June made Rs 17,000-89,000 a month at 2 lots; July to 9 October Rs 7,000-20,000 a month.
+- At-the-money option moves are taken as half the index move; time decay is left out. The settings were chosen
+  on 2026 itself, so live results will very likely be lower.
+
+**TCI** (the Trading Cafe zone breakout, `tci/rules.py`, `y2026_tci_pcr.py`) on 2026:
+
+| 2026, net points | Nifty | Sensex |
+|---|---|---|
+| Indicator now | +2,274 | +8,102 |
+| TCI alone | 301 trades, 17% won, −1,379 | 301 trades, 18% won, −2,433 |
+| TCI with a 2x wider stop | −1,108 | −2,765 |
+| Indicator + TCI, one trade at a time | +611 | +5,468 |
+
+TCI lost money on both indices, made nothing on 9 October, and cut the indicator's profit when added.
+
 ## How to re-check all of this
 
 - `python research/fair_price_backtest.py` downloads the candles and re-runs the Fair Price test.
