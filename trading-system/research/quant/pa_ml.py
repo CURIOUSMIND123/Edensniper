@@ -1,6 +1,6 @@
 """Price action + levels + machine learning: find 5-minute moments where +25 comes before -15.
 
-    python pa_ml.py nifty        (or sensex)
+    python pa_ml.py nifty        (or sensex; add --rebuild to recompute the measurements)
 
 At every 5-minute candle close from 9:35 to 14:00 since 2023, about 50 measurements (all known at that moment):
   candle shape   body, wicks, close position, size vs ATR, for this and the previous candle; engulfing, pin bar,
@@ -16,7 +16,8 @@ At every 5-minute candle close from 9:35 to 14:00 since 2023, about 50 measureme
 Two outcomes are learned for buys and for sells, checked on 1-minute candles:
   fixed  +25 before -15 Nifty points (scaled to price; about 80 / 48 on Sensex), within 60 minutes
   atr    +1.67 x ATR before -1 x ATR, within 60 minutes (the 25 / 15 idea, sized to the day's volatility)
-A gradient-boosted tree model is retrained every month on all earlier months only and scores the next month. Each
+A gradient-boosted tree model is retrained every month on all earlier months only (from 2023) and scores the next
+month; results are for 2026 only (January to 9 October), which the model never trained on before scoring it. Each
 month it trades the scores in its top 1% / 3% / 10% (the cut-off comes from the previous 3 months' scores), one
 trade at a time, at most 5 a day, entries 9:35-14:00. Exits: the fixed target / stop / 60 minutes, or "run":
 after the target, lock +10 and trail 15 behind the best price until 15:15 (so +25 can become +40-50).
@@ -127,7 +128,7 @@ def day_rows(d):
     return rows
 
 NONFEAT = {'d', 'j', 'c', 'atr', 'mo'}
-def walk_forward(df, lab, start='2024-01'):
+def walk_forward(df, lab, start='2026-01'):
     feats = sorted(k for k in df.columns if k not in NONFEAT and not k.startswith(('y_', 'g_', 'run_', 'pr_', 'x_', 'xr_')))
     df['mo'] = df.d.str[:7]
     for nm in ('L', 'S'): df[f'pr_{lab}{nm}'] = np.nan
@@ -164,19 +165,22 @@ def trade(df, lab, top, run):
 def report(ts, label):
     if not ts: print(f'   {label}: no trades'); return
     l90 = set(C.TEST[-90:])
-    for nm, xs in (('since 2024 (unseen)', ts), ('last 90 sessions', [t for t in ts if t[0] in l90])):
+    for nm, xs in (('2026 (unseen)', ts), ('last 90 sessions', [t for t in ts if t[0] in l90])):
         p = [t[1] for t in xs]
         if not p: print(f'   {label} {nm}: no trades'); continue
         w = [v for v in p if v > 0]; lo = [v for v in p if v <= 0]
-        yrs = collections.defaultdict(float)
-        for t in xs: yrs[t[0][:4]] += t[1]
+        mos = collections.defaultdict(float)
+        for t in xs: mos[t[0][5:7]] += t[1]
         print(f"   {label} {nm}: {len(p)} trades ({len(p)/len({t[0] for t in xs}):.1f} on trading days), target first {100*st.mean(t[2] for t in xs):.0f}%, "
               f"won {len(w)} / lost {len(lo)} ({100*len(w)/len(p):.0f}%), {sum(w):+,.0f} / {sum(lo):+,.0f} = {sum(p):+,.0f}"
-              + ('' if nm != 'since 2024 (unseen)' else ' [' + ', '.join(f'{y} {v:+,.0f}' for y, v in sorted(yrs.items())) + ']'))
+              + ('' if nm != '2026 (unseen)' else ' [' + ', '.join(f'{m} {v:+,.0f}' for m, v in sorted(mos.items())) + ']'))
 
 if __name__ == '__main__':
-    df = features()
-    df.to_pickle(f'../.cache/pa_ml_{B.name}.pkl')
+    import os
+    cache = f'../.cache/pa_ml_{B.name}.pkl'
+    if os.path.exists(cache) and '--rebuild' not in sys.argv: df = pd.read_pickle(cache)
+    else:
+        df = features(); df.to_pickle(cache)
     print(f"{B.name.upper()}: {len(df):,} five-minute moments, {df.d.nunique()} days")
     for lab in ('fix', 'atr'):
         print(f"\n== {lab}: base rate (target before stop, any moment): buys {100*df[f'y_{lab}L'].mean():.0f}%, sells {100*df[f'y_{lab}S'].mean():.0f}% ==")
@@ -186,4 +190,3 @@ if __name__ == '__main__':
         for top in (0.01, 0.03, 0.10):
             for run in (False, True):
                 report(trade(df, lab, top, run), f"top {int(top*100)}% {'run' if run else 'fixed'}")
-    df.to_pickle(f'../.cache/pa_ml_{B.name}.pkl')
