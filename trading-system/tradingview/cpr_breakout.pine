@@ -11,16 +11,21 @@
 // STOP: other side of the 15-minute range (or its middle, or 0.2%). EXIT: target 3 x risk, or ride / trail.
 // Optional reversal trade: if the first break fails at a loss, take the break of the other side.
 // Entries 9:30-13:00, out by 3:15. Costs: 4 Nifty / 12 Sensex points a trade.
-// DEFAULTS (the version that held up): narrow-CPR days only; no sells when today's CPR is wholly above
-//   yesterday's, no buys when wholly below; entry on a touch of the 15-minute high / low; stop at the other side;
-//   trail 1R behind the best price after +1R; one reversal trade if the first break loses.
-// Tested on 1-minute candles after costs (4 Nifty / 12 Sensex points a trade), with those defaults:
-//   Nifty  last 90 sessions (3 Jun - 9 Oct 2026): 34 trades, 20 won / 14 lost, +1,068 / -807 points, net +262.
-//          Since Feb 2023: 276 trades, 51% won, +1,896 points; lost in 2023 (-181) and 2025 (-118).
-//   Sensex last 90 sessions: 31 trades, 22 won / 9 lost, net +1,998. Since 2023: +7,296; lost in 2023 and 2025.
-//   Average win about +53 and loss about -58 Nifty points: the 1:3 target was rarely reached. None of 3,888
-//   versions won 80% of its trades. The same rules on days that are NOT narrow lost (Nifty -2,300 since 2023).
-//   The open-vs-CPR direction filter and the 15-day POC filter lowered results; they are off by default.
+// DEFAULTS = SCALP MODE (highest win rate that still made money on both indices):
+//   narrow-CPR days only; only in the direction of the opening gap (open vs yesterday's close); no sells when
+//   today's CPR is wholly above yesterday's, no buys when wholly below; entry on a touch of the 15-minute high /
+//   low (9:30-1:00); stop at the other side; BOOK HALF at 0.25 x the risk, move the stop to entry, trail the rest
+//   1R behind the best price after +1R; out by 3:15; one reversal trade if the first break loses.
+// Tested on 1-minute candles after costs (4 Nifty / 12 Sensex points a trade):
+//   Nifty  last 90 sessions (3 Jun - 9 Oct 2026): 19 trades, 17 won / 2 lost, +232 / -135, net +97.
+//          Since Feb 2023: 137 trades, 76% won, +549 (about +4 points a trade); lost in 2023 and 2025.
+//   Sensex last 90 sessions: 16 trades, 16 won / 0 lost, net +577. Since 2023: 132 trades, 82% won, +1,654.
+//   About one trade a week (one in the last 30 sessions).
+// MORE PROFIT, LOWER WIN RATE: set Exit to "Trail 1R..." and switch the gap filter off:
+//   Nifty last 90: 34 trades, 20 won / 14 lost, net +262; since 2023 +1,896 (51% won).
+//   Sensex last 90: 31 trades, 22 won / 9 lost, net +1,998; since 2023 +7,296 (53% won).
+// Smaller targets win more and make less: a 0.1R target won 97% of Nifty trades in the last 90 sessions but lost
+//   money since 2023 (79% won, -1,164). The open-vs-CPR and 15-day POC filters lowered results; they are off.
 // The 15-day profile here uses the chart's 5-minute candles; the test used 1-minute candles.
 // Reference implementation (same rules): trading-system/research/quant/cpr_orb.py
 // ============================================================================
@@ -35,8 +40,8 @@ relF   = input.bool(true, "Not against today's CPR vs yesterday's (higher / lowe
 widF   = input.string("Narrow only", "CPR width", options = ["Any", "Narrow only", "Skip narrow"], group = G1)
 entF   = input.string("Touch of the range high / low", "Entry", options = ["5-minute close beyond the range", "Touch of the range high / low"], group = G1)
 stopF  = input.string("Other side of the 15-minute range", "Stop", options = ["Other side of the 15-minute range", "Middle of the 15-minute range", "0.2% of price"], group = G1)
-exitF  = input.string("Trail 1R behind the best price after +1R", "Exit", options = ["Scalp: book half at 0.25R, stop to entry, trail the rest", "Target 3 x risk", "Ride: stop to entry at +1R, out at 3:15", "Trail 1R behind the best price after +1R"], group = G1)
-gapF   = input.bool(false, "Only in the direction of the opening gap (open vs yesterday's close)", group = G1)
+exitF  = input.string("Scalp: book half at 0.25R, stop to entry, trail the rest", "Exit", options = ["Scalp: book half at 0.25R, stop to entry, trail the rest", "Target 3 x risk", "Ride: stop to entry at +1R, out at 3:15", "Trail 1R behind the best price after +1R"], group = G1)
+gapF   = input.bool(true, "Only in the direction of the opening gap (open vs yesterday's close)", group = G1)
 revF   = input.bool(true, "Reversal trade when the first break fails", group = G1)
 costIn = input.float(0, "Cost per trade in index points (0 = auto: Nifty 4, Sensex 12)", step = 1, group = G1)
 G2 = "Display"

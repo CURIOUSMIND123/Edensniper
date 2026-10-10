@@ -332,6 +332,23 @@ first 15-minute candle, price beyond the CPR at entry, EMA 50) and with booking 
 
 `research/quant/cpr_orb_winrate.py`, `cpr_winrate_pick.py` and `cpr_scalp_lastn.py` reproduce this.
 
+## Pure scalping at the CPR, pivots and the 15-minute range
+
+Every time price crossed a level on a 1-minute candle (15-minute high / low, CPR top / bottom, R1 / S1 / R2 / S2),
+a scalp: with the break or back against it, targets of 10-30 Nifty points, stops of 10-40, out after 10 or 30
+minutes or at 3:15, narrow days or every day, with or without the open-vs-CPR, CPR-vs-yesterday or first-candle
+filter. Up to 5 trades a day; 3,072 versions per index.
+
+- Nifty: 1 version won 90%+ in the last 90 sessions (20+ trades), and it lost money since 2023. 42 won 80%+;
+  none of those made money both in the last 90 sessions and since 2023.
+- Sensex: none won 90%; 26 won 80%+, and none of those made money in both periods either.
+- Only 3 versions made money on both indices in the last 90 sessions and since 2023, and they earned about +0.2
+  to +0.3 points a trade over 3¾ years, which is break-even.
+- The reason is cost: about 4 Nifty points a trade is 13-40% of a 10-30 point target. With a 20-point target and
+  a 20-point stop you need 60% wins just to break even, not 50%; with a 10-point target and a 30-point stop, 85%.
+
+`research/quant/cpr_scalp.py` and `cpr_scalp_pick.py` reproduce this.
+
 ## How to re-check all of this
 
 - `python research/fair_price_backtest.py` downloads the candles and re-runs the Fair Price test.
