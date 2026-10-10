@@ -768,7 +768,8 @@ fresh puts vs fresh calls:
 - Dropping the indicator's trades that went against PCR cut the profit in every version: Nifty +851 to +1,654
   instead of +2,274; Sensex +1,443 to +4,374 instead of +8,102.
 - As the direction for the 9:30 breakout (no other filter): Nifty −47 to +629, Sensex +547 to +2,212, all below
-  the indicator. A 9:20 trade in its direction made about nothing on Nifty and lost from July to October on Sensex.
+  the indicator. A 9:20 trade in its direction made little on Nifty (−216 to +387) and lost from July to October on Sensex
+  in every version.
 
 So neither TCI nor PCR would have caught 9 October, and both made 2026 worse.
 
