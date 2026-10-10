@@ -841,9 +841,17 @@ key levels, 5-minute closes through key levels (`y2026_rr.py`, 378 versions per 
 | Pullback + Magnet, target 4x, to 3:15 | 55 trades, 44% won, net +1,344, worst fall −428 | 53 trades, 43% won, net +4,419, worst fall −1,048 |
 | Pullback + Magnet + volume lines, target 4x, to 3:15 | 82 trades, 35% won, net +734 | 89 trades, 40% won, avg win +410 / loss −146, net +6,997, worst fall −1,228 |
 | Pullback + Magnet + volume lines, target 3x, out within 60 min | 87 trades, 48% won, net −144 | 97 trades, 58% won, net +3,604 |
-| For comparison: small stops, out within 60 min (current default) | 150 trades, 53% won, net +842 | 170 trades, 54% won, net +4,708 |
+| For comparison: small stops, out within 60 min | 150 trades, 53% won, net +842 | 170 trades, 54% won, net +4,708 |
 
 All versions shown were positive in both halves of 2026 except where the net is negative.
+
+**Now the default** in the indicator ("1:4 targets, held until 3:15") and the phone alerts (`RULES = 'rr'`):
+pullback + Magnet, stop at most 0.21%, target 4x, to 3:15, no volume lines. Nifty: 24 of 55 won, average win +122 /
+average loss −51, Jan-Jun +866, Jul-Oct +478. Sensex: 23 of 53 won, average win +395 / average loss −156, Jan-Jun
++3,623, Jul-Oct +796. Only 9 trades per index reached the full 4x target; 18 were closed at 3:15 and most of the
+wins come from those. On Nifty the Magnet trades about broke even (22 trades, −18); the pullback made the money.
+The alerts took exactly these trades (`alerts_check.py`). These trades are held about 3 hours on average, so an
+option's time decay matters more than with the 60-minute rules.
 
 ## How to re-check all of this
 

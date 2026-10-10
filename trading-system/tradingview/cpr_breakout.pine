@@ -6,18 +6,26 @@
 // Draws the CPR (three pink lines; orange on narrow days), the first 15-minute candle's high / low, the 30-day
 // volume point of control (POC: the price where the most volume traded; volume from NIFTYBEES because the index has
 // none) with its value area, and the 5-minute EMA 50. Every filter is in Settings.
-// DEFAULT RULES = SMALL STOPS, OUT WITHIN 60 MINUTES (Settings > Trade style; "Original" gives the rules below):
-//   Every stop at most 150 Sensex / 45 Nifty points, every trade out after 60 minutes at the latest, the whole
-//   position at the target, no booking half, no trailing. One trade at a time.
-//   CPR MAGNET at 9:16 (as below), target the CPR edge.
+// DEFAULT RULES = 1:4 TARGETS, HELD UNTIL 3:15 (Settings > Trade style > Rules):
+//   Every stop at most 0.21% of price (about 150 Sensex / 47 Nifty points), target 4x the stop, the whole position
+//   held until the target, the stop or 3:15. No booking half, no trailing. One trade at a time. Two setups only:
+//   CPR MAGNET at 9:16 (as below), stop 0.21%, target 4x the stop.
 //   BREAKOUT ON THE PULLBACK: when price touches the 15-minute high / low before 10:00 (same filters as below) and
 //     then goes 0.1% beyond it, a LIMIT order goes back at the broken level (blue dashed line, until 12:00); stop at
-//     the other side of the range or 150 / 45 points, target 2x the stop.
+//     the other side of the range or 0.21%, whichever is closer; target 4x the stop.
+//   No volume-line trades.
+//   2026 (1 Jan - 9 Oct), after costs: Nifty 55 trades, 44% won, avg win +122 / avg loss -51, net +1,344
+//   (Jan-Jun +866, Jul-Oct +478), worst fall -428; Sensex 53 trades, 43% won, avg win +395 / avg loss -156,
+//   net +4,419 (Jan-Jun +3,623, Jul-Oct +796), worst fall -1,048. About 1 trade in 6 reaches the 4x target.
+//   Reference implementation: research/quant/y2026_rr.py (and alerts/cprb_alerts.py, RULES = 'rr').
+// SMALL STOPS, OUT WITHIN 60 MINUTES (the second choice):
+//   Every stop at most 150 Sensex / 45 Nifty points, every trade out after 60 minutes at the latest, the whole
+//   position at the target. Magnet: target the CPR edge. Pullback (as above): target 2x the stop.
 //   3-DAY VOLUME LINES (as below), stop at the previous line or 150 / 45 points, target the next line.
 //   2026 (1 Jan - 9 Oct), after costs: Nifty 150 trades, 53% won, net +842, worst trade -49, worst fall -317;
 //   Sensex 170 trades, 54% won, net +4,708, worst trade -162, worst fall -1,134.
 //   Reference implementation: research/quant/y2026_short_combo.py (and alerts/cprb_alerts.py, RULES = 'small').
-// ORIGINAL RULES = DAILY PLAN (one plan per day), adjusted on 2026:
+// ORIGINAL RULES (the third choice) = DAILY PLAN (one plan per day), adjusted on 2026:
 //   NARROW-CPR DAY -> CPR BREAKOUT scalp. OTHER DAY -> CPR MAGNET at 9:16 if the open qualifies, otherwise the
 //   same CPR BREAKOUT scalp.
 //   CPR Magnet: the 9:15 one-minute candle opens beyond the CPR and closes 0.2%+ beyond it -> trade back toward
@@ -64,8 +72,10 @@ indicator("CPR Breakout", "CPRB", overlay = true, max_lines_count = 500, max_lab
 
 // ---------------- inputs ----------------
 G0 = "Trade style"
-rulesIn  = input.string("Small stops, out within 60 min", "Rules", options = ["Small stops, out within 60 min", "Original (wider stops, trailing)"], group = G0,
-                         tooltip = "Small stops: every stop at most 150 Sensex / 45 Nifty points, out after 60 minutes at the latest, all at the target, no trailing. The breakout is traded on the pullback (a limit order back at the broken 15-minute level), not at the break.")
+rulesIn  = input.string("1:4 targets, held until 3:15", "Rules", options = ["1:4 targets, held until 3:15", "Small stops, out within 60 min", "Original (wider stops, trailing)"], group = G0,
+                         tooltip = "1:4 targets: every stop at most 0.21% of price (about 150 Sensex / 47 Nifty points), target 4x the stop, held until the target, the stop or 3:15. Only the CPR Magnet and the breakout traded on the pullback (a limit order back at the broken 15-minute level); no volume-line trades. Small stops: every stop at most 150 Sensex / 45 Nifty points, out after 60 minutes at the latest, all at the target, no trailing, volume-line trades too.")
+rrStop   = input.float(0.21, "1:4 targets: the largest stop, % of price (0.21 = about 150 Sensex / 47 Nifty points)", step = 0.01, group = G0)
+rrMult   = input.float(4.0, "1:4 targets: target = this x the stop", step = 0.5, group = G0)
 smallCap = input.float(0, "Small stops: the largest stop in points (0 = Sensex 150, Nifty 45)", step = 5, group = G0)
 holdMin  = input.int(60, "Small stops: out after this many minutes at the latest", minval = 5, maxval = 375, group = G0)
 pbMult   = input.float(2.0, "Small stops: the pullback trade's target = this x its stop", step = 0.25, group = G0)
@@ -90,7 +100,7 @@ magHalf = input.bool(true, "Magnet: book half at 0.25 x the risk, stop to entry,
 magPoc  = input.bool(true, "Magnet: only on the volume side of the 30-day POC (buys above it, sells below)", group = G4)
 magIn   = input.bool(false, "Magnet: skip days that open outside yesterday's high-low range (fewer losses, fewer trades)", group = G4)
 G5 = "3-day volume lines (same book: one trade at a time)"
-vlOn   = input.bool(true, "Also trade a 5-minute close through a volume line (target the next line, stop at the previous line)", group = G5)
+vlOn   = input.bool(true, "Also trade a 5-minute close through a volume line (target the next line, stop at the previous line; not with the 1:4 targets)", group = G5)
 vlN    = input.int(3, "Volume lines from the last N sessions", minval = 2, maxval = 15, group = G5)
 vlRR   = input.float(1.5, "Skip when the next line is less than this x the stop away", step = 0.25, group = G5)
 vlLad  = input.bool(false, "Ladder: at the next line book half, move the stop to the broken line, ride the rest to the line after", group = G5, tooltip = "2026 test, whole indicator: Sensex net +8,612 instead of +7,894 (all of the gain in Jan-Jun), Nifty +2,373 instead of +2,454. Booking half needs at least 2 lots.")
@@ -120,7 +130,8 @@ GREY   = color.new(#787b86, 0)
 PURPLE = color.new(#7e57c2, 0)
 TEAL   = color.new(#00897b, 0)
 BLUE   = color.new(#2962ff, 0)
-shortMode = rulesIn == "Small stops, out within 60 min"
+rrMode    = rulesIn == "1:4 targets, held until 3:15"
+shortMode = rrMode or rulesIn == "Small stops, out within 60 min"     // capped stops, fixed targets, pullback entry
 hhmm(int m) => str.format("{0,number,00}:{1,number,00}", math.floor(m / 60), m % 60)
 fmt(x) => str.tostring(x, "#,##0.##")
 pts(x) => str.tostring(x, "+#,##0;-#,##0")
@@ -173,6 +184,7 @@ BIN  = close > 50000 ? 16.0 : 5.0
 CUT  = cutH * 60 + cutMn     // no new entries from this time
 TOUT = 915     // out at 15:15
 CAP  = smallCap > 0 ? smallCap : close > 50000 ? 150.0 : 45.0     // small stops: the largest stop
+capAt(float px) => rrMode ? rrStop / 100 * px : CAP             // the largest stop for an entry at px
 
 // ---------------- CPR: today's (from yesterday) and yesterday's (from the day before) ----------------
 cprWidth(float h, float l, float c) =>
@@ -508,11 +520,11 @@ if is5 and n1 > 0
                     openPx := ck
                     side := ms
                     e := ck
-                    R := shortMode ? math.min(magStop / 100 * ck, CAP) : magStop / 100 * ck
+                    R := shortMode ? math.min(magStop / 100 * ck, capAt(ck)) : magStop / 100 * ck
                     stp := ck - ms * R
                     tgt2 := ms < 0 ? top : bot
-                    tgt := shortMode ? tgt2 : magHalf ? ck + ms * 0.25 * R : tgt2
-                    lastMin := 555 + holdMin
+                    tgt := rrMode ? ck + ms * rrMult * R : shortMode ? tgt2 : magHalf ? ck + ms * 0.25 * R : tgt2
+                    lastMin := rrMode ? TOUT : 555 + holdMin
                     halfDone := false
                     halfPts := na
                     best := ck
@@ -716,7 +728,7 @@ if is5 and n1 > 0
                             float plPx = pullSide > 0 ? math.min(ok, plPx0) : math.max(ok, plPx0)
                             float plRk = pullSide * (plPx - (pullSide > 0 ? orl : orh))
                             if plRk > 0 and state != 1 and not volOpen and mk > lastExitMin
-                                plRk := math.min(plRk, CAP)
+                                plRk := math.min(plRk, capAt(plPx))
                                 opened := true
                                 openSide := pullSide
                                 openPx := plPx
@@ -724,12 +736,12 @@ if is5 and n1 > 0
                                 e := plPx
                                 stp := plPx - pullSide * plRk
                                 R := plRk
-                                tgt := plPx + pullSide * pbMult * plRk
+                                tgt := plPx + pullSide * (rrMode ? rrMult : pbMult) * plRk
                                 halfDone := false
                                 halfPts := na
                                 best := plPx
                                 startMin := mk + 1
-                                lastMin := mk + holdMin
+                                lastMin := rrMode ? TOUT : mk + holdMin
                                 isMag := false
                                 tradeNo += 1
                                 state := 1
@@ -758,8 +770,8 @@ if is5 and not shortMode and not volOpen and entF == "5-minute close beyond the 
                 tradeNo += 1
                 state := 1
 
-// volume-line entries: a 5-minute close through a line, 9:30-2:30, when no trade is open
-if is5 and vlOn and barstate.isconfirmed and not volOpen and state != 1 and not opened and mins >= 570 and mins + 5 <= 870 and array.size(vLines) > 1
+// volume-line entries: a 5-minute close through a line, 9:30-2:30, when no trade is open (not with the 1:4 targets)
+if is5 and vlOn and not rrMode and barstate.isconfirmed and not volOpen and state != 1 and not opened and mins >= 570 and mins + 5 <= 870 and array.size(vLines) > 1
     int vs = 0
     float vx = na
     for x in vLines
@@ -827,7 +839,7 @@ if opened
         bool t3 = not isMag and exitF == "Target 3 x risk"
         float tMain = shortMode ? tgt : isMag ? tgt2 : openPx + openSide * (t3 ? 3 : 1) * R
         float tHalf = shortMode ? na : isMag ? (magHalf ? t0 : na) : halfMode ? openPx + openSide * 0.25 * R : na
-        pbTt := shortMode ? (isMag ? "TARGET (CPR edge) " : "TARGET (" + str.tostring(pbMult) + "x the stop) ") + fmt(tMain) + "\nout by " + hhmm(lastMin) :
+        pbTt := shortMode ? (isMag and not rrMode ? "TARGET (CPR edge) " : "TARGET (" + str.tostring(rrMode ? rrMult : pbMult) + "x the stop) ") + fmt(tMain) + "\nout by " + hhmm(lastMin) :
                  (isMag ? "TARGET (CPR edge) " : t3 ? "TARGET " : "+1R, then trail the stop ") + fmt(tMain) + (na(tHalf) ? "" : "\nbook half at " + fmt(tHalf))
         pbRt := "STOP " + fmt(stp)
         [pb1x, pb2x, pb3x] = posNew(openSide, openPx, tMain, stp, tHalf, pbTt, pbRt, txt)

@@ -7,21 +7,27 @@ month. Brokers' charts (Groww, Dhan, Zerodha) show live prices for free but can'
 default settings) on live 1-minute candles from Upstox's free public candle data. It doesn't need an Upstox account
 or a login. It tells you:
 
-- **before 9:15:** the plan for the day: CPR, narrow or not, the 30-day POC, the 3-day volume lines, the CPR Magnet
-  trigger prices;
+- **before 9:15:** the plan for the day: CPR, narrow or not, the 30-day POC, the CPR Magnet trigger prices;
 - **9:16:** CPR Magnet BUY / SELL, or "no magnet today";
-- **9:30:** the 15-minute range and the one breakout trade that is still allowed: "SELL when price touches X". Set
-  a price alert in Groww at X, so you aren't late;
-- **every trade:** BUY = buy the ATM call, SELL = buy the ATM put, with the stop, when to book half, when to move
-  the stop, and the exit with points and rupees.
+- **9:30:** the 15-minute range and the one breakout that is still allowed;
+- **the breakout:** "broke the 15-minute high X, don't chase it"; then "place a BUY LIMIT order at Y" (the pullback
+  to the broken level, valid until 12:00); at 12:00 "cancel it" if it didn't fill;
+- **every trade:** BUY = buy the ATM call, SELL = buy the ATM put, with the stop, the target, and the exit with
+  points and rupees.
 
 Alerts appear on the screen (with a beep) and, if you set it up, on your phone through Telegram (free).
 
-**Rules** (top of the file): `RULES = 'small'` (default) = stops of at most 150 Sensex / 45 Nifty points
-(`STOP_CAP`), out within 60 minutes (`HOLD_MIN`), all at the target, no trailing; the breakout is traded on the
-pullback: at the break it tells you where the limit order will go, once price is 0.1% beyond it says "place a BUY /
-SELL LIMIT at X", and at 12:00 it tells you to cancel it if it didn't fill. `RULES = 'classic'` = the original
-rules. The chart shows a waiting limit order as a blue "LIMIT" line.
+**Rules** (top of the file):
+
+- `RULES = 'rr'` (default), **1:4 trades**: every stop at most 0.21% of price (`STOP_PCT`; about 150 Sensex / 47
+  Nifty points), target 4x the stop (`RR_TARGET`; about 600 Sensex / 190 Nifty points), held until the target, the
+  stop or 3:15. Only two setups: the CPR Magnet at 9:16 and the breakout traded on the pullback. No volume-line
+  trades. About 6 trades a month per index; fewer than half win, but a win is 4x a loss.
+- `RULES = 'small'`: stops of at most 150 Sensex / 45 Nifty points (`STOP_CAP`), out within 60 minutes
+  (`HOLD_MIN`), target 2x the stop for the pullback, plus volume-line trades. About 17 trades a month per index.
+- `RULES = 'classic'`: the original rules (wider stops, book half, trailing).
+
+The chart shows a waiting limit order as a blue "LIMIT" line.
 
 ## The live chart (free)
 
@@ -34,7 +40,7 @@ refreshes every 5 seconds; the program fetches new prices every 15 seconds. On a
 The chart library (TradingView's free open-source Lightweight Charts) is downloaded once and kept next to the
 program. `CHART = False` at the top switches the chart off.
 
-![The live chart on a phone, replaying 6 October 2026 (Sensex, small-stop rules)](chart-phone.png)
+![The live chart on a phone, replaying 6 October 2026 (Sensex, 1:4 rules: pullback BUY, closed at 3:15)](chart-phone.png)
 
 ## Set up once
 
@@ -99,8 +105,9 @@ On a phone, put the date in `REPLAY_DAY = '2026-10-08'` at the top and press Run
 ## Checked
 
 `research/quant/alerts_check.py` runs it on every 2026 session, minute by minute as it runs live. It took exactly the
-backtest's trades: small-stop rules Nifty 150 trades, net +842 points, Sensex 170 trades, net +4,708; original rules
-Nifty 101 trades, net +2,274, Sensex 114 trades, net +8,102 (with the ladder +2,193 / +8,819). Nothing it had already said changed later in the day. The CPR uses the exchange's official daily close
+backtest's trades: 1:4 rules Nifty 55 trades, net +1,344 points, Sensex 53 trades, net +4,419; small-stop rules
+Nifty 150 trades, net +842, Sensex 170 trades, net +4,708; original rules Nifty 101 trades, net +2,274, Sensex 114
+trades, net +8,102 (with the ladder +2,193 / +8,819). Nothing it had already said changed later in the day. The CPR uses the exchange's official daily close
 (downloaded each morning), like TradingView; the official close often differs from the last 1-minute candle.
 
 ## Limits
@@ -112,3 +119,5 @@ Nifty 101 trades, net +2,274, Sensex 114 trades, net +8,102 (with the ladder +2,
   the script will say "data error".
 - It only sends alerts. You place the orders yourself in Groww.
 - The rules were adjusted on 2026 itself, so live results will very likely be lower than the backtest.
+- 1:4 trades are held for hours. An at-the-money option loses value every hour it is held (time decay), most on
+  expiry day, so the rupee estimates (half the index move) are on the high side for these trades.

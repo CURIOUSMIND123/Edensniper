@@ -2,8 +2,10 @@
 """CPR Breakout alerts for Nifty and Sensex: live, free, no TradingView and no login needed.
 
 Follows the same rules as tradingview/cpr_breakout.pine (its default settings) on live 1-minute candles from
-Upstox's free public candle data. It tells you when to BUY (a call) or SELL (a put), where the stop is, when to
-book half and when to exit: on this screen, and on your phone through Telegram if you set that up (free).
+Upstox's free public candle data. It tells you when to BUY (a call) or SELL (a put), where the stop and the target
+are and when to exit: on this screen, and on your phone through Telegram if you set that up (free).
+Default rules ('rr'): 1:4 trades. Stop at most 0.21% of price (about 150 Sensex / 47 Nifty points), target 4x the
+stop, held until the target, the stop or 3:15. Only the CPR Magnet (9:16) and the pullback after the 9:30 breakout.
 
     python cprb_alerts.py                       run today: start it any time before 9:15, leave it running
     python cprb_alerts.py --replay 2026-10-09   replay a past day in a few seconds, to see what it does
@@ -30,8 +32,12 @@ import urllib.request
 # ---------------- settings ----------------
 INDICES = ['nifty', 'sensex']     # or ['nifty'] / ['sensex']
 LOTS = 5                          # lots per trade, only for the rupee estimates (option moves about half the index)
-RULES = 'small'                   # 'small': stops of at most STOP_CAP points, out within HOLD_MIN minutes, pullback entry
+RULES = 'rr'                      # 'rr': 1:4 trades. Stop at most STOP_PCT % of price, target RR_TARGET x the stop,
+                                  #       held until the target, the stop or 3:15. Pullback entry and CPR Magnet only
+                                  # 'small': stops of at most STOP_CAP points, out within HOLD_MIN minutes, pullback entry
                                   # 'classic': the original rules (wider stops, book half, trailing, out by 3:15)
+STOP_PCT = 0.21                   # 'rr' rules: the most a stop may be from entry, in % of price (Sensex ~150, Nifty ~47 points)
+RR_TARGET = 4.0                   # 'rr' rules: target = this x the stop
 STOP_CAP = {'nifty': 45, 'sensex': 150}   # 'small' rules: the most a stop may be from entry, in index points
 HOLD_MIN = 60                     # 'small' rules: out after this many minutes at the latest
 PULLBACK_R = 2.0                  # 'small' rules: the pullback trade's target = this x its stop
@@ -423,7 +429,7 @@ def vol_trades(cx, c1, upto, over, ladder):
     return out
 
 
-# ---------------- the 'small' rules: small stops, out within HOLD_MIN minutes, pullback entry ----------------
+# ---------------- the 'rr' and 'small' rules: capped stops, fixed targets, pullback entry ----------------
 def run_fixed(c1, side, e, start, stp, tgt, last_m, over, cost):
     """Stop, target, time limit (close of minute last_m), 3:15. No booking half, no trailing."""
     for m, o, h, l, c in c1:
@@ -444,24 +450,36 @@ def capped(side, e, stp0, cap):
     """The stop moved in to at most `cap` points from entry."""
     return stp0 if side * (e - stp0) <= cap else e - side * cap
 
-def small_plan_trades(cx, c1, upto, over):
-    """CPR Magnet at 9:16 (stop capped, target the CPR edge) and the pullback after the 9:30 breakout (a limit order
-    back at the broken 15-minute high / low once price has gone 0.1% beyond it, until 12:00; target PULLBACK_R x the
-    stop). Returns (trades, pending pullback or None)."""
+def risk_rules(cx, rules):
+    """The stop limit (points, for an entry price), the targets and the time limit under the 'small' / 'rr' rules."""
+    if rules == 'rr':
+        return dict(cap=lambda e: STOP_PCT / 100 * e, mag=RR_TARGET, pb=RR_TARGET, hold=None)
+    return dict(cap=lambda e: cx['cap'], mag=None, pb=PULLBACK_R, hold=HOLD_MIN)
+
+def pullback_plan(cx, c1, upto, over, rules):
+    """CPR Magnet at 9:16 (stop capped; target the CPR edge, or RR_TARGET x the stop) and the pullback after the 9:30
+    breakout (a limit order back at the broken 15-minute high / low once price has gone 0.1% beyond it, until 12:00;
+    target PULLBACK_R or RR_TARGET x the stop). Returns (trades, pending pullback or None)."""
     out, pend = [], None
     if not c1:
         return out, pend
-    lv, poc, cost, cap = cx['lv'], cx['poc'], cx['cost'], cx['cap']
+    R = risk_rules(cx, rules)
+    lv, poc, cost = cx['lv'], cx['poc'], cx['cost']
     if not cx['narrow']:
         o, e = c1[0][1], c1[0][4]
         side = -1 if o > lv['top'] else 1 if o < lv['bot'] else 0
         if side:
             edge = lv['top'] if side < 0 else lv['bot']
             if side * (edge - e) >= 0.002 * e and side * (e - poc) > 0:
-                stp = capped(side, e, e - side * 0.003 * e, cap)
-                last = 556 - 1 + HOLD_MIN
-                r = run_fixed(c1, side, e, 556, stp, edge, last, over, cost)
-                out.append(dict(src='MAGNET', small=True, side=side, m=556, known=556, e=e, stp0=stp, tgt=edge, last=last, **r))
+                stp = capped(side, e, e - side * 0.003 * e, R['cap'](e))
+                if R['mag']:
+                    tgt, tdesc = e + R['mag'] * (e - stp), f"{R['mag']:g}x the stop"
+                else:
+                    tgt, tdesc = edge, 'the CPR edge'
+                last = 556 - 1 + R['hold'] if R['hold'] else OUT
+                r = run_fixed(c1, side, e, 556, stp, tgt, last, over, cost)
+                out.append(dict(src='MAGNET', small=True, side=side, m=556, known=556, e=e, stp0=stp, tgt=tgt, tdesc=tdesc,
+                                last=last, **r))
     if upto < RANGE_END - 1:
         return out, pend
     first = [x for x in c1 if x[0] < RANGE_END]
@@ -484,6 +502,7 @@ def small_plan_trades(cx, c1, upto, over):
     tol = 0.0005 * lvl
     cx['breakout'] = dict(side=side, m=m, lvl=lvl, arm=lvl + side * 0.001 * lvl, px=lvl + side * tol)
     far = lvl
+    mult = R['pb']
     for mm, o, h, l, c in c1:
         if mm <= m:
             continue
@@ -495,8 +514,9 @@ def small_plan_trades(cx, c1, upto, over):
         px = lvl + side * tol
         s0 = orl if side > 0 else orh
         if pend is None:
-            risk = min(side * (px - s0), cap)
-            pend = dict(side=side, m=mm, px=px, lvl=lvl, stp=px - side * risk, tgt=px + side * PULLBACK_R * risk)
+            risk = min(side * (px - s0), R['cap'](px))
+            pend = dict(side=side, m=mm, px=px, lvl=lvl, stp=px - side * risk, tgt=px + side * mult * risk, hold=R['hold'],
+                        tdesc=f"{mult:g}x the stop")
         if not ((l <= lvl + tol) if side > 0 else (h >= lvl - tol)):
             continue
         e = min(o, px) if side > 0 else max(o, px)
@@ -504,12 +524,14 @@ def small_plan_trades(cx, c1, upto, over):
         if risk <= 0:
             break
         stp = s0
+        cap = R['cap'](e)
         if risk > cap:
             stp, risk = e - side * cap, cap
-        tgt = e + side * PULLBACK_R * risk
-        last = mm + HOLD_MIN
+        tgt = e + side * mult * risk
+        last = mm + R['hold'] if R['hold'] else OUT
         r = run_fixed(c1, side, e, mm + 1, stp, tgt, last, over, cost)
-        out.append(dict(src='PULLBACK', small=True, side=side, m=mm, known=mm + 1, e=e, stp0=stp, tgt=tgt, last=last, lvl=lvl, **r))
+        out.append(dict(src='PULLBACK', small=True, side=side, m=mm, known=mm + 1, e=e, stp0=stp, tgt=tgt,
+                        tdesc=f"{mult:g}x the stop", last=last, lvl=lvl, **r))
         break
     return out, pend
 
@@ -551,15 +573,15 @@ def small_vol_trades(cx, c1, upto, over):
 
 def day_trades(cx, c1, upto, over=False, ladder=False, rules=None):
     """Every signal of the day so far, and which were taken: one trade at a time, whichever came first."""
-    if (rules or RULES) == 'small':
+    rules = rules or RULES
+    if rules in ('small', 'rr'):
         cx['breakout'] = None
-        plan, pend = small_plan_trades(cx, c1, upto, over)
-        ts = plan + small_vol_trades(cx, c1, upto, over)
+        plan, pend = pullback_plan(cx, c1, upto, over, rules)
+        ts = plan + (small_vol_trades(cx, c1, upto, over) if rules == 'small' else [])
         cx['pending'] = pend
-        cx['rules_used'] = 'small'
+        cx['rules_used'] = rules
     else:
         cx['rules_used'] = 'classic'
-
         ts = plan_trades(cx, c1, upto, over) + vol_trades(cx, c1, upto, over, ladder)
     ts.sort(key=lambda t: (t['m'], t['src'] == 'VOLUME LINE'))
     free = 0
@@ -585,7 +607,7 @@ def option(cx, side, px):
     return f"buy the {k:.0f} {'CE (call)' if side > 0 else 'PE (put)'}"
 
 def plan_text(cx):
-    if RULES == 'small':
+    if RULES in ('small', 'rr'):
         return plan_text_small(cx)
     lv, poc, nm = cx['lv'], cx['poc'], cx['name']
     out = [f"{nm} plan for the session after {cx['prev']}",
@@ -613,7 +635,16 @@ def plan_text(cx):
 def plan_text_small(cx):
     lv, poc, nm, cap = cx['lv'], cx['poc'], cx['name'], cx['cap']
     sell, buy = lv['top'] / 0.998, lv['bot'] / 1.002
-    out = [f"{nm} plan for the session after {cx['prev']} (small stops: at most {cap:g} points, out within {HOLD_MIN} min)",
+    rr = RULES == 'rr'
+    if rr:
+        cap = round(STOP_PCT / 100 * cx['yc'])
+        rule = (f"stop at most {STOP_PCT:g}% of price (about {cap} points), target {RR_TARGET:g}x the stop, "
+                "held until the target, the stop or 3:15")
+        mult = RR_TARGET
+    else:
+        rule = f"stop at most {cap:g} points, out within {HOLD_MIN} minutes"
+        mult = PULLBACK_R
+    out = [f"{nm} plan for the session after {cx['prev']} ({'1:' + format(RR_TARGET, 'g') + ' trades' if rr else 'small stops'})",
            f"CPR {f2(lv['bot'])} - {f2(lv['top'])}, pivot {f2(lv['p'])}" + (" (NARROW)" if cx['narrow'] else ""),
            f"30-day volume POC {f2(poc)}: buys only above it, sells only below.",
            "Today's CPR vs yesterday's: " + ("higher -> no SELL breakout" if cx['rel'] > 0 else
@@ -623,12 +654,14 @@ def plan_text_small(cx):
         out.append(f"9:16 CPR MAGNET: SELL if the 9:15 candle opens above {f2(lv['top'])} and closes at or above {f2(sell)}"
                    + (f" and below the POC" if sell < poc else " (not possible today)") +
                    f"; BUY if it opens below {f2(lv['bot'])} and closes at or below {f2(buy)}"
-                   + (f" and above the POC" if buy > poc else " (not possible today)") + ". Target the CPR edge.")
+                   + (f" and above the POC" if buy > poc else " (not possible today)") +
+                   (f". Target {mult:g}x the stop." if rr else ". Target the CPR edge."))
     out.append("9:30-10:00 BREAKOUT, then PULLBACK: when price breaks the 9:15-9:30 high / low (filters above) and goes 0.1% "
-               f"beyond it, place a limit order back at that level (until 12:00). Target {PULLBACK_R:g}x the stop.")
-    out.append(f"3-day volume lines: {', '.join(f2(x) for x in cx['lines'])}. 9:30-2:30: a 5-minute close through a line "
-               "-> trade toward the next line (it must be at least 1.5x the stop away).")
-    out.append(f"Every trade: stop at most {cap:g} points, out within {HOLD_MIN} minutes, one trade at a time.")
+               f"beyond it, place a limit order back at that level (until 12:00). Target {mult:g}x the stop.")
+    if not rr:
+        out.append(f"3-day volume lines: {', '.join(f2(x) for x in cx['lines'])}. 9:30-2:30: a 5-minute close through a line "
+                   "-> trade toward the next line (it must be at least 1.5x the stop away).")
+    out.append(f"Every trade: {rule}, one trade at a time.")
     return '\n'.join(out)
 
 def range_note_small(cx, c1):
@@ -637,7 +670,8 @@ def range_note_small(cx, c1):
     gap = c1[0][1] - cx['yc']
     gap = 1 if gap > 0 else -1 if gap < 0 else 0
     if gap == 0 or gap == -cx['rel']:
-        return f"{cx['name']} 15-minute range {f2(orl)} - {f2(orh)}. No breakout trade today. Volume-line trades only."
+        return (f"{cx['name']} 15-minute range {f2(orl)} - {f2(orh)}. No breakout trade today." +
+                (" Volume-line trades only." if cx.get('rules_used') == 'small' else ""))
     lvl, word = (orh, 'BUY') if gap > 0 else (orl, 'SELL')
     return (f"{cx['name']} 15-minute range {f2(orl)} - {f2(orh)}. Watching for a break of {f2(lvl)} before 10:00"
             + ("" if gap * (lvl - cx['poc']) > 0 else f" (only counts beyond the POC {f2(cx['poc'])})") +
@@ -663,7 +697,7 @@ def messages(cx, ts, c1, upto, lots):
     """(id, minute known, text, important) for everything that has happened so far."""
     nm, out = cx['name'], []
     plan = [t for t in ts if t['src'] != 'VOLUME LINE']
-    if cx.get('rules_used') == 'small':
+    if cx.get('rules_used') in ('small', 'rr'):
         return messages_small(cx, ts, c1, upto, lots)
     if c1 and not cx['narrow'] and upto >= 556 and not any(t['src'] == 'MAGNET' for t in plan):
         out.append(('nomag', 556, f"{nm} 9:16: no CPR Magnet trade today; breakout plan from 9:30.", False))
@@ -722,8 +756,9 @@ def messages_small(cx, ts, c1, upto, lots):
         word = 'BUY' if pend['side'] > 0 else 'SELL'
         out.append(('pend', pend['m'] + 1, f"{nm} {hhmm(pend['m'])} breakout {'UP' if pend['side'] > 0 else 'DOWN'} confirmed. Place a {word} "
                     f"LIMIT order at {f2(pend['px'])} (back at the broken 15-minute {'high' if pend['side'] > 0 else 'low'}), valid until "
-                    f"12:00 -> {option(cx, pend['side'], pend['px'])}. Stop {f2(pend['stp'])}, target {f2(pend['tgt'])}, out within "
-                    f"{HOLD_MIN} minutes after the fill.", True))
+                    f"12:00 -> {option(cx, pend['side'], pend['px'])}. Stop {f2(pend['stp'])}, target {f2(pend['tgt'])} ({pend['tdesc']}), " +
+                    (f"out within {pend['hold']} minutes after the fill." if pend['hold'] else
+                     "hold until the target, the stop or 3:15."), True))
         if upto >= 720 and not any(t['src'] == 'PULLBACK' for t in ts):
             out.append(('nopb', 720, f"{nm} 12:00: the pullback didn't come. Cancel the {word} limit order at {f2(pend['px'])}.", True))
     for t in ts:
@@ -734,10 +769,10 @@ def messages_small(cx, ts, c1, upto, lots):
                         "another trade is still open" + (" (cancel the limit order)." if t['src'] == 'PULLBACK' else "."), t['src'] == 'PULLBACK'))
             continue
         if t['src'] == 'MAGNET':
-            how = f"Target the CPR edge {f2(t['tgt'])}."
+            how = f"Target {f2(t['tgt'])} ({t['tdesc']})."
         elif t['src'] == 'PULLBACK':
             how = (f"Limit order filled back at the broken 15-minute {'high' if t['side'] > 0 else 'low'}. "
-                   f"Target {f2(t['tgt'])} ({PULLBACK_R:g}x the stop).")
+                   f"Target {f2(t['tgt'])} ({t['tdesc']}).")
         else:
             how = f"5-minute close through the line {f2(t['x'])}. Target {f2(t['tgt'])} (next volume line)."
         out.append((tid + ('in',), t['known'], f"{nm} {hhmm(556 if t['src'] == 'MAGNET' else t['m'])} {t['src']} {sd} at {f2(t['e'])} -> "

@@ -4,17 +4,25 @@
 
 File: [`cpr_breakout.pine`](cpr_breakout.pine). An indicator; reads 1-minute candles underneath for exits.
 
-**Default rules now: small stops, out within 60 minutes** (Settings > Trade style > Rules; "Original" gives the
-rules described further down). Every stop at most 150 Sensex / 45 Nifty points, every trade out after 60 minutes
-at the latest, all at the target, no booking half, no trailing, one trade at a time:
-- **CPR Magnet** at 9:16 (same conditions as below), target the CPR edge.
+**Default rules now: 1:4 targets, held until 3:15** (Settings > Trade style > Rules). Every stop at most 0.21% of
+price (about 150 Sensex / 47 Nifty points), the target 4x the stop (about 600 / 190 points), the whole position held
+until the target, the stop or 3:15. No booking half, no trailing, one trade at a time, and only two setups:
+- **CPR Magnet** at 9:16 (same conditions as below): stop 0.21%, target 4x the stop.
 - **Breakout on the pullback**: when price touches the 15-minute high / low before 10:00 (same filters) and goes 0.1%
   beyond it, a limit order goes back at the broken level (blue dashed line, until 12:00). Stop at the other side of
-  the range or 150 / 45 points, target 2x the stop.
-- **3-day volume lines**: stop at the previous line or 150 / 45 points, target the next line.
-- 2026: Nifty 150 trades, 53% won, net +842, worst trade −49; Sensex 170 trades, 54% won, net +4,708, worst trade
-  −162 (`research/quant/y2026_short_combo.py`). The original rules made more (Nifty +2,274, Sensex +8,102) with
-  bigger single losses (−105 / −471).
+  the range or 0.21%, whichever is closer; target 4x the stop.
+- No volume-line trades with these rules (the volume lines are still drawn).
+- 2026 (1 Jan - 9 Oct), after costs: Nifty 55 trades (about 6 a month), 44% won, average win +122 / average loss
+  −51, net +1,344 (Jan-Jun +866, Jul-Oct +478), worst fall −428; Sensex 53 trades, 43% won, average win +395 /
+  average loss −156, net +4,419 (Jan-Jun +3,623, Jul-Oct +796), worst fall −1,048. Only about 1 trade in 6 reaches
+  the full 4x target; most winners are closed at 3:15 with a smaller gain. Trades last about 3 hours on average.
+  On Nifty the Magnet trades about broke even; the pullback trades made the money (`research/quant/y2026_rr.py`).
+
+**Small stops, out within 60 minutes** (the second choice): every stop at most 150 Sensex / 45 Nifty points, out
+after 60 minutes at the latest; Magnet target the CPR edge, pullback target 2x the stop, plus 3-day volume-line
+trades (target the next line). 2026: Nifty 150 trades, 53% won, net +842; Sensex 170 trades, 54% won, net +4,708
+(`research/quant/y2026_short_combo.py`). **Original** (the third choice): the rules below; Nifty +2,274, Sensex
++8,102, with bigger single losses (−105 / −471).
 
 The rest of this section describes the original rules.
 

@@ -1,5 +1,5 @@
 """Check that alerts/cprb_alerts.py trades exactly like the 2026 backtest (y2026_combo.py / y2026_improve.py for the
-classic rules, y2026_short.py + y2026_reversal.py for the small-stop rules).
+classic rules, y2026_short.py + y2026_reversal.py for the small-stop rules, y2026_rr.py for the 1:4 rules).
 
     python alerts_check.py nifty        (or sensex)
 
@@ -10,6 +10,7 @@ classic rules, y2026_short.py + y2026_reversal.py for the small-stop rules).
 """
 import collections, sys
 import y2026 as Y, y2026_combo as K, y2026_improve as I, y2026_vol_lines as V, cpr_orb as C, y2026_short as S, y2026_reversal as RV
+import y2026_rr as RR
 sys.path.insert(0, '../../alerts')
 import cprb_alerts as A
 
@@ -50,14 +51,19 @@ ref_s = collections.defaultdict(list)
 for t in S.one_book([dict(t, src='BO') for d in Y.D26 for t in RV.pullback(d, PB)] + [t for d in Y.D26 for t in (S.magnet(d, P) or [])] +
                     [t for d in Y.D26 for t in S.vol(d, P)]):
     ref_s[t['d']].append((t['m'], round(t['pnl'], 6)))
-for label, a, b in (('classic', mine(False), ref), ('ladder', mine(True), ref_l), ('small', mine(False, 'small'), ref_s)):
+ref_r = collections.defaultdict(list)
+RP = dict(cap=A.STOP_PCT / 100, mode='tighten', target=f"{A.RR_TARGET:g}R", hold=0)
+for t in S.one_book([t for d in Y.D26 for f in ('PB', 'MAG') for t in RR.FAMS[f](d, dict(RP, fam=f))]):
+    ref_r[t['d']].append((t['m'], round(t['pnl'], 6)))
+for label, a, b in (('classic', mine(False), ref), ('ladder', mine(True), ref_l), ('small', mine(False, 'small'), ref_s),
+                    ('rr', mine(False, 'rr'), ref_r)):
     diff = [d for d in Y.D26 if sorted(a[d]) != sorted(b[d])]
     n = sum(len(v) for v in a.values()); net = sum(p for v in a.values() for _, p in v)
     print(f"  {label:8} alerts: {n} trades, net {net:+,.0f} | backtest: {sum(len(v) for v in b.values())} trades, "
           f"net {sum(p for v in b.values() for _, p in v):+,.0f} | days that differ: {len(diff)} {diff[:5]}")
     for d in diff[:3]: print(f"     {d} alerts {a[d]} backtest {b[d]}")
 
-for rules in ('classic', 'small'):
+for rules in ('classic', 'small', 'rr'):
     changed = 0
     for d in Y.D26:
         cx, said = CX[d], {}
