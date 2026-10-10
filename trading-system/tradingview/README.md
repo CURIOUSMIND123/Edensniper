@@ -29,6 +29,10 @@ File: [`cpr_breakout.pine`](cpr_breakout.pine). An indicator; reads 1-minute can
   - Optional **ladder** (off by default): at the next line book half, move the stop to the broken line, ride the
     rest to the line after. 2026: Sensex net +8,819 (instead of +8,102), Nifty +2,193 (instead of +2,274); all of
     the gain came in January-June.
+- Today's lines are named at the right edge: TC / P / BC (the CPR), POC, 15m high / low, vol (3-day volume lines),
+  and SL / T for an open trade. After the close, the **next session's CPR** is drawn dashed to the right with its
+  width, so on a weekend you already see Monday's levels. (A CPR is fixed for its whole session: it comes from the
+  previous day's high, low and close.) The value area lines are off by default.
 - Chart marks are small letters by the candles: **B** buy, **S** sell, **T** target or half booked, **SL** stop
   loss, **BE** stop at entry, **X** any other exit. Tap a letter for the prices and points. Dashed red / green
   lines show the open trade's stop and target.
