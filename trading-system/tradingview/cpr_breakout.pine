@@ -1,4 +1,5 @@
-// CPR Breakout for TradingView. Select and copy EVERYTHING in this file, including the next line.
+// CPR Breakout for TradingView. First empty the Pine Editor completely (it starts with a sample script),
+// then paste EVERYTHING in this file, including the next line.
 //@version=5
 // ============================================================================
 // CPR Breakout: NIFTY or SENSEX, 5-MINUTE chart (1-minute data is read underneath for exits)
@@ -174,8 +175,12 @@ if newDay and is5
                 int b2 = k
                 float s = array.get(hist, k)
                 while s < 0.7 * tot
-                    float up = b2 + 1 < nbin ? array.get(hist, b2 + 1) : -1.0
-                    float dn = a2 > 0 ? array.get(hist, a2 - 1) : -1.0
+                    float up = -1.0
+                    float dn = -1.0
+                    if b2 + 1 < nbin
+                        up := array.get(hist, b2 + 1)
+                    if a2 > 0
+                        dn := array.get(hist, a2 - 1)
                     if up < 0 and dn < 0
                         break
                     if up >= dn
@@ -215,14 +220,20 @@ if newDay and is5
                     array.set(vlSm, b, vv)
                     if vv > 0
                         array.push(vlNz, vv)
-                float vlThr = array.size(vlNz) > 0 ? array.percentile_nearest_rank(vlNz, 70) : 0.0
+                float vlThr = 0.0
+                if array.size(vlNz) > 0
+                    vlThr := array.percentile_nearest_rank(vlNz, 70)
                 int vlK = array.indexof(vlHist, array.max(vlHist))
                 for b = 1 to vlNb - 2
                     float vv = array.get(vlSm, b)
                     if (vv >= vlThr and vv >= array.get(vlSm, b - 1) and vv >= array.get(vlSm, b + 1)) or b == vlK
                         float vx = vlLo + (b + 0.5) * BIN
+                        // TradingView works out both sides of an "and", so check for a previous line first
                         int vln = array.size(vLines)
-                        if vln > 0 and vx - array.get(vLines, vln - 1) <= 0.0015 * vx
+                        bool vlMerge = false
+                        if vln > 0
+                            vlMerge := vx - array.get(vLines, vln - 1) <= 0.0015 * vx
+                        if vlMerge
                             array.set(vLines, vln - 1, (array.get(vLines, vln - 1) + vx) / 2)
                         else
                             array.push(vLines, vx)
