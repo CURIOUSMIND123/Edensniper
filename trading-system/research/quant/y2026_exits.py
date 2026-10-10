@@ -20,6 +20,9 @@ B. Trading again when the stop at entry or the trailing stop closes a trade (bef
 C. The whole indicator re-run with the breakout / Magnet exit replaced (so the trades after it change too): the whole
    trade at 1R / 1.5R / 2R / 3R with the original stop, book half and keep the stop, book half and hold to 3:15.
    Trades, won, net, worst fall from a high, longest losing run, worst trade.
+D. No booking half, the whole trade, re-run as in C: all at the book-half level (0.25R); or the stop to breakeven
+   (entry) at 0.25R (or at 1R) and then everything at the target (breakout 1R / 2R / 3R, Magnet the CPR edge) or at
+   the trailing stop as now; for comparison the whole trade at 3R with the original stop.
 Costs 4 Nifty / 12 Sensex points. A and B: each trade replayed on its own; January-June and July-October separately.
 """
 import collections, sys
@@ -63,6 +66,28 @@ def walk(c1, side, e, start, stp, half_at=None, tgt=None, to_entry=True, trail=N
     m, o, h, l, c = c1[-1]
     rest = side * (c - e)
     return (rest if half is None else (half + rest) / 2) - COST, m, c, '3:15'
+
+def walk_be(c1, side, e, start, stp, be_at=None, tgt=None, trail=None):
+    """The whole trade: the stop to entry (breakeven) once price reaches be_at, everything at tgt, trail `trail` behind
+    the best price once it is `trail` in profit, out at 3:15."""
+    best = e
+    for m, o, h, l, c in c1:
+        if m < start: continue
+        for px in path(o, h, l, c):
+            if side * (px - stp) <= 0:
+                why = 'breakeven' if stp == e else 'trailing stop' if side * (stp - e) > 0 else 'stop'
+                return side * (stp - e) - COST, m, stp, why
+            if be_at is not None and side * (px - be_at) >= 0 and side * (e - stp) > 0: stp = e
+            if tgt is not None and side * (px - tgt) >= 0:
+                return side * (tgt - e) - COST, m, tgt, 'target'
+        best = max(best, h) if side > 0 else min(best, l)
+        if trail and side * (best - e) >= trail:
+            ns = best - side * trail
+            if side * (ns - stp) > 0: stp = ns
+        if m >= OUT:
+            return side * (c - e) - COST, m, c, '3:15'
+    m, o, h, l, c = c1[-1]
+    return side * (c - e) - COST, m, c, '3:15'
 
 def plan_alts(t, c1):
     """Points of each 'booking the profit' version for one breakout / Magnet trade."""
@@ -189,4 +214,35 @@ if __name__ == '__main__':
             eq += v; pk = max(pk, eq); dd = min(dd, eq - pk); run = run + 1 if v <= 0 else 0; worst_run = max(worst_run, run)
         print(f"   {kind:14} {len(p):3} trades, {100 * sum(v > 0 for v in p) / len(p):3.0f}% won, net {sum(p):+7,.0f} (Jan-Jun {a:+6,.0f}, "
               f"Jul-Oct {sum(p) - a:+6,.0f}), worst fall {dd:6,.0f}, longest losing run {worst_run}, worst trade {min(p):+.0f} | 5 lots Rs {sum(p) * RS:+,.0f}")
+    A.run_breakout, A.run_magnet = orig_b, orig_m
+
+    print("\nD. NO BOOKING HALF, THE WHOLE TRADE (re-run, one trade at a time):")
+    def make_d(kind):
+        def run(c1, side, e, start, stp, R, edge):
+            q = e + side * 0.25 * R
+            if kind == 'all at 0.25R': r = walk_be(c1, side, e, start, stp, None, q)
+            elif kind == 'BE at 0.25R, trail': r = walk_be(c1, side, e, start, stp, q, edge, None if edge else R)
+            elif kind.startswith('BE at 0.25R, all at'): r = walk_be(c1, side, e, start, stp, q, edge or e + side * float(kind[-2]) * R)
+            elif kind == 'BE at 1R, all at 3R': r = walk_be(c1, side, e, start, stp, e + side * R, edge or e + side * 3 * R)
+            else: r = walk_be(c1, side, e, start, stp, None, e + side * 3 * R)
+            return dict(ev=[], stp=stp, exit=A.done(r[1], r[2], r[3], r[0]))
+        def rb(c1, side, e, start, stp, over, cost, R=None):
+            return run(c1, side, e, start, stp, side * (e - stp) if R is None else R, None)
+        def rm(c1, side, e, edge, over, cost, risk=None, R=None, start=556):
+            R0 = 0.3 / 100 * e
+            return run(c1, side, e, start, e - side * R0, R0, None if kind == 'all at 3R, no BE' else edge)
+        return rb, rm
+    for kind in ('now', 'all at 0.25R', 'BE at 0.25R, trail', 'BE at 0.25R, all at 1R', 'BE at 0.25R, all at 2R', 'BE at 0.25R, all at 3R',
+                 'BE at 1R, all at 3R', 'all at 3R, no BE'):
+        if kind == 'now': A.run_breakout, A.run_magnet = orig_b, orig_m
+        else: A.run_breakout, A.run_magnet = make_d(kind)
+        ts = [dict(d=d, pnl=t['exit']['pnl'], why=t['exit']['why']) for d in D26 for t in A.day_trades(CX[d], Y.one[d], 929, True, False, 'classic') if t['taken']]
+        p = [t['pnl'] for t in ts]; a = sum(t['pnl'] for t in ts if t['d'] in H1)
+        eq = pk = dd = 0; run_ = worst_run = 0
+        for v in p:
+            eq += v; pk = max(pk, eq); dd = min(dd, eq - pk); run_ = run_ + 1 if v <= 0 else 0; worst_run = max(worst_run, run_)
+        be = sum(t['why'] == 'breakeven' for t in ts)
+        print(f"   {kind:24} {len(p):3} trades, {100 * sum(v > 0 for v in p) / len(p):3.0f}% won, breakeven exits {be:2}, net {sum(p):+7,.0f} "
+              f"(Jan-Jun {a:+6,.0f}, Jul-Oct {sum(p) - a:+6,.0f}), worst fall {dd:6,.0f}, longest losing run {worst_run}, worst trade {min(p):+.0f}"
+              f" | 5 lots Rs {sum(p) * RS:+,.0f}")
     A.run_breakout, A.run_magnet = orig_b, orig_m

@@ -1075,6 +1075,21 @@ stop to entry and then trail (breakout) or ride to the CPR edge (Magnet). Most o
   −27k, August −3k), worst day −Rs 64,600; Rs 30,000 at 2 lots, 5 from Rs 75,000: Rs 9.2 lakh, below Rs 15,000 in 6.0%
   of random orders (0.4% now). Not the default yet.
 
+**No booking half, the whole trade** (re-run, one trade at a time; "breakeven" = the stop moved to entry, which
+loses only the costs, 4 Nifty / 12 Sensex points):
+
+| 2026, whole indicator | Nifty | Sensex | Both, 5 lots |
+|---|---|---|---|
+| Now (half at 0.25R, stop to entry, trail) | +2,214, worst fall −138 | +8,001, worst fall −336 | Rs 7.6 lakh |
+| Everything at the book-half level (0.25R) | +2,077 (Jan-Jun +1,632, Jul-Oct +446), worst fall −138 | +7,856 (+6,461 / +1,395), worst fall −336 | Rs 7.3 lakh |
+| Breakeven at 0.25R, then the trailing stop as now | **+2,459** (+1,949 / +510), worst fall −158 | **+8,465** (+7,117 / +1,348), worst fall −363 | Rs 8.2 lakh |
+| Breakeven at 0.25R, everything at 1R / 2R / 3R (Magnet: the CPR edge) | +2,154 / +2,504 / +2,577 | +8,129 / +8,167 / +8,141 | Rs 7.6-8.3 lakh |
+| Breakeven at 1R, everything at 3R | +2,961, worst fall −267 | +8,948, worst fall −686 | Rs 9.3 lakh |
+| Everything at 3R, no breakeven | +2,998, worst fall −267 | +10,719, worst fall −686 | Rs 10.2 lakh |
+
+- Breakeven at 0.25R and then trailing (the same as now, without booking half) made more in both halves on both
+  indices with about the same worst fall; 30 Nifty / 25 Sensex trades end at breakeven (−4 / −12 points).
+
 ## How to re-check all of this
 
 - `python research/fair_price_backtest.py` downloads the candles and re-runs the Fair Price test.
