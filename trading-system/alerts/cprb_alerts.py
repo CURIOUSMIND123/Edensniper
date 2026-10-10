@@ -43,6 +43,10 @@ VOLCHECK = True                   # 'classic' rules: the volume check (Dr David 
                                   # VOL_WINDOW 5-minute candles, the up candles carried more volume than the down
                                   # candles (price and volume moving together); a SELL only when the down candles did
 VOL_WINDOW = 24                   # 24 five-minute candles = the last 2 hours (early in the day: yesterday's last ones)
+STOP_MAX = {'nifty': 0, 'sensex': 0}   # 'classic' rules: the most a stop may be from entry, in index points
+                                  # (0 = each setup's own stop: 0.3% Magnet, the 15-minute range, the previous line)
+STOP_MODE = 'pull'                # a wider stop is: 'pull' moved in (book half / trail scaled to the new stop),
+                                  # 'stop' moved in (book half / trail as before), 'skip' not traded
 SWEEP = False                     # 'classic' rules: also trade liquidity sweeps of yesterday's high / low
 SWEEP_MAX = 3                     # at most this many sweep trades a day
 STOP_PCT = 0.21                   # 'rr' rules: the most a stop may be from entry, in % of price (Sensex ~150, Nifty ~47 points)
@@ -252,11 +256,12 @@ def path(o, h, l, c):
 def done(m, px, why, pnl):
     return dict(m=m, px=px, why=why, pnl=pnl)
 
-def run_magnet(c1, side, e, edge, over, cost):
-    """Stop 0.3%; book half at 0.25 x the risk and move the stop to entry; the rest to the CPR edge; out by 3:15."""
-    R = 0.3 / 100 * e
-    stp = e - side * R
-    t1 = e + side * 0.25 * R
+def run_magnet(c1, side, e, edge, over, cost, risk=None, R=None):
+    """Stop 0.3% (or `risk` points); book half at 0.25 x the risk (or R) and move the stop to entry; the rest to the
+    CPR edge; out by 3:15."""
+    R0 = 0.3 / 100 * e
+    stp = e - side * (R0 if risk is None else risk)
+    t1 = e + side * 0.25 * (R0 if R is None else R)
     half, ev = None, []
     for m, o, h, l, c in c1:
         if m < 556:
@@ -280,9 +285,10 @@ def run_magnet(c1, side, e, edge, over, cost):
         return dict(ev=ev, stp=stp, exit=done(c1[-1][0], c1[-1][4], 'close', (rest if half is None else (half + rest) / 2) - cost))
     return dict(ev=ev, stp=stp, exit=None)
 
-def run_breakout(c1, side, e, start, stp, over, cost):
-    """Book half at 0.25 x the risk and move the stop to entry; after +1R trail the stop 1R behind the best price."""
-    R = side * (e - stp)
+def run_breakout(c1, side, e, start, stp, over, cost, R=None):
+    """Book half at 0.25 x the risk (R: the stop distance unless given) and move the stop to entry; after +1R trail
+    the stop 1R behind the best price."""
+    R = side * (e - stp) if R is None else R
     tgt = e + side * 0.25 * R
     half, best, ev, trailing = None, e, [], False
     for m, o, h, l, c in c1:
@@ -377,6 +383,19 @@ def volume_fn(cx, c1, upto):
         return up > dn if side > 0 else dn > up
     return f
 
+def stop_max(cx):
+    """STOP_MAX for this index (0 = none)."""
+    return STOP_MAX.get(cx['name'].lower(), 0) if RULES == 'classic' or cx.get('rules_used') == 'classic' else 0
+
+def capped_stop(cx, side, e, stp):
+    """(stop, R for book half / trail) under STOP_MAX / STOP_MODE, or None when the trade is skipped."""
+    cap, R0 = stop_max(cx), side * (e - stp)
+    if not cap or R0 <= cap:
+        return stp, R0
+    if STOP_MODE == 'skip':
+        return None
+    return e - side * cap, (cap if STOP_MODE == 'pull' else R0)
+
 def plan_trades(cx, c1, upto, over):
     """Daily plan: narrow-CPR day -> breakout; other day -> CPR Magnet at 9:16 if the open qualifies, else breakout."""
     if not c1:
@@ -387,10 +406,11 @@ def plan_trades(cx, c1, upto, over):
         side = -1 if o > lv['top'] else 1 if o < lv['bot'] else 0
         if side:
             edge = lv['top'] if side < 0 else lv['bot']
-            if side * (edge - e) >= 0.002 * e and side * (e - poc) > 0 and vok(cx, side, 556, 'MAGNET'):
-                r = run_magnet(c1, side, e, edge, over, cost)
-                return [dict(src='MAGNET', side=side, m=556, known=556, e=e, stp0=e - side * 0.3 / 100 * e,
-                             t1=e + side * 0.25 * 0.3 / 100 * e, edge=edge, **r)]
+            cs = capped_stop(cx, side, e, e - side * 0.3 / 100 * e)
+            if side * (edge - e) >= 0.002 * e and side * (e - poc) > 0 and vok(cx, side, 556, 'MAGNET') and cs:
+                stp, R = cs
+                r = run_magnet(c1, side, e, edge, over, cost, side * (e - stp), R)
+                return [dict(src='MAGNET', side=side, m=556, known=556, e=e, stp0=stp, t1=e + side * 0.25 * R, edge=edge, **r)]
     if upto < RANGE_END - 1:
         return []
     first = [x for x in c1 if x[0] < RANGE_END]
@@ -407,8 +427,12 @@ def plan_trades(cx, c1, upto, over):
         stp = orl if side > 0 else orh
         if side * (e - stp) <= 0:
             continue
-        r = run_breakout(c1, side, e, start, stp, over, cost)
-        out = [dict(src='BREAKOUT', side=side, m=m, known=m + 1, e=e, stp0=stp, R=side * (e - stp), **r)]
+        cs = capped_stop(cx, side, e, stp)
+        if not cs:
+            continue
+        stp, R = cs
+        r = run_breakout(c1, side, e, start, stp, over, cost, R)
+        out = [dict(src='BREAKOUT', side=side, m=m, known=m + 1, e=e, stp0=stp, R=R, **r)]
         if r['exit'] and r['exit']['pnl'] <= 0:          # the break failed: one trade the other way
             for s2, e2, st2, m2 in touches(c1, orh, orl, r['exit']['m'] + 1):
                 if m2 >= CUTOFF:
@@ -418,8 +442,12 @@ def plan_trades(cx, c1, upto, over):
                 stp2 = orl if s2 > 0 else orh
                 if s2 * (e2 - stp2) <= 0:
                     break
-                r2 = run_breakout(c1, s2, e2, st2, stp2, over, cost)
-                out.append(dict(src='REVERSAL', side=s2, m=m2, known=m2 + 1, e=e2, stp0=stp2, R=s2 * (e2 - stp2), **r2))
+                cs = capped_stop(cx, s2, e2, stp2)
+                if not cs:
+                    continue
+                stp2, R2 = cs
+                r2 = run_breakout(c1, s2, e2, st2, stp2, over, cost, R2)
+                out.append(dict(src='REVERSAL', side=s2, m=m2, known=m2 + 1, e=e2, stp0=stp2, R=R2, **r2))
                 break
         return out
     return []
@@ -455,6 +483,10 @@ def vol_trades(cx, c1, upto, over, ladder):
             e = c
             if side * (e - stp) <= 0 or side * (tgt - e) < 1.5 * side * (e - stp) or not vok(cx, side, m0 + 5, 'VOLUME LINE'):
                 break
+            cs = capped_stop(cx, side, e, stp)
+            if not cs:
+                break
+            stp = cs[0]
             tgt2 = nxt[1] if ladder and len(nxt) > 1 else None
             r = run_vol(c1, side, e, m0 + 5, stp, tgt, x, tgt2, over, cost)
             out.append(dict(src='VOLUME LINE', side=side, m=m0 + 5, known=m0 + 5, e=e, stp0=stp, tgt=tgt, tgt2=tgt2, x=x, **r))
@@ -492,6 +524,11 @@ def sweep_trades(cx, c1, upto, over):
         risk = side * (c - stp)
         if risk > 0.005 * c:
             continue
+        cs = capped_stop(cx, side, c, stp)
+        if not cs:
+            continue
+        stp = cs[0]
+        risk = side * (c - stp)
         tgt = c + side * 3 * risk
         r = run_fixed(c1, side, c, m0 + 5, stp, tgt, OUT, over, cost)
         out.append(dict(src='SWEEP', small=True, side=side, m=m0 + 5, known=m0 + 5, e=c, stp0=stp, tgt=tgt, lvl=lvl,
@@ -709,6 +746,9 @@ def plan_text(cx):
     out.append(f"3-day volume lines: {', '.join(f2(x) for x in cx['lines'])}. 9:30-2:30: a 5-minute close through a line "
                "-> trade toward the next line, stop at the previous line, only if the next line is at least 1.5x the stop "
                "away. One trade at a time." + (" Ladder on." if LADDER else ""))
+    if stop_max(cx):
+        out.append(f"Every stop at most {stop_max(cx):g} points from entry" +
+                   (" (wider ones: trade skipped)." if STOP_MODE == 'skip' else " (wider ones moved in)."))
     if VOLCHECK:
         out.append("Volume check on every signal: a BUY only if, over the last 2 hours, the up candles carried more volume "
                    "(NIFTYBEES) than the down candles; a SELL only if the down candles did. Otherwise the signal is skipped.")
@@ -794,6 +834,7 @@ def messages(cx, ts, c1, upto, lots):
         if upto >= CUTOFF and not plan:
             out.append(('nobo', CUTOFF, f"{nm} 10:00: no breakout trade. Volume-line" + (" and sweep" if SWEEP else "") +
                         " trades only from now (till 2:30).", False))
+    sn = f"at most {stop_max(cx):g} points" if stop_max(cx) else ''
     for (src, side), m in sorted((cx.get('vlog') or {}).items(), key=lambda kv: kv[1]):
         out.append((('vskip', src, side), m, f"{nm} {hhmm(m)} {src} {'BUY' if side > 0 else 'SELL'} signal skipped: the volume "
                     f"doesn't agree (over the last 2 hours the {'down' if side > 0 else 'up'} candles carried more volume). "
@@ -811,15 +852,15 @@ def messages(cx, ts, c1, upto, lots):
                    f"{'below' if hi else 'above'} it (liquidity sweep). Stop {f2(t['stp0'])} (just beyond the candle). "
                    f"Target {f2(t['tgt'])} (3x the stop). Out by 15:15 at the latest.")
         elif t['src'] == 'MAGNET':
-            how = (f"Stop {f2(t['stp0'])} (0.3%). Book half at {f2(t['t1'])}, then stop to entry; "
+            how = (f"Stop {f2(t['stp0'])} ({sn or '0.3%'}). Book half at {f2(t['t1'])}, then stop to entry; "
                    f"rest to the CPR edge {f2(t['edge'])}.")
         elif t['src'] == 'VOLUME LINE':
-            how = (f"5-minute close through the line {f2(t['x'])}. Stop {f2(t['stp0'])} (previous line). "
+            how = (f"5-minute close through the line {f2(t['x'])}. Stop {f2(t['stp0'])} ({sn or 'previous line'}). "
                    f"Target {f2(t['tgt'])} (next line)" +
                    (f": book half there, move the stop to {f2(t['x'])}, rest to {f2(t['tgt2'])}." if t['tgt2'] else "."))
         else:
             how = (("Reversal after the failed break. " if t['src'] == 'REVERSAL' else "") +
-                   f"Stop {f2(t['stp0'])} (other side of the 15-minute range). Book half at "
+                   f"Stop {f2(t['stp0'])} ({sn or 'other side of the 15-minute range'}). Book half at "
                    f"{f2(t['e'] + t['side'] * 0.25 * t['R'])}, then stop to entry; after {f2(t['e'] + t['side'] * t['R'])} "
                    "trail the stop 1R behind the best price.")
         out.append((tid + ('in',), t['known'], f"{nm} {hhmm(t['m'] if t['src'] != 'MAGNET' else 556)} {t['src']} {sd} at "

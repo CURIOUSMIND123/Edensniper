@@ -1002,6 +1002,30 @@ Both indices at 5 lots: 138 trades, 85% won, Rs +7.6 lakh in 9.3 months (about R
 fall Rs 33,872; in random order below Rs 15,000 in 8.6% of 10,000 runs (26.8% without the volume check). 2 lots, 5
 from Rs 75,000, 10 from Rs 2.5 lakh: Rs 11.9 lakh, below Rs 15,000 in 0.4% of runs.
 
+## 2026: the default with every stop held to 30 Nifty / 100 Sensex points
+
+The default's losing trades average −62 Nifty / −177 Sensex points because each setup's own stop is wide (the
+15-minute range, 0.3% for the Magnet, the previous volume line: on average 88 Nifty / 284 Sensex points from entry).
+`y2026_stopcap.py` keeps the same signals and holds every stop to at most 20 / 30 / 45 Nifty (60 / 100 / 150 Sensex)
+points: moved in (book half and trailing scaled to the new stop, or as before), or the trade skipped.
+
+| 2026, default (original rules + volume check) | Nifty | Sensex |
+|---|---|---|
+| Each setup's own stop (now) | 70 trades, 87% won, avg win +45 / loss −62, stop hit 9 times, net **+2,214**, worst fall −138 | 68 trades, 82% won, avg win +181 / loss −177, stop hit 9 times, net **+8,001**, worst fall −336 |
+| Stop at most 30 / 100, moved in (half and trail as before) | 78 trades, 63% won, avg win +44 / loss −34, stop hit 29 times, net +1,171, worst fall −233 | 75 trades, 63% won, avg win +168 / loss −109, stop hit 27 times, net +4,859, worst fall −454 |
+| Same, half and trail scaled to the new stop | 78 trades, 32% won, net +655 | 75 trades, 65% won, net +3,429 |
+| Stop at most 45 / 150, moved in | 71 trades, 77% won, net +1,847, worst fall −98 | 71 trades, 72% won, net +6,329, worst fall −486 |
+| Stop at most 20 / 60, moved in | 81 trades, 48% won, net +527 | 83 trades, 49% won, net +3,298 |
+| Skip trades with a wider stop | 0 trades (no setup's own stop is that small) | 0 trades |
+
+- A 30 / 100 stop cuts each loss by about 40%, but normal back-and-forth hits it three times as often (29 / 27 stops
+  instead of 9 / 9): the net nearly halves (−47% Nifty, −39% Sensex) and even the worst fall gets bigger.
+- The same rupee loss per trade comes more cheaply from fewer lots: at 3 lots with the normal stops a Nifty loss
+  averages about Rs 6,000 (Rs 5,500 with the 30-point stop at 5 lots) and 2026 made Rs 2.16 lakh (Rs 1.90 lakh); Sensex
+  about Rs 5,300 a loss (Rs 5,450) and Rs 2.40 lakh (Rs 2.43 lakh), with a smaller worst fall (Rs 10,000 instead of
+  Rs 22,700).
+- `STOP_MAX` / `STOP_MODE` in the alert program try it live; the default stays each setup's own stop.
+
 ## How to re-check all of this
 
 - `python research/fair_price_backtest.py` downloads the candles and re-runs the Fair Price test.

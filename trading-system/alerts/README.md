@@ -27,6 +27,9 @@ Alerts appear on the screen (with a beep) and, if you set it up, on your phone t
   down candles did. A signal it stops is reported ("skipped: the volume doesn't agree"). About the same points as
   without it from a third fewer trades, with much smaller losing runs. `SWEEP = True` adds liquidity sweeps of
   yesterday's high / low (more points, twice the trades); `LADDER = True` the volume-line ladder.
+  `STOP_MAX = {'nifty': 30, 'sensex': 100}` holds every stop to that many points (`STOP_MODE`: 'pull' / 'stop' moves
+  a wider stop in, 'skip' skips the trade). Tested on 2026 it about halved the profit (`y2026_stopcap.py`), so it
+  is off (0).
 - `RULES = 'rr'`, **1:4 trades**: every stop at most 0.21% of price (`STOP_PCT`), target 4x the stop
   (`RR_TARGET`), held until the target, the stop or 3:15; only the CPR Magnet and the breakout on the pullback
   (a limit order back at the broken 15-minute level).
