@@ -68,3 +68,4 @@ Costs: 4 Nifty points or 12 Sensex points per trade. `pip install pandas scikit-
 | `y2026_rr_combo.py` | 2026 only: the 1:3 / 1:4 setups that held up, put together, with 60 / 120 minute limits or to 3:15 |
 | `y2026_smc.py` | 2026 only: liquidity sweeps, the squeeze, Smart Money Concepts (break of structure, change of character, order blocks, fair value gaps) and the low-volume areas of the last 2 days' volume profile, on their own and added to the indicator's best version |
 | `y2026_sweep.py` | 2026 only: the sweep of yesterday's high / low added to the indicator: where the profit comes from, small changes to the rule, with the ladder |
+| `y2026_report.py` | 2026 only: the full report of what the indicator / alerts trade now (default, original without sweeps, 1:4, small stops): trades, points, setups, exits, months, rupees, and what Rs 30,000 becomes |

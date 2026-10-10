@@ -902,6 +902,29 @@ stop, at most 3 a day, only when no other trade is open.
   (`RULES = 'classic'`, `SWEEP = True`); the alerts took exactly these trades (`alerts_check.py`). Chosen by
   looking at 2026 itself; live results will very likely be lower.
 
+## 2026: the full report of the current default (`y2026_report.py`)
+
+Original rules + liquidity sweeps, both indices, 1 January - 9 October 2026, after costs (the alert program's own
+trades; rupees at delta 0.5, time decay left out):
+
+| | Nifty | Sensex |
+|---|---|---|
+| Trades | 203 on 132 days (22 a month) | 223 on 139 days (24 a month) |
+| Won / lost | 115 / 88 (57%) | 119 / 104 (53%) |
+| Points won / lost / net | +5,824 / −2,831 / **+2,993** | +20,698 / −11,420 / **+9,279** |
+| Average win / loss | +51 / −32 | +174 / −110 |
+| Biggest win / worst trade | +260 / −105 | +1,168 / −471 |
+| Worst fall from a high | −284 | −1,535 |
+| Jan-Jun / Jul-Oct | +2,175 / +819 | +7,264 / +2,015 |
+| Breakout | 42 trades, 39 won, +1,076 | 37 trades, 37 won, +2,954 |
+| Magnet | 22 trades, 17 won, −20 | 25 trades, 22 won, +721 |
+| Volume lines | 34 trades, 22 won, +1,319 | 50 trades, 25 won, +4,345 |
+| Sweeps | 105 trades, 37 won, +618 | 111 trades, 35 won, +1,259 |
+
+Both indices at 5 lots: Rs +9.5 lakh in 9.3 months (about Rs 1 lakh a month; no losing month; weakest June
++17k). Rs 30,000 at 2 lots, 5 from Rs 75,000: Rs 8.97 lakh, lowest Rs 25,971; in random order it fell below Rs 15,000
+in 8.4% of 10,000 runs. At 5 lots from the start: below Rs 15,000 in 32% of runs and below zero in 13%.
+
 ## How to re-check all of this
 
 - `python research/fair_price_backtest.py` downloads the candles and re-runs the Fair Price test.
