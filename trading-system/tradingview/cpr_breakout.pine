@@ -137,8 +137,10 @@ markBox = input.bool(true, "Marks in a small coloured tag (off: the letter only)
 cprLbl  = input.bool(false, "Also write the CPR width on the chart each morning (it is always in the box)", group = G2)
 showPrf = input.bool(true, "Show the 30-day volume POC", group = G2)
 showVA  = input.bool(false, "Show the value area (the 70% of volume around the POC)", group = G2)
-nameLbl = input.bool(true, "Name today's lines at the right edge (TC, P, BC, POC, 15m high / low, vol, SL, T)", group = G2)
+nameLbl = input.bool(true, "Name every line at the right edge (CPR, POC, 15-minute high / low, volume lines, yesterday's high / low, stop, target)", group = G2)
 nextCpr = input.bool(true, "After the close, draw the next session's CPR to the right", group = G2)
+pdShow  = input.bool(true, "Show yesterday's high and low (yellow)", group = G2)
+nextLv  = input.bool(true, "After the close, also draw the next session's yesterday high / low, volume POC and 3-day volume lines", group = G2)
 G3 = "Volume zones"
 volSym  = input.symbol("NSE:NIFTYBEES", "Volume from (the index has none; the test used NIFTYBEES for both indices)", group = G3)
 profN   = input.int(30, "Volume profile: last N sessions", minval = 5, maxval = 30, group = G3)
@@ -942,10 +944,82 @@ if showBoxes and state == 1
 if showBoxes and volOpen
     posGrow(vbT, vbR, vbH, bar_index + 1)
 
-plot(is5 and swOn and swShow and not shortMode ? pH : na, "Yesterday's high", color = lc(color.new(#fdd835, 20)), style = plot.style_linebr)
-plot(is5 and swOn and swShow and not shortMode ? pL : na, "Yesterday's low", color = lc(color.new(#fdd835, 20)), style = plot.style_linebr)
+showPD = timeframe.isintraday and (pdShow or (swOn and swShow and not shortMode))
+plot(showPD ? pH : na, "Yesterday's high", color = lc(color.new(#fdd835, 20)), style = plot.style_linebr)
+plot(showPD ? pL : na, "Yesterday's low", color = lc(color.new(#fdd835, 20)), style = plot.style_linebr)
 plot(is5 and mins >= 570 ? orh : na, "15-min high", color = lc(color.new(GREEN, 30)), style = plot.style_linebr)
 plot(is5 and mins >= 570 ? orl : na, "15-min low", color = lc(color.new(RED, 30)), style = plot.style_linebr)
+
+// ---------------- the next session's volume levels (after the close) ----------------
+// the same profile as each morning's, over the bars `off` to `off + nb - 1` back (today included)
+loOf(int off, int nb) =>
+    float lo = low[off]
+    for i = off to off + nb - 1
+        lo := math.min(lo, low[i])
+    math.floor(lo / BIN) * BIN
+histOf(int off, int nb, float lo) =>
+    float hi = high[off]
+    for i = off to off + nb - 1
+        hi := math.max(hi, high[i])
+    int nbin = math.min(int((hi - lo) / BIN) + 2, 3000)
+    float[] hist = array.new_float(nbin, 0.0)
+    for i = off to off + nb - 1
+        int a = math.max(0, int((low[i] - lo) / BIN))
+        int z = math.min(nbin - 1, int((high[i] - lo) / BIN))
+        float share = vw[i] / (z - a + 1)
+        for b = a to z
+            array.set(hist, b, array.get(hist, b) + share)
+    hist
+pocOf(float[] hist, float lo) =>
+    int nbin = array.size(hist)
+    int k = array.indexof(hist, array.max(hist))
+    float tot = array.sum(hist)
+    int a2 = k
+    int b2 = k
+    float s = array.get(hist, k)
+    while s < 0.7 * tot
+        float up = -1.0
+        float dn = -1.0
+        if b2 + 1 < nbin
+            up := array.get(hist, b2 + 1)
+        if a2 > 0
+            dn := array.get(hist, a2 - 1)
+        if up < 0 and dn < 0
+            break
+        if up >= dn
+            b2 += 1
+            s += up
+        else
+            a2 -= 1
+            s += dn
+    [lo + (k + 0.5) * BIN, lo + (b2 + 1) * BIN, lo + a2 * BIN]
+linesOf(float[] hist, float lo) =>
+    int nbin = array.size(hist)
+    float[] out = array.new_float()
+    float[] sm = array.new_float(nbin, 0.0)
+    float[] nz = array.new_float()
+    for b = 0 to nbin - 1
+        float vv = (array.get(hist, math.max(0, b - 1)) + array.get(hist, b) + array.get(hist, math.min(nbin - 1, b + 1))) / 3
+        array.set(sm, b, vv)
+        if vv > 0
+            array.push(nz, vv)
+    float thr = 0.0
+    if array.size(nz) > 0                  // TradingView works out both sides of a ?:, so not in one line
+        thr := array.percentile_nearest_rank(nz, 70)
+    int kk = array.indexof(hist, array.max(hist))
+    for b = 1 to nbin - 2
+        float vv = array.get(sm, b)
+        if (vv >= thr and vv >= array.get(sm, b - 1) and vv >= array.get(sm, b + 1)) or b == kk
+            float vx = lo + (b + 0.5) * BIN
+            int ln = array.size(out)
+            bool merge = false
+            if ln > 0
+                merge := vx - array.get(out, ln - 1) <= 0.0015 * vx
+            if merge
+                array.set(out, ln - 1, (array.get(out, ln - 1) + vx) / 2)
+            else
+                array.push(out, vx)
+    out
 
 // ---------------- names at the right edge, and the next session's CPR ----------------
 edgeName(label[] arr, int x, float y, string t, color c, string sz) =>
@@ -962,28 +1036,36 @@ if barstate.islast and cprOn
     array.clear(nextLn)
     int x1 = bar_index + 2
     if nameLbl
-        edgeName(edgeLbl, x1, top, "TC " + fmt(top), cprCol, size.small)
-        edgeName(edgeLbl, x1, P, "P", cprCol, size.small)
-        edgeName(edgeLbl, x1, bot, "BC " + fmt(bot), cprCol, size.small)
+        edgeName(edgeLbl, x1, top, "CPR top (TC) " + fmt(top), cprCol, size.small)
+        edgeName(edgeLbl, x1, P, "CPR pivot (P) " + fmt(P), cprCol, size.small)
+        edgeName(edgeLbl, x1, bot, "CPR bottom (BC) " + fmt(bot), cprCol, size.small)
         if is5 and showPrf
-            edgeName(edgeLbl, x1, poc, "POC", PURPLE, size.small)
+            edgeName(edgeLbl, x1, poc, "POC " + fmt(poc) + ": most volume, last " + str.tostring(profN) + " days (buys above, sells below)", PURPLE, size.small)
+        if is5 and showVA
+            edgeName(edgeLbl, x1, vah, "Value area high (70% of volume)", PURPLE, size.small)
+            edgeName(edgeLbl, x1, val, "Value area low", PURPLE, size.small)
         if is5 and mins >= 570
-            edgeName(edgeLbl, x1, orh, "15m high", GREEN, size.small)
-            edgeName(edgeLbl, x1, orl, "15m low", RED, size.small)
+            bool bOk = (not gapF or gapDir == 1) and (not relF or relBias != -1) and widOk
+            bool sOk = (not gapF or gapDir == -1) and (not relF or relBias != 1) and widOk
+            string xtra = (pocF != "Off" ? ", if beyond the POC" : "") + (vcOn ? ", if the volume agrees" : "")
+            string hiTxt = shortMode ? "" : isMag ? " (Magnet day: no breakout)" : bOk ? ": BUY on a touch until " + hhmm(CUT) + xtra : " (no BUY today)"
+            string loTxt = shortMode ? "" : isMag ? " (Magnet day: no breakout)" : sOk ? ": SELL on a touch until " + hhmm(CUT) + xtra : " (no SELL today)"
+            edgeName(edgeLbl, x1, orh, "15-min HIGH " + fmt(orh) + hiTxt, GREEN, size.small)
+            edgeName(edgeLbl, x1, orl, "15-min LOW " + fmt(orl) + loTxt, RED, size.small)
         if is5 and vlShow
             for x in vLines
-                edgeName(edgeLbl, x1, x, "vol", TEAL, size.tiny)
-        if is5 and swOn and swShow and not shortMode
-            edgeName(edgeLbl, x1, pH, "yday high", color.new(#fdd835, 0), size.small)
-            edgeName(edgeLbl, x1, pL, "yday low", color.new(#fdd835, 0), size.small)
+                edgeName(edgeLbl, x1, x, "3-day volume line " + fmt(x), TEAL, size.small)
+        if showPD
+            edgeName(edgeLbl, x1, pH, "Yesterday HIGH " + fmt(pH), color.new(#fdd835, 0), size.small)
+            edgeName(edgeLbl, x1, pL, "Yesterday LOW " + fmt(pL), color.new(#fdd835, 0), size.small)
         if pullState == 1 and pullArmed
             edgeName(edgeLbl, x1, pullLv + pullSide * 0.0005 * pullLv, (pullSide > 0 ? "LIMIT BUY " : "LIMIT SELL ") + fmt(pullLv + pullSide * 0.0005 * pullLv), BLUE, size.small)
         if state == 1 and not showBoxes
-            edgeName(edgeLbl, x1, stp, "SL", RED, size.small)
-            edgeName(edgeLbl, x1, tgt, "T", GREEN, size.small)
+            edgeName(edgeLbl, x1, stp, "STOP LOSS " + fmt(stp), RED, size.small)
+            edgeName(edgeLbl, x1, tgt, "TARGET " + fmt(tgt), GREEN, size.small)
         if volOpen and not showBoxes
-            edgeName(edgeLbl, x1, vStp, "SL", RED, size.small)
-            edgeName(edgeLbl, x1, vTgt, "T", GREEN, size.small)
+            edgeName(edgeLbl, x1, vStp, "STOP LOSS " + fmt(vStp), RED, size.small)
+            edgeName(edgeLbl, x1, vTgt, "TARGET " + fmt(vTgt), GREEN, size.small)
     // after the close (the chart's last candle is the session's last one): the next session's CPR, dashed, to the right
     if nextCpr and (mins + timeframe.multiplier >= 930 or timenow - time_close > 45 * 60000)
         float nP = (tH + tL + tC) / 3
@@ -998,9 +1080,33 @@ if barstate.islast and cprOn
             array.push(nextLn, line.new(xa, y, xb, y, color = nCol, style = line.style_dashed, width = y == nP ? 1 : 2))
         array.push(edgeLbl, label.new(xa, nTop, "NEXT SESSION CPR  " + str.tostring(nTop - nBot, "#,##0") + " pts (" + str.tostring((nTop - nBot) / nP * 100, "0.00") + "%) " + (nNarrow ? "NARROW" : tNar * 3 >= 40 ? "wide" : "normal"),
                                          style = label.style_label_lower_left, color = color.new(nCol, 100), textcolor = nCol, size = size.small))
-        edgeName(edgeLbl, xb, nTop, "TC " + fmt(nTop), nCol, size.small)
-        edgeName(edgeLbl, xb, nP, "P " + fmt(nP), nCol, size.small)
-        edgeName(edgeLbl, xb, nBot, "BC " + fmt(nBot), nCol, size.small)
+        edgeName(edgeLbl, xb, nTop, "Next CPR top (TC) " + fmt(nTop), nCol, size.small)
+        edgeName(edgeLbl, xb, nP, "Next CPR pivot (P) " + fmt(nP), nCol, size.small)
+        edgeName(edgeLbl, xb, nBot, "Next CPR bottom (BC) " + fmt(nBot), nCol, size.small)
+        if nextLv
+            color yel = color.new(#fdd835, 0)
+            array.push(nextLn, line.new(xa, tH, xb, tH, color = yel, style = line.style_dashed, width = 1))
+            array.push(nextLn, line.new(xa, tL, xb, tL, color = yel, style = line.style_dashed, width = 1))
+            edgeName(edgeLbl, xb, tH, "Next: yesterday HIGH " + fmt(tH), yel, size.small)
+            edgeName(edgeLbl, xb, tL, "Next: yesterday LOW " + fmt(tL), yel, size.small)
+            int nd = array.size(dStart)
+            if is5 and showPrf and nd >= profN
+                int nbP = bar_index - array.get(dStart, nd - profN) + 1
+                if nbP > 10 and nbP < 2450
+                    float loP = loOf(0, nbP)
+                    float[] hP = histOf(0, nbP, loP)
+                    [nPoc, nVah, nVal] = pocOf(hP, loP)
+                    array.push(nextLn, line.new(xa, nPoc, xb, nPoc, color = PURPLE, style = line.style_dashed, width = 2))
+                    edgeName(edgeLbl, xb, nPoc, "Next: POC " + fmt(nPoc) + " (most volume, " + str.tostring(profN) + " days)", PURPLE, size.small)
+            if is5 and vlShow and nd >= vlN
+                int nbV = bar_index - array.get(dStart, nd - vlN) + 1
+                if nbV > 10 and nbV < 2450
+                    float loV = loOf(0, nbV)
+                    float[] hV = histOf(0, nbV, loV)
+                    float[] nLines = linesOf(hV, loV)
+                    for x in nLines
+                        array.push(nextLn, line.new(xa, x, xb, x, color = color.new(TEAL, 30), style = line.style_dotted, width = 1))
+                        edgeName(edgeLbl, xb, x, "Next: 3-day volume line " + fmt(x), TEAL, size.small)
 
 // ---------------- status and results box ----------------
 var table tbl = table.new(position.top_right, 2, 11, bgcolor = color.new(chart.bg_color, 5), border_width = 1, border_color = color.new(GREY, 60), frame_width = 1, frame_color = GREY)

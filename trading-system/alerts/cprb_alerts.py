@@ -971,15 +971,14 @@ def chart_update(n, cx, c_all, ts, got, day):
     """Everything the chart page draws for one index: today's (and yesterday's) 1-minute candles, levels, marks."""
     lv = cx['lv']
     pink = '#ff9800' if cx['narrow'] else '#e91e63'
-    levels = [dict(p=lv['top'], c=pink, t='TC', s=0, w=2), dict(p=lv['p'], c=pink, t='P', s=0, w=1),
-              dict(p=lv['bot'], c=pink, t='BC', s=0, w=2), dict(p=cx['poc'], c='#9c6ade', t='POC', s=0, w=1)]
-    levels += [dict(p=x, c='#26a69a', t='', s=1, w=1) for x in cx['lines']]
-    if SWEEP and cx.get('rules_used') == 'classic':
-        levels += [dict(p=cx['yh'], c='#fdd835', t='yday high', s=2, w=1), dict(p=cx['yl'], c='#fdd835', t='yday low', s=2, w=1)]
+    levels = [dict(p=lv['top'], c=pink, t='CPR top', s=0, w=2), dict(p=lv['p'], c=pink, t='Pivot', s=0, w=1),
+              dict(p=lv['bot'], c=pink, t='CPR bottom', s=0, w=2), dict(p=cx['poc'], c='#9c6ade', t='POC 30 days', s=0, w=1)]
+    levels += [dict(p=x, c='#26a69a', t='Vol line', s=1, w=1) for x in cx['lines']]
+    levels += [dict(p=cx['yh'], c='#fdd835', t='Yesterday high', s=2, w=1), dict(p=cx['yl'], c='#fdd835', t='Yesterday low', s=2, w=1)]
     first = [x for x in c_all if x[0] < RANGE_END]
     if first and got >= RANGE_END - 1:
-        levels += [dict(p=max(x[2] for x in first), c='#4caf50', t='15m H', s=2, w=1),
-                   dict(p=min(x[3] for x in first), c='#f44336', t='15m L', s=2, w=1)]
+        levels += [dict(p=max(x[2] for x in first), c='#4caf50', t='15-min high', s=2, w=1),
+                   dict(p=min(x[3] for x in first), c='#f44336', t='15-min low', s=2, w=1)]
     marks, rows, open_t = [], [], None
     for t in ts:
         if not t['taken']:
@@ -1003,7 +1002,7 @@ def chart_update(n, cx, c_all, ts, got, day):
     if pend and got < 720 and not any(t['src'] == 'PULLBACK' for t in ts):
         levels.append(dict(p=pend['px'], c='#2962ff', t='LIMIT ' + ('BUY' if pend['side'] > 0 else 'SELL'), s=2, w=2))
     if open_t:
-        levels.append(dict(p=open_t['stp'], c='#ef5350', t='SL', s=2, w=1))
+        levels.append(dict(p=open_t['stp'], c='#ef5350', t='Stop loss', s=2, w=1))
         half = any(e['kind'] == 'half' for e in open_t['ev'])
         sd = open_t['side']
         if open_t.get('small'):
@@ -1015,7 +1014,7 @@ def chart_update(n, cx, c_all, ts, got, day):
         else:
             tg = None if half else open_t['e'] + sd * 0.25 * open_t['R']      # after half: trailing, no target
         if tg:
-            levels.append(dict(p=tg, c='#26a69a', t='T', s=2, w=1))
+            levels.append(dict(p=tg, c='#26a69a', t='Target', s=2, w=1))
     done_ = [t for t in ts if t['taken'] and t['exit']]
     net = sum(t['exit']['pnl'] for t in done_)
     last = c_all[-1] if c_all else None
@@ -1039,9 +1038,10 @@ table{width:100%;border-collapse:collapse;font-size:13px}td,th{padding:5px 8px;b
 #key{font-size:12px;color:#7d8794;padding:6px 8px}
 </style></head><body>
 <div id="bar"></div><div id="c"></div>
-<div id="key">Pink: CPR (TC, P, BC; orange on a narrow day). Purple: 30-day POC. Teal dots: 3-day volume lines.
-Green / red dashed: 15-minute high / low, and the open trade's T / SL. Yellow dashed: yesterday's high / low (sweeps). Letters: B buy, S sell, T target or half booked,
-SL stop loss, BE stop at entry, X other exit.</div>
+<div id="key">Pink: CPR top / pivot / bottom (orange on a narrow day). Purple: POC, where the most volume traded in the last 30
+days (buys above it, sells below). Teal dots: 3-day volume lines. Green / red dashed: the first 15 minutes' high / low (a BUY on a
+touch of the high, a SELL on the low, until 10:00, if the filters allow), and the open trade's target / stop loss. Yellow dashed:
+yesterday's high / low. Letters: B buy, S sell, T target or half booked, SL stop loss, BE stop at entry, X other exit.</div>
 <table><thead><tr><th>Time</th><th>Trade</th><th>Entry</th><th>Stop</th><th>Result</th></tr></thead><tbody id="list"></tbody></table>
 <script src="/lwc.js"></script>
 <script>

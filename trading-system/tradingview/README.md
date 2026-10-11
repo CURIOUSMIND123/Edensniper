@@ -58,10 +58,15 @@ The rest of this section describes the original rules.
   - Optional **ladder** (off by default): at the next line book half, move the stop to the broken line, ride the
     rest to the line after. 2026: Sensex net +8,819 (instead of +8,102), Nifty +2,193 (instead of +2,274); all of
     the gain came in January-June.
-- Today's lines are named at the right edge: TC / P / BC (the CPR), POC, 15m high / low, vol (3-day volume lines),
-  and SL / T for an open trade. After the close, the **next session's CPR** is drawn dashed to the right with its
-  width, so on a weekend you already see Monday's levels. (A CPR is fixed for its whole session: it comes from the
-  previous day's high, low and close.) The value area lines are off by default.
+- **Every line is named at the right edge, in words, with its price:** "CPR top (TC)", "CPR pivot (P)", "CPR bottom
+  (BC)", "POC ...: most volume, last 30 days (buys above, sells below)", "3-day volume line ...", "Yesterday HIGH /
+  LOW ...", "STOP LOSS / TARGET ..." for an open trade, and the first 15 minutes' range with today's plan: "15-min
+  HIGH 22,628: BUY on a touch until 10:00, if beyond the POC, if the volume agrees" or "(no BUY today)".
+- **The next session is drawn in advance**, dashed, to the right of the last candle after the close (so on a weekend
+  you already see Monday's levels): its CPR with width, yesterday's high / low (today's), the 30-day POC and the
+  3-day volume lines, each named "Next: ...". (A CPR is fixed for its whole session: it comes from the previous
+  day's high, low and close.) The value area lines are off by default. PCR needs option open interest, which
+  TradingView indicators can't read; the tests found it didn't help anyway.
 - **Trades are drawn as position boxes**, like TradingView's Long / Short Position tool: green = entry to target,
   red = entry to stop, from the entry candle until the trade closes, with the entry ("SELL 72,650"), target, stop,
   book-half level and the result written where the prices are. Settings > "How trades are drawn" switches to small

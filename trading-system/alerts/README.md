@@ -42,8 +42,8 @@ The chart shows a waiting limit order as a blue "LIMIT" line.
 
 While the program runs, open **http://127.0.0.1:8000** in Chrome on the same phone. It's a live candle chart drawn
 from the same free Upstox prices: NIFTY / SENSEX buttons, 1 / 3 / 5 / 15-minute candles, the CPR as three pink lines
-(orange on a narrow day), the 30-day POC (purple), the 3-day volume lines (teal dots), the 15-minute high / low, yesterday's high / low (yellow, for the sweeps), the
-open trade's stop (SL) and target (T), and every trade as a small letter: B buy, S sell, T target or half booked,
+(orange on a narrow day), the 30-day POC (purple), the 3-day volume lines (teal dots), the 15-minute high / low, yesterday's high / low (yellow), the
+open trade's stop loss and target, each named in words on the price scale, and every trade as a small letter: B buy, S sell, T target or half booked,
 SL stop loss, BE stop at entry, X other exit. Under the chart: today's trades with entry, stop and result. It
 refreshes every 5 seconds; the program fetches new prices every 15 seconds. On a weekend it shows the last session.
 The chart library (TradingView's free open-source Lightweight Charts) is downloaded once and kept next to the
