@@ -1,4 +1,4 @@
-"""2026 only: the volume POC from the last 3 / 7 / 15 / 30 sessions (30 = now), or no POC filter at all, on the
+"""2026 only: the volume POC from the last 1 / 2 / 3 / 7 / 15 / 30 sessions, or no POC filter at all, on the
 indicator's default (original rules + the volume check) and without the volume check.
 
     python y2026_pocdays.py nifty        (or sensex)
@@ -54,7 +54,7 @@ if __name__ == '__main__':
     for vc in (True, False):
         print(f"\n{NM.upper()} 2026, original rules {'+ volume check (default)' if vc else 'without the volume check'}")
         base = None
-        for n in (30, 15, 7, 3, 0):
+        for n in (30, 15, 7, 3, 2, 1, 0):
             r = run(n, vc)
             if base is None: base = r
             tag = '' if n == 30 else ('  <- better in both halves' if r['a'] > base['a'] and r['b'] > base['b'] else '')
