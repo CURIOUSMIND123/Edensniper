@@ -1223,6 +1223,31 @@ open. Rupees: half the index points after costs, 3 lots.
   comes first and Sensex when both come together beats trading one index alone or splitting the money.
 - The rupees are the old half-the-points estimate; with time decay (y2026_options.py) all of them are lower.
 
+## 2026: only expiry days and the day before, slightly out-of-the-money options, as many lots as Rs 30,000 buys
+
+Nifty expires on Tuesday and Sensex on Thursday, so this trades Nifty on Monday and Tuesday and Sensex on Wednesday
+and Thursday. `y2026_expiry.py` prices each default trade as the nearest-expiry option (the one expiring that
+afternoon on expiry day) with y2026_options.py's model (the day's implied volatility from the exchange's prices,
+time decay, costs), buys as many lots as Rs 30,000 pays for, one trade at a time.
+
+| Rs 30,000 a trade | Last 30 days (10 Sep - 9 Oct) | All of 2026 (to 9 Oct) |
+|---|---|---|
+| **Expiry + day before, 1 strike out of the money** | 7 trades, 4 won, **−Rs 4,344**; biggest win +17,278, biggest loss −22,898 | 65 trades, 39 won, +Rs 1.18 lakh; biggest win +66,871, biggest loss −30,200; worst fall −96,854 |
+| Expiry + day before, 2 strikes out of the money | −Rs 9,313 | +Rs 0.30 lakh, worst fall −1.51 lakh |
+| Expiry + day before, at the money | +Rs 5,682 | +Rs 1.95 lakh, biggest loss −24,783, worst fall −52,677 |
+| Every day, at the money | +Rs 1,980 | **+Rs 3.43 lakh** (119 trades), worst fall −47,843 |
+
+- One strike out of the money buys more lots (avg 8, up to 31) but the option loses value fast on these days: 17
+  of the 56 trades that made index points lost money as the option, e.g. 10 September, Sensex SELL 9:31-3:15: the
+  index +53 points, the put 158.6 -> 31, −Rs 22,898. Our trades often run for hours (book half, trail, out at
+  3:15), which suits options with more time left.
+- A loss can take the whole Rs 30,000 (20 August, Sensex, 31 lots, premium 46.7 -> 0.1). Reinvesting everything in
+  each trade, the account would have been almost empty by 20 August.
+- By month (1 strike out of the money, expiry + day before): January −7,638, February +22,526, March +89,310, April
+  +41,127, May +39,384, June −20,358, July −9,778, August −25,141, September −4,834, October −7,073.
+- The model prices the option from that day's implied volatility; far out-of-the-money expiry-day prices are the
+  hardest to model, so treat these as estimates.
+
 ## How to re-check all of this
 
 - `python research/fair_price_backtest.py` downloads the candles and re-runs the Fair Price test.
