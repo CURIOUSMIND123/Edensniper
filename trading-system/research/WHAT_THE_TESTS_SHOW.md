@@ -1134,6 +1134,27 @@ through the alert program's own logic:
 - Every extra filter removed more profit than loss; none was better in both halves on both indices. The volume check
   already does the sorting; tightening it further mostly drops winners.
 
+## The last 3 months on gold, crude oil and EUR/USD
+
+`y2026_markets.py` runs the default (original rules + volume check, the alert program's own logic) on gold (XAUUSD),
+WTI crude and EUR/USD, 1-minute data from Dukascopy (`fetch_fx.py`; MCX gold and crude follow these prices), 9 July -
+9 October 2026. These markets trade almost around the clock, so a session as long as the NSE one (6 h 15 min) is cut
+out of each day, starting 9:00 in India (MCX open), 8:00 in London or 8:00 in New York; volume is the market's own
+tick volume; costs about the spread plus commission. Results in % of the price, so markets compare.
+
+| 9 Jul - 9 Oct 2026 | Trades | Won | Net, % of price | Worst fall |
+|---|---|---|---|---|
+| Nifty | 19 | 89% | **+1.57%** | −0.28% |
+| Sensex | 16 | 88% | **+1.11%** | −0.29% |
+| Gold, India 9:00 / London 8:00 / New York 8:00 | 23 / 19 / 30 | 57 / 58 / 43% | −0.56 / −0.54 / −2.64% | −1.67 / −1.15 / −3.02% |
+| WTI crude, India 9:00 / London 8:00 / New York 8:00 | 44 / 45 / 50 | 43 / 53 / 42% | +2.42 / −1.84 / −2.71% | −2.51 / −4.02 / −6.43% |
+| EUR/USD, India 9:00 / London 8:00 / New York 8:00 | 16 / 8 / 17 | 19 / 50 / 41% | −0.03 / −0.05 / −0.26% | −0.08 / −0.10 / −0.30% |
+
+- Gold and EUR/USD lost in every session. Crude made money only from the India 9:00 start, all of it in the first 9
+  days of October (+3.28%; July −0.89%, August +0.61%, September −0.57%), with a worst fall 9x Nifty's.
+- Without the volume check every market did the same or worse.
+- The rules were built and adjusted on Nifty / Sensex; they do not carry over. Three months is a short sample.
+
 ## How to re-check all of this
 
 - `python research/fair_price_backtest.py` downloads the candles and re-runs the Fair Price test.
