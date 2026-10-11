@@ -1,5 +1,5 @@
-"""2026 only: the indicator's strategy (original rules + the volume check, as the alert program trades it) on gold,
-crude oil and currency pairs, compared with Nifty and Sensex.
+"""The last 3 months (9 July - 9 October 2026): the indicator's strategy (original rules + the volume check, as the
+alert program trades it) on gold, crude oil and currency pairs, compared with Nifty and Sensex.
 
     python y2026_markets.py            (needs fetch_fx.py first)
 
@@ -10,7 +10,7 @@ of the first 15 minutes until 45 minutes in, the 3-day volume lines until an hou
 before the end, the 30-day volume profile and the volume check on the market's own (tick) volume.
 Costs a trade: gold $0.40, crude $0.03, EUR/USD and GBP/USD 1.0-1.2 pips, USD/JPY 1.2 pips (about the spread plus
 commission). Results in % of the price (the sum of each trade's move after costs), so markets compare; Nifty and
-Sensex the same way. January-June and July-October separately.
+Sensex the same way, over the same 3 months; by month.
 """
 import collections, datetime as dt, json, sys, zoneinfo
 import numpy as np
@@ -20,7 +20,8 @@ import cprb_alerts as A
 SPECS = {'XAUUSD': ('gold', 0.8, 0.40), 'LIGHTCMDUSD': ('WTI crude', 0.015, 0.03), 'EURUSD': ('EUR/USD', 0.00025, 0.00010),
          'GBPUSD': ('GBP/USD', 0.0003, 0.00012), 'USDJPY': ('USD/JPY', 0.03, 0.012)}
 SESSIONS = {'India 9:00': ('Asia/Kolkata', 9), 'London 8:00': ('Europe/London', 8), 'New York 8:00': ('America/New_York', 8)}
-FIRST, LAST = dt.date(2025, 10, 1), dt.date(2026, 10, 9)
+FIRST, LAST = dt.date(2026, 5, 15), dt.date(2026, 10, 9)
+START = '2026-07-09'
 
 def sessions(sym, tz, hour):
     z = np.load(f'../.cache/fx_{sym}.npz'); t = z['t']
@@ -44,7 +45,7 @@ def run(sym, sess, vol, vcheck):
     A.RULES, A.SWEEP, A.VOLCHECK = 'classic', False, vcheck
     out = []
     for d in sorted(sess):
-        if d < '2026-01-01': continue
+        if d < START: continue
         try: cx = A.context(spec, sess, vol, d)
         except SystemExit: continue
         cx['tvol'] = vol.get(d, {})
@@ -53,15 +54,18 @@ def run(sym, sess, vol, vcheck):
     return out
 
 def stats(ts):
-    p = [t['pct'] for t in ts]; a = sum(t['pct'] for t in ts if t['d'] < '2026-07-01')
+    ts = [t for t in ts if t['d'] >= START]
+    p = [t['pct'] for t in ts]
+    mo = collections.defaultdict(float)
+    for t in ts: mo[t['d'][5:7]] += t['pct']
     eq = pk = dd = 0
     for v in p: eq += v; pk = max(pk, eq); dd = min(dd, eq - pk)
-    days = len({t['d'] for t in ts})
-    return dict(n=len(p), w=sum(v > 0 for v in p), net=sum(p), a=a, b=sum(p) - a, dd=dd, days=days)
+    return dict(n=len(p), w=sum(v > 0 for v in p), net=sum(p), dd=dd, mo=dict(mo))
 
 def line(label, s):
-    return (f"  {label:30} {s['n']:4} trades ({s['n'] / 9.3:4.1f}/month), {100 * s['w'] / max(1, s['n']):3.0f}% won | net {s['net']:+6.1f}% of price "
-            f"(Jan-Jun {s['a']:+5.1f}%, Jul-Oct {s['b']:+5.1f}%), worst fall {s['dd']:5.1f}%, per trade {s['net'] / max(1, s['n']):+.3f}%")
+    return (f"  {label:30} {s['n']:3} trades ({s['n'] / 3:4.1f}/month), {100 * s['w'] / max(1, s['n']):3.0f}% won | net {s['net']:+6.2f}% of price, "
+            f"worst fall {s['dd']:5.2f}%, per trade {s['net'] / max(1, s['n']):+.3f}% | by month " +
+            ', '.join(f"{k}: {v:+.2f}%" for k, v in sorted(s['mo'].items())))
 
 def index_line():
     out = []
@@ -73,7 +77,7 @@ def index_line():
     return out
 
 if __name__ == '__main__':
-    print("2026 (to 9 October), original rules + volume check, in % of the price after costs")
+    print("9 July - 9 October 2026, original rules + volume check, in % of the price after costs")
     for nm, ts in index_line(): print(line(f"{nm} (NSE / BSE session)", stats(ts)))
     res = {}
     for sym, (name, _, _) in SPECS.items():

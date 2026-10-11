@@ -3,7 +3,7 @@
     python fetch_fx.py                 (all)    or: python fetch_fx.py XAUUSD EURUSD
 
 Symbols: XAUUSD (gold, USD an ounce), LIGHTCMDUSD (WTI crude, USD a barrel), EURUSD, GBPUSD, USDJPY.
-1 October 2025 to 9 October 2026, bid prices, UTC times, tick volume. Saved to ../.cache/fx_{symbol}.npz with arrays
+15 May to 9 October 2026 (the last 3 months tested, plus history for the profiles), bid prices, UTC times, tick volume. Saved to ../.cache/fx_{symbol}.npz with arrays
 t (epoch minutes, UTC), o, h, l, c, v. Gold and crude on MCX follow these international prices closely.
 """
 import datetime as dt, lzma, os, struct, sys, time, urllib.request
@@ -11,7 +11,7 @@ import numpy as np
 
 SYMS = {'XAUUSD': 1000.0, 'LIGHTCMDUSD': 1000.0, 'EURUSD': 100000.0, 'GBPUSD': 100000.0, 'USDJPY': 1000.0}
 HDR = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)', 'Referer': 'https://www.dukascopy.com/swiss/english/marketwatch/historical/'}
-FIRST, LAST = dt.date(2025, 10, 1), dt.date(2026, 10, 9)
+FIRST, LAST = dt.date(2026, 5, 15), dt.date(2026, 10, 9)
 
 def day(sym, d):
     url = f"https://datafeed.dukascopy.com/datafeed/{sym}/{d.year}/{d.month - 1:02d}/{d.day:02d}/BID_candles_min_1.bi5"
