@@ -7,14 +7,17 @@ small-stop rules, y2026_rr.py for the 1:4 rules).
 
 1. Levels: CPR, narrow rank, CPR vs yesterday's, 30-day POC and 3-day volume lines match y2026.py for every 2026 day.
 2. Trades on whole days: same trades (start minute and points) as the backtest, one book, with and without the ladder.
-3. Minute by minute (as it runs live) on every 2026 day: nothing it already said changes later, and at the end of the
-   day it has the same trades as on the whole day.
+3. The default POC (Nifty 15 sessions, Sensex none): the same POC and trades as y2026_pocdays.py.
+4. Minute by minute (as it runs live, default POC) on every 2026 day: nothing it already said changes later, and at
+   the end of the day it has the same trades as on the whole day.
 """
 import collections, sys
 import y2026 as Y, y2026_combo as K, y2026_improve as I, y2026_vol_lines as V, cpr_orb as C, y2026_short as S, y2026_reversal as RV
 import y2026_rr as RR, y2026_smc as M, y2026_sweep as SW
 sys.path.insert(0, '../../alerts')
 import cprb_alerts as A
+POC_NOW = dict(A.POC_DAYS)
+A.POC_DAYS = dict.fromkeys(A.POC_DAYS, 30)           # the backtests in 1. and 2. use the 30-day POC
 
 spec = A.SPEC[Y.B.name]
 sess = {d: Y.one[d] for d in Y.days}
@@ -35,11 +38,11 @@ for d in Y.D26:
     bad['lines'] += len(L) != len(cx['lines']) or any(abs(a - b) > 1e-9 for a, b in zip(L, cx['lines']))
 print(f"{Y.B.name.upper()} levels on {len(Y.D26)} days, mismatches: {dict(bad) or 'none'}")
 
-def mine(ladder, rules='classic', sweep=False, vcheck=False):
+def mine(ladder, rules='classic', sweep=False, vcheck=False, cxs=None):
     A.SWEEP, A.VOLCHECK = sweep, vcheck
     out = collections.defaultdict(list)
     for d in Y.D26:
-        for t in A.day_trades(CX[d], Y.one[d], 929, True, ladder, rules):
+        for t in A.day_trades((cxs or CX)[d], Y.one[d], 929, True, ladder, rules):
             if t['taken']: out[d].append((t['m'], round(t['exit']['pnl'], 6)))
     return out
 
@@ -84,11 +87,26 @@ for label, a, b in (('volume', mine(False, vcheck=True), ref_v), ('classic', min
           f"net {sum(p for v in b.values() for _, p in v):+,.0f} | days that differ: {len(diff)} {diff[:5]}")
     for d in diff[:3]: print(f"     {d} alerts {a[d]} backtest {b[d]}")
 
+# the default POC (POC_DAYS: Nifty 15 sessions, Sensex none) against y2026_pocdays.py
+A.POC_DAYS = POC_NOW
+import y2026_pocdays as PD
+N = A.POC_DAYS[Y.B.name]
+CXD = {d: A.context(spec, sess, vol, d, daily) for d in Y.D26}
+for d in Y.D26: CXD[d]['tvol'] = vol.get(d, {})
+bad = sum((CXD[d]['poc'] is None) != (N == 0) or (N > 0 and abs(CXD[d]['poc'] - PD.poc(d, N)) > 1e-9) for d in Y.D26)
+ref_p = collections.defaultdict(list)
+for t in PD.trades(N, True): ref_p[t['d']].append((t['m'], round(t['pnl'], 6)))
+a = mine(False, vcheck=True, cxs=CXD)
+diff = [d for d in Y.D26 if sorted(a[d]) != sorted(ref_p[d])]
+print(f"  {f'POC of the last {N} sessions' if N else 'no POC filter'} (default) + volume check: POC mismatches {bad} | alerts: {sum(len(v) for v in a.values())} trades, "
+      f"net {sum(p for v in a.values() for _, p in v):+,.0f} | y2026_pocdays: {sum(len(v) for v in ref_p.values())} trades, "
+      f"net {sum(p for v in ref_p.values() for _, p in v):+,.0f} | days that differ: {len(diff)} {diff[:5]}")
+
 for rules, sweep, vcheck in (('classic', False, True), ('classic', False, False), ('classic', True, False), ('small', False, False), ('rr', False, False)):
     A.SWEEP, A.VOLCHECK = sweep, vcheck
     changed = 0
     for d in Y.D26:
-        cx, said = CX[d], {}
+        cx, said = CXD[d], {}
         for upto in range(555, 930):
             c1 = [x for x in Y.one[d] if x[0] <= upto]
             for mid, mk, text, push in A.messages(cx, A.day_trades(cx, c1, upto, upto == 929, False, rules), c1, upto, 5):

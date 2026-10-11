@@ -1185,6 +1185,10 @@ Without the volume check: Nifty +2,274 / +2,284 / +2,254 / +2,312 / +1,793 (30 /
   the filter cost 250 points with 17 more trades, so on Nifty the POC filter does useful work.
 - 15 sessions on both made the most of any one setting (+662 points together). Choosing a different window per index
   after seeing the results fits the past more closely; that difference (Rs 6,000) is too small to rely on.
+- **Now the default** (indicator and alerts, from 11 October): 15 sessions on Nifty, no POC filter on Sensex. 2026:
+  Nifty 74 trades +2,177, Sensex 82 trades +9,166, both indices Rs 8.12 lakh at 5 lots (half the index points) instead
+  of Rs 7.60 lakh. Sensex without the POC leans on the volume check: without both it was +7,893 from 152 trades
+  with a worst fall of −1,505. `alerts_check.py` confirms the alert program takes exactly these trades.
 
 ## How to re-check all of this
 

@@ -5,7 +5,8 @@ indicator's default (original rules + the volume check) and without the volume c
 
 The POC (the price where the most NIFTYBEES volume traded over those sessions) is the filter on the CPR Magnet and
 the 9:30 breakout and its reversal: buys only above it, sells only below. Everything else as the alert program
-trades it. January-June and July-October separately.
+trades it. January-June and July-October separately. Result: the alert program and the indicator now use 15 sessions
+on Nifty and no POC filter on Sensex (POC_DAYS in alerts/cprb_alerts.py).
 """
 import collections, sys
 import y2026 as Y
@@ -29,20 +30,19 @@ def poc(d, n):
     prev = [x for x in DAYS if x < d][-n:]
     return A.poc_va(*A.combine([hist(x) for x in prev]), spec['bin'])[0]
 
-class NoPoc:
-    """Stands in for the POC so that every 'beyond the POC' check passes."""
-    def __rsub__(self, other): return self
-    def __rmul__(self, other): return 1.0
-    __mul__ = __rmul__
-
-def run(n, vcheck):
+def trades(n, vcheck):
+    """The taken trades with the POC of the last n sessions (0: no POC filter)."""
     A.RULES, A.SWEEP, A.VOLCHECK = 'classic', False, vcheck
     ts = []
     for d in D26:
         cx = CX[d]; keep = cx['poc']
-        cx['poc'] = NoPoc() if n == 0 else poc(d, n)
-        ts += [dict(d=d, pnl=t['exit']['pnl'], src=t['src']) for t in A.day_trades(cx, Y.one[d], 929, True, False, 'classic') if t['taken']]
+        cx['poc'] = None if n == 0 else poc(d, n)
+        ts += [dict(d=d, m=t['m'], pnl=t['exit']['pnl'], src=t['src']) for t in A.day_trades(cx, Y.one[d], 929, True, False, 'classic') if t['taken']]
         cx['poc'] = keep
+    return ts
+
+def run(n, vcheck):
+    ts = trades(n, vcheck)
     p = [t['pnl'] for t in ts]; a = sum(t['pnl'] for t in ts if t['d'] in H1)
     eq = pk = dd = 0
     for v in p: eq += v; pk = max(pk, eq); dd = min(dd, eq - pk)

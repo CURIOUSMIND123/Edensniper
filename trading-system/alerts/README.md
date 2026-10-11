@@ -7,7 +7,7 @@ month. Brokers' charts (Groww, Dhan, Zerodha) show live prices for free but can'
 default settings) on live 1-minute candles from Upstox's free public candle data. It doesn't need an Upstox account
 or a login. It tells you:
 
-- **before 9:15:** the plan for the day: CPR, narrow or not, the 30-day POC, the 3-day volume lines, yesterday's high
+- **before 9:15:** the plan for the day: CPR, narrow or not, the volume POC (Nifty), the 3-day volume lines, yesterday's high
   and low, the CPR Magnet trigger prices;
 - **9:16:** CPR Magnet BUY / SELL, or "no magnet today";
 - **9:30:** the 15-minute range and the one breakout trade that is still allowed: "SELL when price touches X". Set
@@ -27,6 +27,9 @@ Alerts appear on the screen (with a beep) and, if you set it up, on your phone t
   down candles did. A signal it stops is reported ("skipped: the volume doesn't agree"). About the same points as
   without it from a third fewer trades, with much smaller losing runs. `SWEEP = True` adds liquidity sweeps of
   yesterday's high / low (more points, twice the trades); `LADDER = True` the volume-line ladder.
+  `POC_DAYS = {'nifty': 15, 'sensex': 0}`: the Magnet and the breakout buy only above the volume POC of the last
+  15 sessions on Nifty and sell only below it; Sensex has no POC filter (0). Tested on 2026
+  (`y2026_pocdays.py`): Nifty made the most with a 30- or 15-session POC, Sensex the most with none.
   `STOP_MAX = {'nifty': 30, 'sensex': 100}` holds every stop to that many points (`STOP_MODE`: 'pull' / 'stop' moves
   a wider stop in, 'skip' skips the trade). Tested on 2026 it about halved the profit (`y2026_stopcap.py`), so it
   is off (0).
@@ -42,7 +45,7 @@ The chart shows a waiting limit order as a blue "LIMIT" line.
 
 While the program runs, open **http://127.0.0.1:8000** in Chrome on the same phone. It's a live candle chart drawn
 from the same free Upstox prices: NIFTY / SENSEX buttons, 1 / 3 / 5 / 15-minute candles, the CPR as three pink lines
-(orange on a narrow day), the 30-day POC (purple), the 3-day volume lines (teal dots), the 15-minute high / low, yesterday's high / low (yellow), the
+(orange on a narrow day), the POC (purple, Nifty only), the 3-day volume lines (teal dots), the 15-minute high / low, yesterday's high / low (yellow), the
 open trade's stop loss and target, each named in words on the price scale, and every trade as a small letter: B buy, S sell, T target or half booked,
 SL stop loss, BE stop at entry, X other exit. Under the chart: today's trades with entry, stop and result. It
 refreshes every 5 seconds; the program fetches new prices every 15 seconds. On a weekend it shows the last session.
@@ -114,8 +117,9 @@ On a phone, put the date in `REPLAY_DAY = '2026-10-08'` at the top and press Run
 ## Checked
 
 `research/quant/alerts_check.py` runs it on every 2026 session, minute by minute as it runs live. It took exactly the
-backtest's trades: default (original rules + the volume check) Nifty 70 trades, net +2,214 points, Sensex 68
-trades, net +8,001; original rules alone Nifty 101 trades, net +2,274, Sensex 114 trades, net +8,102 (with the
+backtest's trades: default (original rules + the volume check, POC of the last 15 sessions on Nifty, none on
+Sensex) Nifty 74 trades, net +2,177 points, Sensex 82 trades, net +9,166; with the 30-day POC on both (all the
+figures that follow) Nifty 70 trades, +2,214, Sensex 68 trades, +8,001; original rules alone Nifty 101 trades, net +2,274, Sensex 114 trades, net +8,102 (with the
 ladder +2,193 / +8,819); with sweeps Nifty 203 trades, +2,993, Sensex 223 trades, +9,279; 1:4 rules Nifty 55 trades, net +1,344, Sensex 53 trades, net +4,419;
 small-stop rules Nifty 150 trades, net +842, Sensex 170 trades, net +4,708. Nothing it had already said changed later in the day. The CPR uses the exchange's official daily close
 (downloaded each morning), like TradingView; the official close often differs from the last 1-minute candle.

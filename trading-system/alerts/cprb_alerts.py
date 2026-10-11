@@ -6,7 +6,8 @@ Upstox's free public candle data. It tells you when to BUY (a call) or SELL (a p
 are and when to exit: on this screen, and on your phone through Telegram if you set that up (free).
 Default rules ('classic' with the volume check): the daily plan (CPR Magnet at 9:16 or the 9:30 breakout) and the
 3-day volume lines, one trade at a time; a BUY only when the last 2 hours' up candles carried more volume (NIFTYBEES)
-than the down candles, a SELL only when the down candles did.
+than the down candles, a SELL only when the down candles did. On Nifty the Magnet and the breakout also need price on
+the volume side of the last 15 sessions' POC (buys above it, sells below); Sensex has no POC filter.
 
     python cprb_alerts.py                       run today: start it any time before 9:15, leave it running
     python cprb_alerts.py --replay 2026-10-09   replay a past day in a few seconds, to see what it does
@@ -47,6 +48,9 @@ STOP_MAX = {'nifty': 0, 'sensex': 0}   # 'classic' rules: the most a stop may be
                                   # (0 = each setup's own stop: 0.3% Magnet, the 15-minute range, the previous line)
 STOP_MODE = 'pull'                # a wider stop is: 'pull' moved in (book half / trail scaled to the new stop),
                                   # 'stop' moved in (book half / trail as before), 'skip' not traded
+POC_DAYS = {'nifty': 15, 'sensex': 0}   # the volume POC filter (buys only above it, sells only below) from the
+                                  # last N sessions' volume; 0 = no POC filter. 2026 tests (research/quant/y2026_pocdays.py):
+                                  # Nifty made the most with it, Sensex without it
 SWEEP = False                     # 'classic' rules: also trade liquidity sweeps of yesterday's high / low
 SWEEP_MAX = 3                     # at most this many sweep trades a day
 STOP_PCT = 0.21                   # 'rr' rules: the most a stop may be from entry, in % of price (Sensex ~150, Nifty ~47 points)
@@ -150,7 +154,7 @@ def history(keys, first, last):
     return out
 
 
-# ---------------- levels: CPR, 30-day volume POC, 3-day volume lines ----------------
+# ---------------- levels: CPR, volume POC, 3-day volume lines ----------------
 def levels(h, l, c):
     p = (h + l + c) / 3
     bc = (h + l) / 2
@@ -239,13 +243,18 @@ def context(spec, sess, vol, today, daily=None):
     past = [levels(*D[d][1:])['w'] for d in days[-21:-1]]
     rank = sum(x < lv['w'] for x in past) / 20
     ylv = levels(*D[days[-2]][1:])
-    H = {d: day_hist(sess[d], vol.get(d, {}), spec['bin']) for d in days[-30:]}
-    poc, vah, val = poc_va(*combine([H[d] for d in days[-30:]]), spec['bin'])
+    pn = POC_DAYS.get(spec['name'].lower(), 30)
+    H = {d: day_hist(sess[d], vol.get(d, {}), spec['bin']) for d in days[-max(pn, 3):]}
+    poc, vah, val = poc_va(*combine([H[d] for d in days[-pn:]]), spec['bin']) if pn else (None, None, None)
     return dict(spec, today=today, prev=days[-1], lv=lv, rank=rank, narrow=rank < 1 / 3,
                 rel=1 if lv['bot'] > ylv['top'] else -1 if lv['top'] < ylv['bot'] else 0,
-                yc=D[days[-1]][3], yh=D[days[-1]][1], yl=D[days[-1]][2], poc=poc, vah=vah, val=val, yday=sess[days[-1]],
+                yc=D[days[-1]][3], yh=D[days[-1]][1], yl=D[days[-1]][2], poc=poc, vah=vah, val=val, pocn=pn, yday=sess[days[-1]],
                 yvol=vol.get(days[-1], {}),
                 lines=vol_lines(*combine([H[d] for d in days[-3:]]), spec['bin']))
+
+def poc_ok(cx, side, px):
+    """On the trade's side of the volume POC (buys above, sells below); always, when the index has no POC filter."""
+    return cx['poc'] is None or side * (px - cx['poc']) > 0
 
 
 # ---------------- the trades, on 1-minute candles ----------------
@@ -400,14 +409,14 @@ def plan_trades(cx, c1, upto, over):
     """Daily plan: narrow-CPR day -> breakout; other day -> CPR Magnet at 9:16 if the open qualifies, else breakout."""
     if not c1:
         return []
-    lv, poc, cost = cx['lv'], cx['poc'], cx['cost']
+    lv, cost = cx['lv'], cx['cost']
     if not cx['narrow']:
         o, e = c1[0][1], c1[0][4]
         side = -1 if o > lv['top'] else 1 if o < lv['bot'] else 0
         if side:
             edge = lv['top'] if side < 0 else lv['bot']
             cs = capped_stop(cx, side, e, e - side * 0.3 / 100 * e)
-            if side * (edge - e) >= 0.002 * e and side * (e - poc) > 0 and vok(cx, side, 556, 'MAGNET') and cs:
+            if side * (edge - e) >= 0.002 * e and poc_ok(cx, side, e) and vok(cx, side, 556, 'MAGNET') and cs:
                 stp, R = cs
                 if stop_max(cx):
                     r = run_magnet(c1, side, e, edge, over, cost, side * (e - stp), R)
@@ -426,7 +435,7 @@ def plan_trades(cx, c1, upto, over):
     for side, e, start, m in touches(c1, orh, orl, RANGE_END):
         if m >= CUTOFF:
             break
-        if side == -cx['rel'] or gap != side or side * (e - poc) <= 0 or not vok(cx, side, m, 'BREAKOUT'):
+        if side == -cx['rel'] or gap != side or not poc_ok(cx, side, e) or not vok(cx, side, m, 'BREAKOUT'):
             continue
         stp = orl if side > 0 else orh
         if side * (e - stp) <= 0:
@@ -441,7 +450,7 @@ def plan_trades(cx, c1, upto, over):
             for s2, e2, st2, m2 in touches(c1, orh, orl, r['exit']['m'] + 1):
                 if m2 >= CUTOFF:
                     break
-                if s2 != -side or s2 * (e2 - poc) <= 0 or not vok(cx, s2, m2, 'REVERSAL'):
+                if s2 != -side or not poc_ok(cx, s2, e2) or not vok(cx, s2, m2, 'REVERSAL'):
                     continue
                 stp2 = orl if s2 > 0 else orh
                 if s2 * (e2 - stp2) <= 0:
@@ -575,13 +584,13 @@ def pullback_plan(cx, c1, upto, over, rules):
     if not c1:
         return out, pend
     R = risk_rules(cx, rules)
-    lv, poc, cost = cx['lv'], cx['poc'], cx['cost']
+    lv, cost = cx['lv'], cx['cost']
     if not cx['narrow']:
         o, e = c1[0][1], c1[0][4]
         side = -1 if o > lv['top'] else 1 if o < lv['bot'] else 0
         if side:
             edge = lv['top'] if side < 0 else lv['bot']
-            if side * (edge - e) >= 0.002 * e and side * (e - poc) > 0:
+            if side * (edge - e) >= 0.002 * e and poc_ok(cx, side, e):
                 stp = capped(side, e, e - side * 0.003 * e, R['cap'](e))
                 if R['mag']:
                     tgt, tdesc = e + R['mag'] * (e - stp), f"{R['mag']:g}x the stop"
@@ -603,7 +612,7 @@ def pullback_plan(cx, c1, upto, over, rules):
     for side, e, start, m in touches(c1, orh, orl, RANGE_END):
         if m >= CUTOFF:
             break
-        if side != -cx['rel'] and gap == side and side * (e - poc) > 0:
+        if side != -cx['rel'] and gap == side and poc_ok(cx, side, e):
             sig = (side, m)
             break
     if not sig:
@@ -726,6 +735,11 @@ def option(cx, side, px):
     k = round(px / cx['step']) * cx['step']
     return f"buy the {k:.0f} {'CE (call)' if side > 0 else 'PE (put)'}"
 
+def poc_text(cx, extra):
+    if cx['poc'] is None:
+        return f"No volume POC filter on {cx['name']}: BUYs and SELLs on either side of it."
+    return f"{cx['pocn']}-day volume POC {f2(cx['poc'])}{extra}: buys only above it, sells only below."
+
 def plan_text(cx):
     if RULES in ('small', 'rr'):
         return plan_text_small(cx)
@@ -733,7 +747,7 @@ def plan_text(cx):
     out = [f"{nm} plan for the session after {cx['prev']}",
            f"CPR {f2(lv['bot'])} - {f2(lv['top'])}, pivot {f2(lv['p'])}: " +
            ("NARROW (breakout day)" if cx['narrow'] else "not narrow"),
-           f"30-day volume POC {f2(poc)} (value area {f2(cx['val'])} - {f2(cx['vah'])}): buys only above it, sells only below.",
+           poc_text(cx, f" (value area {f2(cx['val'])} - {f2(cx['vah'])})" if poc is not None else ""),
            "Today's CPR vs yesterday's: " + ("higher -> no breakout SELLs" if cx['rel'] > 0 else
                                              "lower -> no breakout BUYs" if cx['rel'] < 0 else "overlapping -> both ways"),
            f"Yesterday's close {f2(cx['yc'])}: open above it -> breakout BUYs only; below -> SELLs only."]
@@ -743,9 +757,9 @@ def plan_text(cx):
     else:
         sell, buy = lv['top'] / 0.998, lv['bot'] / 1.002
         out.append(f"9:16 CPR MAGNET: SELL if the 9:15 candle opens above {f2(lv['top'])} and closes at or above {f2(sell)}"
-                   + (f" and below the POC {f2(poc)}" if sell < poc else " (not possible today: the POC is below that)") +
+                   + ("" if poc is None else f" and below the POC {f2(poc)}" if sell < poc else " (not possible today: the POC is below that)") +
                    f"; BUY if it opens below {f2(lv['bot'])} and closes at or below {f2(buy)}"
-                   + (f" and above the POC {f2(poc)}" if buy > poc else " (not possible today: the POC is above that)") +
+                   + ("" if poc is None else f" and above the POC {f2(poc)}" if buy > poc else " (not possible today: the POC is above that)") +
                    ". Stop 0.3%, book half at 0.25x the risk, rest to the CPR edge. Otherwise the breakout plan (9:30-10:00).")
     out.append(f"3-day volume lines: {', '.join(f2(x) for x in cx['lines'])}. 9:30-2:30: a 5-minute close through a line "
                "-> trade toward the next line, stop at the previous line, only if the next line is at least 1.5x the stop "
@@ -776,15 +790,15 @@ def plan_text_small(cx):
         mult = PULLBACK_R
     out = [f"{nm} plan for the session after {cx['prev']} ({'1:' + format(RR_TARGET, 'g') + ' trades' if rr else 'small stops'})",
            f"CPR {f2(lv['bot'])} - {f2(lv['top'])}, pivot {f2(lv['p'])}" + (" (NARROW)" if cx['narrow'] else ""),
-           f"30-day volume POC {f2(poc)}: buys only above it, sells only below.",
+           poc_text(cx, ""),
            "Today's CPR vs yesterday's: " + ("higher -> no SELL breakout" if cx['rel'] > 0 else
                                              "lower -> no BUY breakout" if cx['rel'] < 0 else "overlapping -> both ways") +
            f"; yesterday's close {f2(cx['yc'])}: open above it -> BUY breakout only, below -> SELL only."]
     if not cx['narrow']:
         out.append(f"9:16 CPR MAGNET: SELL if the 9:15 candle opens above {f2(lv['top'])} and closes at or above {f2(sell)}"
-                   + (f" and below the POC" if sell < poc else " (not possible today)") +
+                   + ("" if poc is None else f" and below the POC" if sell < poc else " (not possible today)") +
                    f"; BUY if it opens below {f2(lv['bot'])} and closes at or below {f2(buy)}"
-                   + (f" and above the POC" if buy > poc else " (not possible today)") +
+                   + ("" if poc is None else f" and above the POC" if buy > poc else " (not possible today)") +
                    (f". Target {mult:g}x the stop." if rr else ". Target the CPR edge."))
     out.append("9:30-10:00 BREAKOUT, then PULLBACK: when price breaks the 9:15-9:30 high / low (filters above) and goes 0.1% "
                f"beyond it, place a limit order back at that level (until 12:00). Target {mult:g}x the stop.")
@@ -804,7 +818,7 @@ def range_note_small(cx, c1):
                 (" Volume-line trades only." if cx.get('rules_used') == 'small' else ""))
     lvl, word = (orh, 'BUY') if gap > 0 else (orl, 'SELL')
     return (f"{cx['name']} 15-minute range {f2(orl)} - {f2(orh)}. Watching for a break of {f2(lvl)} before 10:00"
-            + ("" if gap * (lvl - cx['poc']) > 0 else f" (only counts beyond the POC {f2(cx['poc'])})") +
+            + ("" if poc_ok(cx, gap, lvl) else f" (only counts beyond the POC {f2(cx['poc'])})") +
             f"; then a {word} limit order on the pullback to it.")
 
 def range_note(cx, c1):
@@ -819,7 +833,7 @@ def range_note(cx, c1):
                (" and sweep" if SWEEP else "") + " trades only."
     lvl, word = (orh, 'BUY') if gap > 0 else (orl, 'SELL')
     other = orl if gap > 0 else orh
-    pocok = gap * (lvl - cx['poc']) > 0
+    pocok = poc_ok(cx, gap, lvl)
     return (f"{cx['name']} 15-minute range {f2(orl)} - {f2(orh)}. Until 10:00: {word} when price touches {f2(lvl)}"
             + ("" if pocok else f" (only if price is {'above' if gap > 0 else 'below'} the POC {f2(cx['poc'])} then)") +
             f", stop {f2(other)}, book half at {f2(lvl + gap * 0.25 * abs(lvl - other))}" +
@@ -972,7 +986,9 @@ def chart_update(n, cx, c_all, ts, got, day):
     lv = cx['lv']
     pink = '#ff9800' if cx['narrow'] else '#e91e63'
     levels = [dict(p=lv['top'], c=pink, t='CPR top', s=0, w=2), dict(p=lv['p'], c=pink, t='Pivot', s=0, w=1),
-              dict(p=lv['bot'], c=pink, t='CPR bottom', s=0, w=2), dict(p=cx['poc'], c='#9c6ade', t='POC 30 days', s=0, w=1)]
+              dict(p=lv['bot'], c=pink, t='CPR bottom', s=0, w=2)]
+    if cx['poc'] is not None:
+        levels.append(dict(p=cx['poc'], c='#9c6ade', t=f"POC {cx['pocn']} days", s=0, w=1))
     levels += [dict(p=x, c='#26a69a', t='Vol line', s=1, w=1) for x in cx['lines']]
     levels += [dict(p=cx['yh'], c='#fdd835', t='Yesterday high', s=2, w=1), dict(p=cx['yl'], c='#fdd835', t='Yesterday low', s=2, w=1)]
     first = [x for x in c_all if x[0] < RANGE_END]
@@ -1038,8 +1054,8 @@ table{width:100%;border-collapse:collapse;font-size:13px}td,th{padding:5px 8px;b
 #key{font-size:12px;color:#7d8794;padding:6px 8px}
 </style></head><body>
 <div id="bar"></div><div id="c"></div>
-<div id="key">Pink: CPR top / pivot / bottom (orange on a narrow day). Purple: POC, where the most volume traded in the last 30
-days (buys above it, sells below). Teal dots: 3-day volume lines. Green / red dashed: the first 15 minutes' high / low (a BUY on a
+<div id="key">Pink: CPR top / pivot / bottom (orange on a narrow day). Purple: the volume POC, where the most volume traded over the
+days its label says (buys above it, sells below; not drawn for an index with no POC filter: Sensex). Teal dots: 3-day volume lines. Green / red dashed: the first 15 minutes' high / low (a BUY on a
 touch of the high, a SELL on the low, until 10:00, if the filters allow), and the open trade's target / stop loss. Yellow dashed:
 yesterday's high / low. Letters: B buy, S sell, T target or half booked, SL stop loss, BE stop at entry, X other exit.</div>
 <table><thead><tr><th>Time</th><th>Trade</th><th>Entry</th><th>Stop</th><th>Result</th></tr></thead><tbody id="list"></tbody></table>
