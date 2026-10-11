@@ -1171,11 +1171,17 @@ without the volume check. Everything else is the alert program's own logic.
 | **POC of the last 15 sessions** | 74 trades, 85% won, +2,177 (+1,828 / +349), worst fall −127 | 72 trades, 83% won, **+8,700** (+7,425 / +1,275) | **Rs 7.89 lakh** |
 | POC of the last 7 sessions | 75 trades, +2,028 (+1,637 / +391), worst fall −145 | 73 trades, +8,668 (+7,307 / +1,361) | Rs 7.63 lakh |
 | POC of the last 3 sessions | 77 trades, +2,086 (+1,730 / +356), worst fall −145 | 75 trades, +8,587 (+7,144 / +1,443) | Rs 7.68 lakh |
+| POC of the last 2 sessions | 77 trades, +2,114 (+1,724 / +390), worst fall −145 | 74 trades, +8,572 (+7,128 / +1,443) | Rs 7.72 lakh |
+| POC of the last session only | 77 trades, +2,114 (+1,724 / +390), worst fall −145 | 72 trades, +8,537 (+7,094 / +1,443) | Rs 7.70 lakh |
 | No POC filter | 87 trades, +1,964 (+1,765 / +198), worst fall −145 | 82 trades, 85% won, +9,166 (+7,575 / +1,590) | Rs 7.77 lakh |
 | Nifty 30 sessions, Sensex 15 | | | Rs 7.95 lakh |
 
-Without the volume check: Nifty +2,274 / +2,284 / +2,254 / +2,312 / +1,793 (30 / 15 / 7 / 3 sessions / none), Sensex
-+8,102 / +8,845 / +8,288 / +8,549 / +7,893, with worst falls of −180 to −352 and −1,109 to −1,505.
+Without the volume check: Nifty +2,274 / +2,284 / +2,254 / +2,312 / +2,332 / +2,389 / +1,793 (30 / 15 / 7 / 3 / 2 / 1
+sessions / none), Sensex +8,102 / +8,845 / +8,288 / +8,549 / +8,517 / +8,483 / +7,893, with worst falls of −180 to
+−352 and −1,109 to −1,505.
+- **The last session's POC alone** (asked 11 October): with the volume check it made less than the default on both
+  indices: Nifty +2,114 (15 sessions +2,177), Sensex +8,537 (no POC filter +9,166). Only without the volume check
+  was it Nifty's best (+2,389), and the default keeps the volume check.
 
 - The window changes only a few trades (Nifty 70 -> 74, Sensex 68 -> 72 at 15 sessions); the 30-day POC is not what
   keeps the number of trades low. The volume check and one-trade-at-a-time do that.
