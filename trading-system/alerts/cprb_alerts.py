@@ -4,10 +4,12 @@
 Follows the same rules as tradingview/cpr_breakout.pine (its default settings) on live 1-minute candles from
 Upstox's free public candle data. It tells you when to BUY (a call) or SELL (a put), where the stop and the target
 are and when to exit: on this screen, and on your phone through Telegram if you set that up (free).
-Default rules ('classic' with the volume check): the daily plan (CPR Magnet at 9:16 or the 9:30 breakout) and the
-3-day volume lines, one trade at a time; a BUY only when the last 2 hours' up candles carried more volume (NIFTYBEES)
-than the down candles, a SELL only when the down candles did. On Nifty the Magnet and the breakout also need price on
-the volume side of the last 15 sessions' POC (buys above it, sells below); Sensex has no POC filter.
+Default rules ('classic'): the daily plan (CPR Magnet at 9:16 or the 9:30 breakout) and the 3-day volume lines, one
+trade at a time, set differently for each index (the most profit in the 2026 tests):
+  Nifty:  the Magnet and the breakout only on the volume side of yesterday's POC (buys above it, sells below); no
+          volume check.
+  Sensex: the volume check on every signal (a BUY only when the last 2 hours' up candles carried more NIFTYBEES volume
+          than the down candles, a SELL only when the down candles did); no POC filter.
 
     python cprb_alerts.py                       run today: start it any time before 9:15, leave it running
     python cprb_alerts.py --replay 2026-10-09   replay a past day in a few seconds, to see what it does
@@ -40,17 +42,19 @@ RULES = 'classic'                 # 'classic': the original rules (daily plan + 
                                   # 'rr': 1:4 trades. Stop at most STOP_PCT % of price, target RR_TARGET x the stop,
                                   #       held until the target, the stop or 3:15. Pullback entry and CPR Magnet only
                                   # 'small': stops of at most STOP_CAP points, out within HOLD_MIN minutes, pullback entry
-VOLCHECK = True                   # 'classic' rules: the volume check (Dr David Paul): a BUY only when, over the last
-                                  # VOL_WINDOW 5-minute candles, the up candles carried more volume than the down
-                                  # candles (price and volume moving together); a SELL only when the down candles did
+VOLCHECK = {'nifty': False, 'sensex': True}   # 'classic' rules: the volume check (Dr David Paul): a BUY only when,
+                                  # over the last VOL_WINDOW 5-minute candles, the up candles carried more volume than
+                                  # the down candles (price and volume moving together); a SELL only when the down
+                                  # candles did. One setting for each index (or True / False for both)
 VOL_WINDOW = 24                   # 24 five-minute candles = the last 2 hours (early in the day: yesterday's last ones)
 STOP_MAX = {'nifty': 0, 'sensex': 0}   # 'classic' rules: the most a stop may be from entry, in index points
                                   # (0 = each setup's own stop: 0.3% Magnet, the 15-minute range, the previous line)
 STOP_MODE = 'pull'                # a wider stop is: 'pull' moved in (book half / trail scaled to the new stop),
                                   # 'stop' moved in (book half / trail as before), 'skip' not traded
-POC_DAYS = {'nifty': 15, 'sensex': 0}   # the volume POC filter (buys only above it, sells only below) from the
-                                  # last N sessions' volume; 0 = no POC filter. 2026 tests (research/quant/y2026_pocdays.py):
-                                  # Nifty made the most with it, Sensex without it
+POC_DAYS = {'nifty': 1, 'sensex': 0}    # the volume POC filter (buys only above it, sells only below) from the
+                                  # last N sessions' volume (1 = yesterday's); 0 = no POC filter. 2026 tests
+                                  # (research/quant/y2026_pocdays.py): Nifty made the most with yesterday's POC and no
+                                  # volume check, Sensex with the volume check and no POC filter
 SWEEP = False                     # 'classic' rules: also trade liquidity sweeps of yesterday's high / low
 SWEEP_MAX = 3                     # at most this many sweep trades a day
 STOP_PCT = 0.21                   # 'rr' rules: the most a stop may be from entry, in % of price (Sensex ~150, Nifty ~47 points)
@@ -251,6 +255,10 @@ def context(spec, sess, vol, today, daily=None):
                 yc=D[days[-1]][3], yh=D[days[-1]][1], yl=D[days[-1]][2], poc=poc, vah=vah, val=val, pocn=pn, yday=sess[days[-1]],
                 yvol=vol.get(days[-1], {}),
                 lines=vol_lines(*combine([H[d] for d in days[-3:]]), spec['bin']))
+
+def vcheck(nm):
+    """Is the volume check on for this index ('nifty' / 'NIFTY' / ...)?"""
+    return VOLCHECK.get(nm.lower(), True) if isinstance(VOLCHECK, dict) else bool(VOLCHECK)
 
 def poc_ok(cx, side, px):
     """On the trade's side of the volume POC (buys above, sells below); always, when the index has no POC filter."""
@@ -703,12 +711,12 @@ def day_trades(cx, c1, upto, over=False, ladder=False, rules=None):
     else:
         cx['rules_used'] = 'classic'
         own = cx.get('vf') is not None                   # a check set from outside (tests)
-        if VOLCHECK and not own:
+        if vcheck(cx['name']) and not own:
             cx['vf'] = volume_fn(cx, c1, upto)
         cx['vlog'] = {}
         ts = plan_trades(cx, c1, upto, over) + vol_trades(cx, c1, upto, over, ladder) + \
             (sweep_trades(cx, c1, upto, over) if SWEEP else [])
-        if VOLCHECK and not own:
+        if vcheck(cx['name']) and not own:
             cx['vf'] = None
     ts.sort(key=lambda t: (t['m'], {'VOLUME LINE': 1, 'SWEEP': 2}.get(t['src'], 0)))
     free = nsw = 0
@@ -738,7 +746,8 @@ def option(cx, side, px):
 def poc_text(cx, extra):
     if cx['poc'] is None:
         return f"No volume POC filter on {cx['name']}: BUYs and SELLs on either side of it."
-    return f"{cx['pocn']}-day volume POC {f2(cx['poc'])}{extra}: buys only above it, sells only below."
+    span = "Yesterday's" if cx['pocn'] == 1 else f"{cx['pocn']}-day"
+    return f"{span} volume POC {f2(cx['poc'])}{extra}: buys only above it, sells only below."
 
 def plan_text(cx):
     if RULES in ('small', 'rr'):
@@ -767,7 +776,7 @@ def plan_text(cx):
     if stop_max(cx):
         out.append(f"Every stop at most {stop_max(cx):g} points from entry" +
                    (" (wider ones: trade skipped)." if STOP_MODE == 'skip' else " (wider ones moved in)."))
-    if VOLCHECK:
+    if vcheck(cx['name']):
         out.append("Volume check on every signal: a BUY only if, over the last 2 hours, the up candles carried more volume "
                    "(NIFTYBEES) than the down candles; a SELL only if the down candles did. Otherwise the signal is skipped.")
     if SWEEP:
@@ -837,7 +846,7 @@ def range_note(cx, c1):
     return (f"{cx['name']} 15-minute range {f2(orl)} - {f2(orh)}. Until 10:00: {word} when price touches {f2(lvl)}"
             + ("" if pocok else f" (only if price is {'above' if gap > 0 else 'below'} the POC {f2(cx['poc'])} then)") +
             f", stop {f2(other)}, book half at {f2(lvl + gap * 0.25 * abs(lvl - other))}" +
-            (" (only if the volume check agrees then)." if VOLCHECK else "."))
+            (" (only if the volume check agrees then)." if vcheck(cx['name']) else "."))
 
 def messages(cx, ts, c1, upto, lots):
     """(id, minute known, text, important) for everything that has happened so far."""
@@ -988,7 +997,7 @@ def chart_update(n, cx, c_all, ts, got, day):
     levels = [dict(p=lv['top'], c=pink, t='CPR top', s=0, w=2), dict(p=lv['p'], c=pink, t='Pivot', s=0, w=1),
               dict(p=lv['bot'], c=pink, t='CPR bottom', s=0, w=2)]
     if cx['poc'] is not None:
-        levels.append(dict(p=cx['poc'], c='#9c6ade', t=f"POC {cx['pocn']} days", s=0, w=1))
+        levels.append(dict(p=cx['poc'], c='#9c6ade', t='POC yesterday' if cx['pocn'] == 1 else f"POC {cx['pocn']} days", s=0, w=1))
     levels += [dict(p=x, c='#26a69a', t='Vol line', s=1, w=1) for x in cx['lines']]
     levels += [dict(p=cx['yh'], c='#fdd835', t='Yesterday high', s=2, w=1), dict(p=cx['yl'], c='#fdd835', t='Yesterday low', s=2, w=1)]
     first = [x for x in c_all if x[0] < RANGE_END]
@@ -1247,7 +1256,7 @@ def live(names, lots, ladder, plan_only=False):
         upto = min(mnow - 1, CLOSE - 1)
         late = False
         vlast = CLOSE
-        if VOLCHECK and RULES == 'classic':
+        if any(vcheck(n) for n in names) and RULES == 'classic':
             try:
                 tvol = {m: v[4] for m, v in fetch_today(BEES).get(today, {}).items()}
                 vlast = max(tvol) if tvol else OPEN - 1
@@ -1271,12 +1280,13 @@ def live(names, lots, ladder, plan_only=False):
                     print(f"  {cx['name']}: no candles yet today ({hhmm(mnow)}). Market holiday or a data problem?")
                     shown[n] = 'none'
                 continue
-            if (c1[-1][0] < upto or vlast < upto) and now.second < 40:
+            vl = vlast if vcheck(n) else CLOSE               # the NIFTYBEES volume matters only with the volume check
+            if (c1[-1][0] < upto or vl < upto) and now.second < 40:
                 late = True                                   # the last minute isn't in yet: look again soon
                 if CHART:
                     chart_update(n, cx, c_all, last_ts.get(n, []), c1[-1][0], today)
                 continue
-            got = min(upto, c1[-1][0], vlast)                 # data complete up to here (the source can lag)
+            got = min(upto, c1[-1][0], vl)                    # data complete up to here (the source can lag)
             c1 = [x for x in c1 if x[0] <= got]
             if not c1:
                 continue

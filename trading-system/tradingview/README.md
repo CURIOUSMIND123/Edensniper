@@ -4,21 +4,22 @@
 
 File: [`cpr_breakout.pine`](cpr_breakout.pine). An indicator; reads 1-minute candles underneath for exits.
 
-**Default rules now: the original rules + the volume check, with the POC filter on Nifty only** (Settings > Trade
-style > Rules = "Original"; Settings > "Volume check"; Settings > Volume zones). The original rules (daily plan +
-3-day volume lines) are described below. The volume check (Dr David Paul's reading of volume: in a healthy up move
-price and volume move together; in distribution the falls come on heavy volume and the rallies on light volume):
-- A BUY is taken only if, over the last 24 five-minute candles (2 hours), the up candles carried more volume
-  (NIFTYBEES) than the down candles; a SELL only if the down candles did. The box says which side is allowed now.
-- **The POC filter** (the Magnet and the 9:30 breakout: buys only above the POC, sells only below) uses the last
-  **15 sessions on Nifty**, and **Sensex has none** ("Volume POC on Nifty / Sensex: last N sessions", 0 = no POC
-  filter). 2026 with the volume check (`research/quant/y2026_pocdays.py`): Nifty 30 sessions +2,214, 15 sessions
-  +2,177, no filter +1,964; Sensex 30 sessions +8,001, 15 sessions +8,700, no filter +9,166, better in both halves.
-- 2026 (1 Jan - 9 Oct), after costs, the default: Nifty 74 trades, 85% won, net **+2,177**, worst fall **−127**;
-  Sensex 82 trades, 85% won, net **+9,166**, worst fall **−336**. Without the volume check: Nifty 98 trades, +2,284,
-  worst fall −180; Sensex 152 trades, +7,893, worst fall −1,505 (`research/quant/y2026_volume.py`,
-  `y2026_pocdays.py`). With the 30-day POC on both (the default until 11 October): Nifty 70 trades, +2,214; Sensex 68
-  trades, +8,001.
+**Default rules now: the original rules, set differently for each index** (Settings > Trade style > Rules =
+"Original"; Settings > Volume check; Settings > Volume zones). The indicator sees which index the chart is.
+- **Nifty:** the Magnet and the 9:30 breakout only on the volume side of **yesterday's POC** (buys above it, sells
+  below); **no volume check**.
+- **Sensex:** **the volume check** on every signal; **no POC filter**.
+- The volume check (Dr David Paul's reading of volume: in a healthy up move price and volume move together; in
+  distribution the falls come on heavy volume and the rallies on light volume): a BUY only if, over the last 24
+  five-minute candles (2 hours), the up candles carried more volume (NIFTYBEES) than the down candles; a SELL only if
+  the down candles did. The box says which side is allowed now.
+- 2026 (1 Jan - 9 Oct), after costs, the default: Nifty 93 trades, 80% won, net **+2,389** (Jan-Jun +1,990, Jul-Oct
+  +398), worst fall **−204**; Sensex 82 trades, 85% won, net **+9,166** (Jan-Jun +7,575, Jul-Oct +1,590), worst fall
+  **−336** (`research/quant/y2026_pocdays.py`). With the 30-day POC and the volume check on both (the default until
+  11 October): Nifty 70 trades, +2,214, worst fall −138; Sensex 68 trades, +8,001.
+- How each setting did (net points 2026): Nifty with the volume check, POC of 30 / 15 / 1 sessions / none: +2,214 /
+  +2,177 / +2,114 / +1,964; without it: +2,274 / +2,284 / **+2,389** / +1,793. Sensex with the volume check: +8,001 /
+  +8,700 / +8,537 / **+9,166**; without it: +8,102 / +8,845 / +8,483 / +7,893 (worst fall −1,505).
 - **Liquidity sweeps** of yesterday's high / low (yellow lines) are in their own settings group, off by default:
   more points (Nifty +2,993, Sensex +9,279 without the volume check) but twice the trades.
 - Also tested and not added: the squeeze, Smart Money Concepts, the low-volume areas of the last 2 days' volume
@@ -41,8 +42,8 @@ The rest of this section describes the original rules.
 - Draws the CPR as three pink lines: TC (top), the pivot P (middle) and BC (bottom), from yesterday's official
   high, low and close; orange on narrow days, with its width in the box ("55 pts (0.25%) normal"). The CPR
   shows on any intraday chart; the trades need a 5-minute chart. Also the first 15-minute candle's high and low,
-  the volume point of control (purple, the price where the most NIFTYBEES volume traded over the last 15
-  sessions; Nifty only) with its value area, and (if switched on) the EMA 50.
+  the volume point of control (purple, the price where the most NIFTYBEES volume traded yesterday; Nifty only)
+  with its value area, and (if switched on) the EMA 50.
 - **Default = daily plan, one plan per day.** Narrow-CPR day: CPR Breakout scalp. Other day: CPR Magnet at 9:16
   if the open is 0.2%+ beyond the CPR, otherwise the CPR Breakout scalp.
   - CPR Magnet: trade back toward the CPR, stop 0.3%, book half at 0.25 x the risk, stop to entry, rest to the
@@ -64,7 +65,7 @@ The rest of this section describes the original rules.
     rest to the line after. 2026: Sensex net +8,819 (instead of +8,102), Nifty +2,193 (instead of +2,274); all of
     the gain came in January-June.
 - **Every line is named at the right edge, in words, with its price:** "CPR top (TC)", "CPR pivot (P)", "CPR bottom
-  (BC)", "POC ...: most volume, last 15 days (buys above, sells below)" (Nifty), "3-day volume line ...", "Yesterday HIGH /
+  (BC)", "POC ...: most volume, yesterday (buys above, sells below)" (Nifty), "3-day volume line ...", "Yesterday HIGH /
   LOW ...", "STOP LOSS / TARGET ..." for an open trade, and the first 15 minutes' range with today's plan: "15-min
   HIGH 22,628: BUY on a touch until 10:00, if beyond the POC, if the volume agrees" or "(no BUY today)".
 - **The next session is drawn in advance**, dashed, to the right of the last candle after the close (so on a weekend

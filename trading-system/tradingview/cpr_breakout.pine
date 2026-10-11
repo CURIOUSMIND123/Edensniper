@@ -4,21 +4,26 @@
 // ============================================================================
 // CPR Breakout: NIFTY or SENSEX, 5-MINUTE chart (1-minute data is read underneath for exits)
 // Draws the CPR (three pink lines; orange on narrow days), the first 15-minute candle's high / low, the volume point
-// of control (POC: the price where the most volume traded over the last 15 sessions; volume from NIFTYBEES because
-// the index has none; Nifty only) with its value area, and the 5-minute EMA 50. Every filter is in Settings.
-// DEFAULT RULES = ORIGINAL (daily plan + 3-day volume lines, described below) + THE VOLUME CHECK, one trade at a time,
-// with the POC filter from the last 15 sessions on Nifty and NO POC FILTER ON SENSEX:
+// of control (POC: the price where the most volume traded; volume from NIFTYBEES because the index has none; Nifty
+// only, from yesterday) with its value area, and the 5-minute EMA 50. Every filter is in Settings.
+// DEFAULT RULES = ORIGINAL (daily plan + 3-day volume lines, described below), one trade at a time, SET DIFFERENTLY
+// FOR EACH INDEX (the most profit in the 2026 tests; the indicator sees which index the chart is):
+//   NIFTY:  the Magnet and the breakout only on the volume side of YESTERDAY'S POC (buys above it, sells below);
+//           NO VOLUME CHECK.
+//   SENSEX: THE VOLUME CHECK on every signal; NO POC FILTER.
 //   THE VOLUME CHECK (Dr David Paul: in a healthy up move price and volume move together, in distribution the falls
 //   come on heavy volume and the rallies on light volume): a BUY is taken only if, over the last 24 five-minute
 //   candles (2 hours; early in the day yesterday's last ones), the up candles carried more volume (NIFTYBEES) than
 //   the down candles; a SELL only if the down candles did. The box shows which side is allowed now.
-//   2026 (1 Jan - 9 Oct), after costs: Nifty 74 trades, 85% won, net +2,177 (Jan-Jun +1,828, Jul-Oct +349), worst
-//   fall -127; Sensex 82 trades, 85% won, net +9,166 (Jan-Jun +7,575, Jul-Oct +1,590), worst fall -336. Without the
-//   check: Nifty 98 trades, +2,284, worst fall -180; Sensex 152 trades, +7,893, worst fall -1,505. Reference:
-//   research/quant/y2026_volume.py (and alerts/cprb_alerts.py, VOLCHECK = True).
-// THE POC WINDOW (research/quant/y2026_pocdays.py, with the volume check): Nifty 30 sessions +2,214, 15 +2,177,
-//   7 +2,028, 3 +2,086, no POC filter +1,964; Sensex 30 sessions +8,001, 15 +8,700, 7 +8,668, 3 +8,587, no POC
-//   filter +9,166 (better in both halves). Settings > Volume zones sets it for each index (0 = no POC filter).
+//   2026 (1 Jan - 9 Oct), after costs: Nifty 93 trades, 80% won, net +2,389 (Jan-Jun +1,990, Jul-Oct +398), worst
+//   fall -204; Sensex 82 trades, 85% won, net +9,166 (Jan-Jun +7,575, Jul-Oct +1,590), worst fall -336.
+//   Reference: research/quant/y2026_pocdays.py (and alerts/cprb_alerts.py, POC_DAYS and VOLCHECK).
+// THE POC WINDOW AND THE VOLUME CHECK (y2026_pocdays.py), net points 2026:
+//   Nifty, with the check:     POC of 30 sessions +2,214, 15 +2,177, 7 +2,028, 3 +2,086, 2 +2,114, 1 +2,114, none +1,964
+//   Nifty, without the check:  30 +2,274, 15 +2,284, 7 +2,254, 3 +2,312, 2 +2,332, 1 +2,389 (worst fall -204), none +1,793
+//   Sensex, with the check:    30 +8,001, 15 +8,700, 7 +8,668, 3 +8,587, 2 +8,572, 1 +8,537, none +9,166
+//   Sensex, without the check: 30 +8,102, 15 +8,845, 7 +8,288, 3 +8,549, 2 +8,517, 1 +8,483, none +7,893 (worst fall -1,505)
+//   Settings > Volume zones and Settings > Volume check set them for each index.
 // LIQUIDITY SWEEPS of yesterday's high / low (off by default; Settings): a 5-minute candle (9:30-2:30) goes above
 //   yesterday's high and closes back below it -> SELL; below yesterday's low and back above it -> BUY. Stop 0.02%
 //   beyond the candle, target 3x the stop, at most 3 a day. 2026 without the volume check: Nifty +2,993, Sensex
@@ -123,7 +128,8 @@ vlRR   = input.float(1.5, "Skip when the next line is less than this x the stop 
 vlLad  = input.bool(false, "Ladder: at the next line book half, move the stop to the broken line, ride the rest to the line after", group = G5, tooltip = "2026 test, whole indicator: Sensex net +8,612 instead of +7,894 (all of the gain in Jan-Jun), Nifty +2,373 instead of +2,454. Booking half needs at least 2 lots.")
 vlShow = input.bool(true, "Draw the volume lines", group = G5)
 G7 = "Volume check (Dr David Paul; original rules)"
-vcOn   = input.bool(true, "Volume check: BUY only when the up candles carried more volume than the down candles (SELL the other way)", group = G7, tooltip = "Price and volume move together in a healthy up move (rises on heavy volume, dips on light volume); in distribution the falls come on heavy volume and the rallies on light volume. Volume from the 'Volume from' symbol (NIFTYBEES). Over the last N five-minute candles closed by the signal. 2026: Nifty 74 trades instead of 98, net +2,177 instead of +2,284, worst fall -127 instead of -180; Sensex 82 instead of 152, +9,166 instead of +7,893, worst fall -336 instead of -1,505.")
+vcNf   = input.bool(false, "Volume check on Nifty: BUY only when the up candles carried more volume than the down candles (SELL the other way)", group = G7, tooltip = "Price and volume move together in a healthy up move (rises on heavy volume, dips on light volume); in distribution the falls come on heavy volume and the rallies on light volume. Volume from the 'Volume from' symbol (NIFTYBEES). Over the last N five-minute candles closed by the signal. 2026 Nifty with yesterday's POC: 93 trades, net +2,389, worst fall -204 without the check; 77 trades, +2,114, worst fall -145 with it.")
+vcSx   = input.bool(true, "Volume check on Sensex", group = G7, tooltip = "2026 Sensex with no POC filter: 82 trades, net +9,166, worst fall -336 with the check; 152 trades, +7,893, worst fall -1,505 without it.")
 vcN    = input.int(24, "Volume check: over the last N five-minute candles (24 = 2 hours)", minval = 6, maxval = 100, group = G7)
 G6 = "Liquidity sweeps of yesterday's high / low (same book; original rules)"
 swOn   = input.bool(false, "Trade liquidity sweeps: a 5-minute candle goes beyond yesterday's high / low and closes back -> the other way", group = G6, tooltip = "9:30-2:30, only when no other trade is open. Above yesterday's high and back below -> SELL; below yesterday's low and back above -> BUY. Stop 0.02% beyond the candle's high / low (skipped if wider than 0.5% of price), target 3x the stop, out by 3:15. 2026: Nifty +2,993 instead of +2,274, Sensex +9,279 instead of +8,102.")
@@ -146,10 +152,10 @@ pdShow  = input.bool(true, "Show yesterday's high and low (yellow)", group = G2)
 nextLv  = input.bool(true, "After the close, also draw the next session's yesterday high / low, volume POC and 3-day volume lines", group = G2)
 G3 = "Volume zones"
 volSym  = input.symbol("NSE:NIFTYBEES", "Volume from (the index has none; the test used NIFTYBEES for both indices)", group = G3)
-pocNn   = input.int(15, "Volume POC on Nifty: last N sessions (0 = no POC filter)", minval = 0, maxval = 30, group = G3,
-         tooltip = "Buys only above the POC, sells only below (the Magnet and the 9:30 breakout). 2026, original rules + volume check: 30 sessions +2,214, 15 sessions +2,177 (74 trades, worst fall -127), 7 +2,028, 3 +2,086, no POC filter +1,964.")
-pocNs   = input.int(0, "Volume POC on Sensex: last N sessions (0 = no POC filter)", minval = 0, maxval = 30, group = G3,
-         tooltip = "2026, original rules + volume check: 30 sessions +8,001, 15 sessions +8,700, 7 +8,668, 3 +8,587, no POC filter +9,166 (82 trades, worst fall -336, better in both halves).")
+pocNn   = input.int(1, "Volume POC on Nifty: last N sessions (1 = yesterday's; 0 = no POC filter)", minval = 0, maxval = 30, group = G3,
+         tooltip = "Buys only above the POC, sells only below (the Magnet and the 9:30 breakout). 2026 Nifty without the volume check: 1 session +2,389 (93 trades, worst fall -204), 2 +2,332, 3 +2,312, 15 +2,284, 30 +2,274, no POC filter +1,793. With the volume check: 30 sessions +2,214, 15 +2,177, 1 +2,114.")
+pocNs   = input.int(0, "Volume POC on Sensex: last N sessions (1 = yesterday's; 0 = no POC filter)", minval = 0, maxval = 30, group = G3,
+         tooltip = "2026 Sensex with the volume check: 30 sessions +8,001, 15 +8,700, 7 +8,668, 3 +8,587, 1 +8,537, no POC filter +9,166 (82 trades, worst fall -336, better in both halves).")
 showEma = input.bool(false, "Show the EMA 50", group = G2)
 showBox = input.bool(true, "Show the status and results box", group = G2)
 
@@ -217,6 +223,8 @@ CAP  = smallCap > 0 ? smallCap : close > 50000 ? 150.0 : 45.0     // small stops
 capAt(float px) => rrMode ? rrStop / 100 * px : CAP             // the largest stop for an entry at px
 profN = close > 50000 ? pocNs : pocNn                            // the volume POC from this many sessions
 pocOn = profN > 0                                                // 0: no POC filter on this index
+vcOn  = close > 50000 ? vcSx : vcNf                              // the volume check on this index
+pocSpan(int n, bool next) => n == 1 ? (next ? "today" : "yesterday") : "last " + str.tostring(n) + " days"
 
 // ---------------- CPR: today's (from yesterday) and yesterday's (from the day before) ----------------
 cprWidth(float h, float l, float c) =>
@@ -1048,7 +1056,7 @@ if barstate.islast and cprOn
         edgeName(edgeLbl, x1, P, "CPR pivot (P) " + fmt(P), cprCol, size.small)
         edgeName(edgeLbl, x1, bot, "CPR bottom (BC) " + fmt(bot), cprCol, size.small)
         if is5 and showPrf
-            edgeName(edgeLbl, x1, poc, "POC " + fmt(poc) + ": most volume, last " + str.tostring(profN) + " days (buys above, sells below)", PURPLE, size.small)
+            edgeName(edgeLbl, x1, poc, "POC " + fmt(poc) + ": most volume, " + pocSpan(profN, false) + " (buys above, sells below)", PURPLE, size.small)
         if is5 and showVA
             edgeName(edgeLbl, x1, vah, "Value area high (70% of volume)", PURPLE, size.small)
             edgeName(edgeLbl, x1, val, "Value area low", PURPLE, size.small)
@@ -1105,7 +1113,7 @@ if barstate.islast and cprOn
                     float[] hP = histOf(0, nbP, loP)
                     [nPoc, nVah, nVal] = pocOf(hP, loP)
                     array.push(nextLn, line.new(xa, nPoc, xb, nPoc, color = PURPLE, style = line.style_dashed, width = 2))
-                    edgeName(edgeLbl, xb, nPoc, "Next: POC " + fmt(nPoc) + " (most volume, " + str.tostring(profN) + " days)", PURPLE, size.small)
+                    edgeName(edgeLbl, xb, nPoc, "Next: POC " + fmt(nPoc) + " (most volume, " + pocSpan(profN, true) + ")", PURPLE, size.small)
             if is5 and vlShow and nd >= vlN
                 int nbV = bar_index - array.get(dStart, nd - vlN) + 1
                 if nbV > 10 and nbV < 2450
@@ -1127,7 +1135,7 @@ if barstate.islast and showBox
     cell(1, "Today's CPR", fmt(bot) + " - " + fmt(top) + ", " + str.tostring(top - bot, "#,##0") + " pts (" + str.tostring((top - bot) / P * 100, "0.00") + "%) " + (narrow ? "NARROW" : nNar * 3 >= 40 ? "wide" : "normal"), narrow ? cprNar : cprPink)
     cell(2, "Bias", bias, cb > 0 ? GREEN : cb < 0 ? RED : chart.fg_color)
     cell(3, "15-minute range", na(orh) ? "-" : fmt(orl) + " - " + fmt(orh), chart.fg_color)
-    cell(4, pocOn ? str.tostring(profN) + "-day volume POC / value area" : "Volume POC", not pocOn ? "no POC filter on this index" : na(poc) ? "-" : fmt(poc) + " / " + fmt(val) + " - " + fmt(vah), PURPLE)
+    cell(4, pocOn ? "Volume POC (" + pocSpan(profN, false) + ") / value area" : "Volume POC", not pocOn ? "no POC filter on this index" : na(poc) ? "-" : fmt(poc) + " / " + fmt(val) + " - " + fmt(vah), PURPLE)
     cell(5, "Today", todayMsg, chart.fg_color)
     cell(6, "On this chart", str.tostring(nTr) + " trades, " + str.tostring(nWon) + " won, " + str.tostring(nTr - nWon) + " lost", chart.fg_color)
     cell(7, "Points won / lost / net", pts(winPts) + " / " + pts(lossPts) + " / " + pts(totPts), totPts >= 0 ? GREEN : RED)

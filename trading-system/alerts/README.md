@@ -13,7 +13,7 @@ or a login. It tells you:
 - **9:30:** the 15-minute range and the one breakout trade that is still allowed: "SELL when price touches X". Set
   a price alert in Groww at X, so you aren't late;
 - **9:30-2:30:** volume-line trades (and liquidity sweeps if switched on);
-- **the volume check:** a signal whose volume doesn't agree is skipped, with a message saying so;
+- **the volume check (Sensex):** a signal whose volume doesn't agree is skipped, with a message saying so;
 - **every trade:** BUY = buy the ATM call, SELL = buy the ATM put, with the stop, the target (or when to book half
   and move the stop), and the exit with points and rupees.
 
@@ -22,14 +22,15 @@ Alerts appear on the screen (with a beep) and, if you set it up, on your phone t
 **Rules** (top of the file):
 
 - `RULES = 'classic'` (default): the original rules (daily plan + 3-day volume lines; book half, trailing, out by
-  3:15) **with the volume check** (`VOLCHECK = True`): a BUY only if, over the last 2 hours (`VOL_WINDOW` = 24
+  3:15); **the volume check** (`VOLCHECK`, on for Sensex): a BUY only if, over the last 2 hours (`VOL_WINDOW` = 24
   five-minute candles), the up candles carried more NIFTYBEES volume than the down candles; a SELL only if the
   down candles did. A signal it stops is reported ("skipped: the volume doesn't agree"). About the same points as
   without it from a third fewer trades, with much smaller losing runs. `SWEEP = True` adds liquidity sweeps of
   yesterday's high / low (more points, twice the trades); `LADDER = True` the volume-line ladder.
-  `POC_DAYS = {'nifty': 15, 'sensex': 0}`: the Magnet and the breakout buy only above the volume POC of the last
-  15 sessions on Nifty and sell only below it; Sensex has no POC filter (0). Tested on 2026
-  (`y2026_pocdays.py`): Nifty made the most with a 30- or 15-session POC, Sensex the most with none.
+  **Set for each index:** `VOLCHECK = {'nifty': False, 'sensex': True}` and `POC_DAYS = {'nifty': 1, 'sensex': 0}`:
+  on Nifty the Magnet and the breakout buy only above yesterday's volume POC and sell only below it, with no volume
+  check; on Sensex the volume check, with no POC filter (0). Tested on 2026 (`y2026_pocdays.py`): Nifty 93 trades,
+  +2,389 (with the 30-day POC and the volume check +2,214); Sensex 82 trades, +9,166 (+8,001).
   `STOP_MAX = {'nifty': 30, 'sensex': 100}` holds every stop to that many points (`STOP_MODE`: 'pull' / 'stop' moves
   a wider stop in, 'skip' skips the trade). Tested on 2026 it about halved the profit (`y2026_stopcap.py`), so it
   is off (0).
@@ -117,9 +118,9 @@ On a phone, put the date in `REPLAY_DAY = '2026-10-08'` at the top and press Run
 ## Checked
 
 `research/quant/alerts_check.py` runs it on every 2026 session, minute by minute as it runs live. It took exactly the
-backtest's trades: default (original rules + the volume check, POC of the last 15 sessions on Nifty, none on
-Sensex) Nifty 74 trades, net +2,177 points, Sensex 82 trades, net +9,166; with the 30-day POC on both (all the
-figures that follow) Nifty 70 trades, +2,214, Sensex 68 trades, +8,001; original rules alone Nifty 101 trades, net +2,274, Sensex 114 trades, net +8,102 (with the
+backtest's trades: default (original rules; Nifty: yesterday's POC, no volume check; Sensex: the volume check, no
+POC filter) Nifty 93 trades, net +2,389 points, Sensex 82 trades, net +9,166; with the 30-day POC on both (all the
+figures that follow) and the volume check Nifty 70 trades, +2,214, Sensex 68 trades, +8,001; original rules alone Nifty 101 trades, net +2,274, Sensex 114 trades, net +8,102 (with the
 ladder +2,193 / +8,819); with sweeps Nifty 203 trades, +2,993, Sensex 223 trades, +9,279; 1:4 rules Nifty 55 trades, net +1,344, Sensex 53 trades, net +4,419;
 small-stop rules Nifty 150 trades, net +842, Sensex 170 trades, net +4,708. Nothing it had already said changed later in the day. The CPR uses the exchange's official daily close
 (downloaded each morning), like TradingView; the official close often differs from the last 1-minute candle.
