@@ -1199,6 +1199,30 @@ sessions / none), Sensex +8,102 / +8,845 / +8,288 / +8,549 / +8,517 / +8,483 / +
   152 trades with a worst fall of −1,505. Each index's setting was picked by looking at 2026 itself, so expect less
   live. `alerts_check.py` confirms the alert program takes exactly these trades.
 
+## 2026: one account for both indices (all the money in each trade)
+
+With Rs 30,000 all of it goes into each trade (about 3 lots), so while a Nifty trade is open a Sensex signal has to
+be missed, and the other way round. `y2026_capital.py` merges the default trades of both indices by time (Nifty:
+yesterday's POC, no volume check; Sensex: the volume check, no POC filter) and takes a trade only when no trade is
+open. Rupees: half the index points after costs, 3 lots.
+
+| 2026, 3 lots | Trades | Rs | Jan-Jun / Jul-Oct | Worst fall |
+|---|---|---|---|---|
+| Both indices always (two accounts) | 175 | +5.08 lakh | +4.21 / +0.87 lakh | −24,778 |
+| **One account, Sensex first when both come in the same minute** | 120 (Sensex 67, Nifty 53) | **+3.81 lakh** | +3.21 / +0.60 lakh | −10,602 |
+| One account, Nifty first | 120 (Nifty 74, Sensex 46) | +3.47 lakh | +3.00 / +0.47 lakh | −19,568 |
+| One account, the smaller stop first | 120 | +3.48 lakh | +3.02 / +0.47 lakh | −19,568 |
+| Sensex only | 82 | +2.75 lakh | +2.27 / +0.48 lakh | −10,091 |
+| Nifty only | 93 | +2.33 lakh | +1.94 / +0.39 lakh | −19,900 |
+| Half the money on each index (half the lots) | 175 | +2.54 lakh | | |
+
+- One account misses 55 of the 175 trades (31%) on 53 days: 21 because both indices signalled in the same minute
+  (mostly both breaking their 15-minute range together), 34 because the other index's trade was still open. The
+  missed trades were mostly winners (47-48 of 55).
+- Sensex first keeps the most: Rs 3.81 lakh instead of 5.08 (−25%), and the smallest worst fall. Taking whichever
+  comes first and Sensex when both come together beats trading one index alone or splitting the money.
+- The rupees are the old half-the-points estimate; with time decay (y2026_options.py) all of them are lower.
+
 ## How to re-check all of this
 
 - `python research/fair_price_backtest.py` downloads the candles and re-runs the Fair Price test.
