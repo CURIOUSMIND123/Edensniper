@@ -1235,7 +1235,10 @@ time decay, costs), buys as many lots as Rs 30,000 pays for, one trade at a time
 | **Expiry + day before, 1 strike out of the money** | 7 trades, 4 won, **−Rs 4,344**; biggest win +17,278, biggest loss −22,898 | 65 trades, 39 won, +Rs 1.18 lakh; biggest win +66,871, biggest loss −30,200; worst fall −96,854 |
 | Expiry + day before, 2 strikes out of the money | −Rs 9,313 | +Rs 0.30 lakh, worst fall −1.51 lakh |
 | Expiry + day before, at the money | +Rs 5,682 | +Rs 1.95 lakh, biggest loss −24,783, worst fall −52,677 |
-| Every day, at the money | +Rs 1,980 | **+Rs 3.43 lakh** (119 trades), worst fall −47,843 |
+| Every day, at the money | +Rs 1,980 | +Rs 3.43 lakh (119 trades), biggest loss −24,783, worst fall −47,843 |
+| **Every day, 1 strike in the money** | +Rs 16,847; biggest win +11,396, biggest loss −10,073 | **+Rs 3.07 lakh** (118 trades), biggest win +35,196, biggest loss −19,796, worst fall −21,657 |
+| **Every day, in the money, next week's expiry on expiry day** | **+Rs 24,633**; biggest win +11,396, biggest loss −7,412 | +Rs 2.26 lakh (120 trades), biggest loss −9,745, worst fall −13,349 |
+| Every day, at the money, next week's expiry on expiry day | +Rs 15,361 | +Rs 2.39 lakh, worst fall −14,335 |
 
 - One strike out of the money buys more lots (avg 8, up to 31) but the option loses value fast on these days: 17
   of the 56 trades that made index points lost money as the option, e.g. 10 September, Sensex SELL 9:31-3:15: the
@@ -1245,8 +1248,37 @@ time decay, costs), buys as many lots as Rs 30,000 pays for, one trade at a time
   each trade, the account would have been almost empty by 20 August.
 - By month (1 strike out of the money, expiry + day before): January −7,638, February +22,526, March +89,310, April
   +41,127, May +39,384, June −20,358, July −9,778, August −25,141, September −4,834, October −7,073.
+- In the money (more of the price is real value, less is time value) gave up a little profit for much smaller
+  losses: with next week's expiry on expiry day the worst fall was −13,349 instead of −47,843 at the money.
 - The model prices the option from that day's implied volatility; far out-of-the-money expiry-day prices are the
-  hardest to model, so treat these as estimates.
+  hardest to model, so treat these as estimates. The script also prints an "account all-in" figure (all of the
+  balance into every trade); for the in-the-money rows it runs into crores, which assumes any number of lots can be
+  bought and sold at these prices and that 2026 repeats: not realistic.
+
+## 2026: pure scalping, several trades a day, with tight ("sniper") entries
+
+`y2026_scalp.py`: 9,216 versions per index of four scalping setups on 1-minute candles, each entered with a stop
+order beyond the signal candle (the trade starts only if price keeps going), stop just beyond the candle (at most
+0.10% / 0.15% of price), target 1 / 1.5 / 2 / 3x the stop, out after 10 / 20 / 45 minutes, up to 3 or 8 trades a day:
+- **VWAP pullback** in a trend (NIFTYBEES volume), **EMA 9 / 21 pullback**, **break and retest** of a key level
+  (CPR, yesterday's high / low, the 15-minute range, the 3-day volume lines), **momentum burst** (a candle 2-3x the
+  average range, with or without a volume spike);
+- filters: none, the daily plan's direction (gap + CPR vs yesterday's), only after the indicator's own trade in its
+  direction, the volume check, stop for the day after 2 losses.
+
+| 2026, index points after costs | Nifty | Sensex |
+|---|---|---|
+| Versions that made money | 890 of 9,216 (best +328 for the year) | 359 of 9,216 (best +1,185) |
+| Middle version | −438 | −2,017 |
+| Made money in both halves on both indices | **0** (none, at any number of trades) | |
+
+- The reason is cost. A scalp catches 0-2 Nifty points on average before costs (middle version; the best about 7),
+  and a round trip costs about 4 (Sensex: about 0 before costs against 12). With no costs at all, 6,880 of the
+  9,216 Nifty versions would have made money.
+- The indicator's own trades make about 26 Nifty / 112 Sensex points each after costs because they are held about
+  2 hours 15 minutes on average; that size of move is what pays for the costs and the time decay.
+- Scalping only in the direction of the indicator's trade of the day did better than without it (Nifty middle −167
+  instead of −438), but no version held up on both indices in both halves.
 
 ## How to re-check all of this
 

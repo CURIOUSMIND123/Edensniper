@@ -9,8 +9,8 @@ volume check, no POC filter). Each one is priced as the option you would buy, wi
 Black-Scholes on the index price at the entry, book-half and exit minutes, with that day's implied volatility of the
 option solved from the exchange's real prices (F&O bhavcopy) and the time left to expiry, so time decay and the speed
 of expiry day are in. Costs: slippage 1 Nifty / 2 Sensex premium points, 0.13% of the selling price, Rs 20 an order.
-Strike: at the money, 1 strike (Nifty 50 / Sensex 100 points) or 2 strikes out of the money; nearest expiry (on
-expiry day the one expiring that afternoon). Lots: as many as Rs 30,000 buys at the entry premium (Nifty 65, Sensex
+Strike: at the money, 1 strike (Nifty 50 / Sensex 100 points) or 2 strikes out of the money, or 1 strike in the
+money; nearest expiry (on expiry day the one expiring that afternoon), or next week's on expiry day. Lots: as many as Rs 30,000 buys at the entry premium (Nifty 65, Sensex
 20 a lot). One account: a trade is taken only when no other trade is open (Sensex first when both come together).
 """
 import collections, json, math, sys
@@ -36,25 +36,26 @@ def dump(nm):
             (m0, S0), exits = OP.legs_now(t)
             row = dict(d=d, nm=nm, kind=kind, src=t['src'], side=t['side'], m=t['m'], x=t['exit']['m'], ipts=t['exit']['pnl'])
             typ = 'CE' if t['side'] > 0 else 'PE'
-            for k in (0, 1, 2):
+            for k, ex in ((0, ''), (1, ''), (2, ''), (-1, ''), (-1, 'n'), (0, 'n')):
+                exp = exps[1] if ex == 'n' and exps[0] == d and len(exps) > 1 else exps[0]
                 K = round(S0 / OP.STEP) * OP.STEP + t['side'] * k * OP.STEP
-                iv = OP.day_iv(d, exps[0], K, typ)
+                iv = OP.day_iv(d, exp, K, typ)
                 if iv is None:
-                    row[f'k{k}'] = None; nofit += 1; continue
-                P0 = OP.bs(S0, K, OP.T_of(d, exps[0], m0), iv, typ)
-                outs = [(w, OP.bs(S1, K, OP.T_of(d, exps[0], m1), iv, typ)) for w, m1, S1 in exits]
+                    row[f'k{k}{ex}'] = None; nofit += 1; continue
+                P0 = OP.bs(S0, K, OP.T_of(d, exp, m0), iv, typ)
+                outs = [(w, OP.bs(S1, K, OP.T_of(d, exp, m1), iv, typ)) for w, m1, S1 in exits]
                 pts = sum(w * (P1 - P0) for w, P1 in outs) - OP.SLIP - 0.0013 * sum(w * P1 for w, P1 in outs)
-                row[f'k{k}'] = dict(K=K, P0=P0, out=[P1 for _, P1 in outs], pts=pts, orders=1 + len(exits), buy=P0 + OP.SLIP / 2)
+                row[f'k{k}{ex}'] = dict(K=K, P0=P0, out=[P1 for _, P1 in outs], pts=pts, orders=1 + len(exits), buy=P0 + OP.SLIP / 2)
             out.append(row)
     json.dump(out, open(f'../.cache/expiry_trades_{nm}.json', 'w'))
     print(nm, len(out), 'trades,', round(sum(r['ipts'] for r in out)), 'index points;', nofit, 'option prices missing')
 
 def lots_for(money, r, k):
-    o = r[f'k{k}']
+    o = r[f'k{k}' if isinstance(k, int) else k]
     return int(money // (o['buy'] * LOT[r['nm']])) if o else 0
 
 def rupees(r, k, lots):
-    o = r[f'k{k}']
+    o = r[f'k{k}' if isinstance(k, int) else k]
     return o['pts'] * lots * LOT[r['nm']] - 20 * o['orders'] if lots else 0.0
 
 def one_account(rows):
@@ -82,7 +83,7 @@ def report(label, rows, k, show=False):
           f"account all-in from Rs 30,000: Rs {bal:,.0f}" + (f" (below Rs 3,000 on {broke})" if broke else ''))
     if show:
         for r, v, n in zip(rows, rs, lots):
-            o = r[f'k{k}']
+            o = r[f'k{k}' if isinstance(k, int) else k]
             print(f"     {r['d']} {r['nm']:6} {r['kind']:10} {r['src'].lower():11} {'BUY ' if r['side'] > 0 else 'SELL'} {r['m'] // 60:02d}:{r['m'] % 60:02d} "
                   f"{o['K']:>7.0f} {'CE' if r['side'] > 0 else 'PE'} {n:3} lots, premium {o['P0']:6.1f} -> {', '.join(f'{p:.1f}' for p in o['out'])} "
                   f"| index {r['ipts']:+6.0f} pts | Rs {v:+9,.0f}")
@@ -99,6 +100,8 @@ if __name__ == '__main__':
             e = [r for r in exp if r['d'] >= lo and r[f'k{k}']]
             report(f"expiry + day before, {kl}", e, k, show=(k == 1 and lo == START30))
             report(f"  every day, {kl}", [r for r in alld if r['d'] >= lo and r[f'k{k}']], k)
+        for kk, kl in (('k-1', '1 strike in the money'), ('k-1n', 'in the money, next expiry on expiry day'), ('k0n', 'at the money, next expiry on expiry day')):
+            report(f"  every day, {kl}", [r for r in alld if r['d'] >= lo and r.get(kk)], kk)
         e = [r for r in exp if r['d'] >= lo and r['k1']]
         for kind in ('expiry', 'day before'):
             report(f"  only {kind} days, 1 strike OTM", [r for r in e if r['kind'] == kind], 1)

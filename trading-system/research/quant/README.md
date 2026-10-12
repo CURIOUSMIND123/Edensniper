@@ -79,7 +79,8 @@ Costs: 4 Nifty points or 12 Sensex points per trade. `pip install pandas scikit-
 | `y2026_sniper.py` | 2026 only: sharper entries (stronger volume agreement, time of day, expiry day, 15-minute range width, setups) measured as options |
 | `fetch_fx.py` | 1-minute gold (XAUUSD), WTI crude, EUR/USD, GBP/USD, USD/JPY candles from Dukascopy's free data feed, 15 May - 9 October 2026 |
 | `y2026_markets.py` | The last 3 months: the default strategy on gold, crude and currency pairs (6 h 15 min sessions from 9:00 India / 8:00 London / 8:00 New York) vs Nifty / Sensex, in % of the price |
-| `y2026_expiry.py` | 2026: only expiry days and the day before, at the money / 1 / 2 strikes out of the money, nearest expiry, as many lots as Rs 30,000 buys; last 30 days and the year; biggest win / loss |
+| `y2026_scalp.py` | 2026: pure scalping, several trades a day: VWAP / EMA pullbacks, break and retest of key levels, momentum bursts, with stop-order entries, small stops, quick exits; 9,216 versions per index |
+| `y2026_expiry.py` | 2026: only expiry days and the day before (and every day), 1 strike in the money / at the money / 1 / 2 strikes out of the money, nearest expiry or next week's on expiry day, as many lots as Rs 30,000 buys; last 30 days and the year; biggest win / loss |
 | `y2026_capital.py` | 2026: one account for both indices (Rs 30,000, all of it in each trade): the trades missed while the other index's trade is open, and the cost; Sensex first / Nifty first on same-minute signals |
 | `y2026_pocdays.py` | 2026: the volume POC filter from the last 30 / 15 / 7 / 3 / 2 / 1 sessions or none, with and without the volume check, Jan-Jun vs Jul-Oct |
 | `y2026_report.py` | 2026 only: the full report of what the indicator / alerts trade now (default, original without sweeps, 1:4, small stops): trades, points, setups, exits, months, rupees, and what Rs 30,000 becomes |
