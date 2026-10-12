@@ -79,6 +79,7 @@ Costs: 4 Nifty points or 12 Sensex points per trade. `pip install pandas scikit-
 | `y2026_sniper.py` | 2026 only: sharper entries (stronger volume agreement, time of day, expiry day, 15-minute range width, setups) measured as options |
 | `fetch_fx.py` | 1-minute gold (XAUUSD), WTI crude, EUR/USD, GBP/USD, USD/JPY candles from Dukascopy's free data feed, 15 May - 9 October 2026 |
 | `y2026_markets.py` | The last 3 months: the default strategy on gold, crude and currency pairs (6 h 15 min sessions from 9:00 India / 8:00 London / 8:00 New York) vs Nifty / Sensex, in % of the price |
+| `y2026_cpropen.py` | The last 60 sessions (and the 60 before): opens above / below the CPR, the first 1- / 5-minute candle, the day, the next pivot (R1 / S1...) or the CPR first, and simple opening scalps |
 | `y2026_scalp.py` | 2026: pure scalping, several trades a day: VWAP / EMA pullbacks, break and retest of key levels, momentum bursts, with stop-order entries, small stops, quick exits; 9,216 versions per index |
 | `y2026_expiry.py` | 2026: only expiry days and the day before (and every day), 1 strike in the money / at the money / 1 / 2 strikes out of the money, nearest expiry or next week's on expiry day, as many lots as Rs 30,000 buys; last 30 days and the year; biggest win / loss |
 | `y2026_capital.py` | 2026: one account for both indices (Rs 30,000, all of it in each trade): the trades missed while the other index's trade is open, and the cost; Sensex first / Nifty first on same-minute signals |

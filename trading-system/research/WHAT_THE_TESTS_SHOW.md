@@ -1280,6 +1280,39 @@ order beyond the signal candle (the trade starts only if price keeps going), sto
 - Scalping only in the direction of the indicator's trade of the day did better than without it (Nifty middle −167
   instead of −438), but no version held up on both indices in both halves.
 
+## Opening away from the CPR: does it keep going or turn back? (the last 60 sessions)
+
+`y2026_cpropen.py`: every day that opened above the CPR's top or below its bottom; the first 1-minute and 5-minute
+candles, the day, and which came first: the next pivot level (R1 / R2 / R3 above, S1 / S2 / S3 below, from the
+previous session's official high, low and close) or the CPR. 16 July - 9 October 2026 (Nifty 24,142 -> 22,520,
+Sensex 77,388 -> 72,472), and the 60 sessions before (20 April - 15 July, Nifty 24,392 -> 24,073) to check it.
+
+| Last 60 sessions | Nifty | Sensex |
+|---|---|---|
+| Opened above the CPR | 22 days | 27 days |
+| First 1-minute candle turned back down toward the CPR | 16 (73%) | 18 (67%) |
+| First 5 minutes turned back down | 15 (68%) | 16 (59%) |
+| Closed the day above the open | 11 (50%) | 9 (33%) |
+| Reached the CPR before the next pivot (R1...) | 11 (9 the pivot first) | 17 (8) |
+| Opened below the CPR | 27 days | 22 days |
+| First 1-minute candle kept going down | 17 (63%) | 12 (55%) |
+| First 5 minutes kept going down | 15 (56%) | 12 (55%) |
+| Closed the day below the open | 15 (56%) | 14 (64%) |
+| Reached the next pivot (S1...) before the CPR | 17 (7 the CPR first) | 10 (11) |
+| Opened inside the CPR | 11 days | 11 days |
+
+- In the last 60 sessions, a falling market, opens above the CPR mostly turned back down and opens below it mostly
+  kept falling. In the 60 sessions before (flat) Nifty did nearly the opposite: opens above kept going up in the
+  first minute 58% of the time, and opens below turned back up in the first 5 minutes 73% of the time. What happens
+  after the open follows the market's trend; it is not a fixed rule.
+- Held in both periods: opens less than 0.2% from the CPR touched the CPR first on 59 of 77 days (77%), but nearly
+  always within the 9:15 candle itself (before a trade can be placed); opens 0.2% or more away reached the next pivot
+  before the CPR 74 times against 37, also often within the first candle.
+- Scalps (0.1% target / stop, 30 minutes, costs in): at 9:16 or 9:20 with or against the first 1- / 5-minute candle,
+  away from or back toward the CPR, and back to the CPR on small gaps: none made money in both periods on both
+  indices. Trading a 0.2%+ gap away from the CPR at 9:20, target the next pivot, stop at the CPR: Nifty +167 and
+  +142 points (22 and 37 trades), Sensex +329 then −1,257; the stop is about twice the target.
+
 ## How to re-check all of this
 
 - `python research/fair_price_backtest.py` downloads the candles and re-runs the Fair Price test.
