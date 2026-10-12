@@ -1313,6 +1313,33 @@ Sensex 77,388 -> 72,472), and the 60 sessions before (20 April - 15 July, Nifty 
   indices. Trading a 0.2%+ gap away from the CPR at 9:20, target the next pivot, stop at the CPR: Nifty +167 and
   +142 points (22 and 37 trades), Sensex +329 then −1,257; the stop is about twice the target.
 
+## Gap up above the pivot with a doji as the first 15-minute candle (the last 90 sessions)
+
+`y2026_doji15.py`, 3 June - 9 October 2026: gap-up opens (above the previous close) above the pivot P, and the
+first 15-minute candle (9:15-9:30): doji = body at most 25% of its range (gravestone: closes in the lower third, a
+long upper wick; dragonfly: closes in the upper third, a long lower wick), or green / red. From 9:30: which side of
+the candle breaks first, how far it then runs, whether the other side breaks later too, and trading the break (stop
+at the other side, target 1x, costs in). Gap-down opens below the pivot the same way.
+
+| Gap up above the pivot | Nifty (35 days) | Sensex (40 days) |
+|---|---|---|
+| First 15 minutes a doji | 11 days | 13 days |
+| Doji: its low broke first / its high first | **7 / 4** | **4 / 9** |
+| After the low broke: further down (average) | 85 points; the high broke later too on 3 of 7 | 199 points; 3 of 4 |
+| After the high broke: further up (average) | 57 points; the low broke later too on 1 of 4 | 151 points; 4 of 9 |
+| Doji: the day closed above / below the candle's close | 5 / 6 | 7 / 6 |
+| Doji: trading the break | 11 trades, 7 won, +193 points | 13 trades, 6 won, −401 points |
+| First 15 minutes green: the high broke first | 9 of 9 | 9 of 10 |
+| First 15 minutes red: the low broke first | 12 of 15 | 14 of 17 |
+
+- A doji after a gap up broke either way: mostly down on Nifty, mostly up on Sensex. The candle's colour told
+  the first break far better: green -> its high first 18 of 19 times, red -> its low first 26 of 32.
+- The doji's wicks hinted at the first break in this small sample: gravestone (long upper wick) -> the low first 4
+  of 4; dragonfly (long lower wick) -> the high first 6 of 6, but 4 of those 6 days still closed below the candle.
+- Trading the doji's break made money on Nifty and lost on Sensex; 24 days in all is too few to rely on.
+- Gap down below the pivot with a doji: Nifty 6 days (3 up / 3 down, the break trade −347), Sensex 9 days (6 up /
+  3 down, −164).
+
 ## How to re-check all of this
 
 - `python research/fair_price_backtest.py` downloads the candles and re-runs the Fair Price test.
