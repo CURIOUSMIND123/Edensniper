@@ -1340,6 +1340,32 @@ at the other side, target 1x, costs in). Gap-down opens below the pivot the same
 - Gap down below the pivot with a doji: Nifty 6 days (3 up / 3 down, the break trade −347), Sensex 9 days (6 up /
   3 down, −164).
 
+## Gap up to R1 -> SELL, gap down to S1 -> BUY (the trade back from the pivot level)
+
+`y2026_r1s1.py`: on a gap-up day (open above the previous close, below R1), the first touch of R1 before 2:30 ->
+SELL; on a gap-down day the first touch of S1 -> BUY. Entry at the touch (a limit order at the level), or only
+after a 5-minute candle reaches the level and closes back inside it ("rejection", within 30 minutes). Stop 0.1 /
+0.2 / 0.3% beyond the level; target 1x / 2x the risk, the pivot P, or none (held to 3:15); costs in. 24 versions
+per side; chosen on 2026, then checked on 2023-2025 (not used to choose).
+
+- The level usually broke: after the touch, price went 0.2% beyond it before coming back to the pivot on 24 of
+  40 R1 touches (Nifty) / 29 of 44 (Sensex), and on 35 of 47 / 32 of 41 S1 touches.
+- **BUY at S1 after a gap down lost** in every 2026 version on both indices except one, and no version made money
+  in each of 2024, 2025 and 2026 on either index.
+- **SELL at R1 after a gap up** made money with the rejection entry and a wide stop. Same version on both indices:
+  rejection, stop 0.3% above R1, held to 3:15:
+
+| Points after costs | 2023 | 2024 | 2025 | 2026 (to 9 Oct) | All |
+|---|---|---|---|---|---|
+| Nifty | 45 trades, −320 | 45, +768 | 52, +141 | 30, **+988** (Jan-Jun +944, Jul-Oct +45) | +1,576 |
+| Sensex | 48 trades, −1,013 | 48, +3,467 | 42, +1,811 | 35, **+1,136** (+475 / +661) | +5,401 |
+
+  It wins only 35-55% of trades (a few big falling days make the money), about one trade a week per index, and it
+  lost in 2023. On Nifty 12 of the 24 versions made money in each of 2024-2026; on Sensex 3 (all held to 3:15). Selling
+  at the touch itself, without waiting for the 5-minute rejection, was weaker.
+- About Rs 16,000 (Nifty) / Rs 21,000 (Sensex) a lot a year in 2024-2026 at half the index points; the trade is held
+  for hours, so in-the-money options suit it better (time decay).
+
 ## How to re-check all of this
 
 - `python research/fair_price_backtest.py` downloads the candles and re-runs the Fair Price test.
