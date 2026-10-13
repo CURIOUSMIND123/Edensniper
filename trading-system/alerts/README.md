@@ -80,11 +80,19 @@ program. `CHART = False` at the top switches the chart off.
 3. Telegram alerts: do step 3 above (BotFather, then the token in the file). In Pydroid 3, open the file and press
    the yellow Run button once: it prints your chat id. Put it in `TELEGRAM_CHAT_ID`, save, and Run again: "CPR
    Breakout alerts started" arrives in Telegram.
-4. Stop Android from closing it during the day:
-   - Settings > Battery > Background usage limits > **Never sleeping apps** > add Pydroid 3.
+4. Stop Android from closing it during the day (Samsung; Android closes apps you switch away from to save battery,
+   and the program and the live chart stop with it):
    - Settings > Apps > Pydroid 3 > Battery > **Unrestricted**.
-   - Keep the phone on the charger from 9:10 to 3:30. If it still stops when the screen is off, keep Pydroid 3 open
-     in split screen or a pop-up window next to Groww.
+   - Settings > Battery > Background usage limits: turn off **Put unused apps to sleep**, and add Pydroid 3 to
+     **Never sleeping apps**. Turn **Power saving** off.
+   - Recent apps: tap the Pydroid 3 icon at the top of its card > **Keep open**, and don't swipe it away.
+   - Keep Pydroid 3 on screen: **split screen** or a **pop-up window** with Chrome (the chart) or Groww, phone on the
+     charger from 9:10 to 3:30.
+   - **If it still stops**, open `cprb_log.txt` (next to `cprb_alerts.py`; everything the program printed is saved
+     there). If the log ends with an error, that is the reason (after an error such as no internet the program now
+     waits 60 seconds and starts again by itself). If it just ends with no error, the phone closed Pydroid 3.
+   - Another way that keeps running in the background: **Termux** (from F-Droid, not the Play Store), then
+     `pkg install python`, copy `cprb_alerts.py` into it, `termux-wake-lock`, `python cprb_alerts.py`.
 5. Optional, the chart: open tradingview.com in Chrome (in DeX, or on the phone with "Desktop site" ticked), Pine Editor,
    paste the indicator, Save, Add to chart. After saving it once it is also in the TradingView app under
    Indicators > My scripts. Free TradingView is 15 minutes late, but the CPR, POC and volume lines come from

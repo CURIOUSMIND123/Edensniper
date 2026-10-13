@@ -68,6 +68,9 @@ TELEGRAM_CHAT_ID = ''             # found by itself once you've messaged your bo
 REPLAY_DAY = ''                   # e.g. '2026-10-08' to replay a past day instead of running live
 CHART = True                      # live chart in the phone's browser: http://127.0.0.1:8000
 CHART_PORT = 8000
+LOG = True                        # also save everything it prints in cprb_log.txt next to this file, so you can see
+                                  # afterwards why it stopped (an error is written there; if the log just ends, the
+                                  # phone closed Pydroid 3)
 
 # ---------------- fixed rules (as tested on 2026) ----------------
 SPEC = {
@@ -1338,7 +1341,39 @@ def telegram_setup():
         else:
             print("Telegram: no chat id yet. Send any message to your bot, then start this again.")
 
+class Tee:
+    """Everything printed goes to the screen and to the log file."""
+    def __init__(self, stream, f):
+        self.stream, self.f = stream, f
+
+    def write(self, s):
+        self.stream.write(s)
+        try:
+            self.f.write(('\n' + s[1:]) if s.startswith('\r') else s)
+            self.f.flush()
+        except Exception:
+            pass
+
+    def flush(self):
+        self.stream.flush()
+
+    def __getattr__(self, k):
+        return getattr(self.stream, k)
+
+def start_log():
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'cprb_log.txt')
+    try:
+        if os.path.exists(path) and os.path.getsize(path) > 2_000_000:
+            os.remove(path)
+        f = open(path, 'a', encoding='utf-8')
+        sys.stdout, sys.stderr = Tee(sys.stdout, f), Tee(sys.stderr, f)
+        print(f"\n===== started {now_ist():%Y-%m-%d %H:%M:%S} IST (this log: {path}) =====")
+    except Exception as e:
+        print(f"(no log file: {e})")
+
 if __name__ == '__main__':
+    if LOG:
+        start_log()
     args = sys.argv[1:]
     names = [a for a in args if a in SPEC] or INDICES
     ladder = LADDER or '--ladder' in args
@@ -1354,4 +1389,14 @@ if __name__ == '__main__':
     elif '--telegram-chat-id' in args:
         pass                                          # telegram_setup() above printed it
     else:
-        live(names, lots, ladder, plan_only='--plan' in args)
+        while True:                                   # after an error (no internet, a data problem): start again
+            try:
+                live(names, lots, ladder, plan_only='--plan' in args)
+                break
+            except KeyboardInterrupt:
+                break
+            except Exception as e:
+                import traceback
+                traceback.print_exc()
+                print(f"Stopped by an error: {e}. Starting again in 60 seconds (press Stop to end) ...", flush=True)
+                time.sleep(60)
