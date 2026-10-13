@@ -1366,6 +1366,31 @@ per side; chosen on 2026, then checked on 2023-2025 (not used to choose).
 - About Rs 16,000 (Nifty) / Rs 21,000 (Sensex) a lot a year in 2024-2026 at half the index points; the trade is held
   for hours, so in-the-money options suit it better (time decay).
 
+## 2026: targets T1 / T2 / T3 at the next levels and a smaller stop, instead of half / entry / trail
+
+`y2026_t123.py`: the same calls (default settings, one trade at a time), with a third booked at each of T1 / T2 / T3,
+the next price levels in the trade's direction (CPR, pivots R1-R3 / S1-S3, yesterday's high / low, the 15-minute
+range, the 3-day volume lines, the POC; at least 0.05% apart). Stops: as now; half the distance to T2; the
+distance to T1, or half of T2 when T2 is more than twice as far ("user"); beyond the 15-minute swing low / high plus
+0.03% (so a liquidity sweep of it doesn't take it out); "user" moved beyond that swing. After the targets: stop to
+entry after T1 and to T1 after T2 (A), to entry after T2 (B), or never moved (C). Also a hybrid: T1 where half is
+booked now (0.25x the stop, then the stop to entry), T2 / T3 at the next two levels instead of trailing.
+
+| 2026, points after costs | Nifty | Sensex |
+|---|---|---|
+| **Now: book half at 0.25R, stop to entry, trail** | 93 trades, 80% won, **+2,389**, worst fall −204 | 82 trades, 85% won, **+9,166**, worst fall −336 |
+| T1 / T2 / T3, stop as now (best of A / B / C) | +2,109, worst fall −272 | +7,277, worst fall −1,429 |
+| T1 / T2 / T3, stop half of T2 | +1,289 to +1,547, worst fall −370 to −392 | +4,689 to +5,741, worst fall −1,171 to −1,288 |
+| T1 / T2 / T3, stop "user" | +1,451 to +1,724, worst fall −258 to −279 | +4,437 to +5,735, worst fall −1,180 to −1,297 |
+| T1 / T2 / T3, stop beyond the swing (sweep-safe) | +1,186 to +1,440, worst fall −470 to −484 | +4,416 to +6,044, worst fall −709 to −774 |
+| Hybrid: early T1 + entry stop, T2 / T3 at levels | 107 trades, 86% won, +1,448 | 92 trades, 85% won, +4,649 |
+
+- No version made more than the current exits, on either index, in either half. The smaller stops (about 60 Nifty /
+  190-230 Sensex points instead of 85 / 290) were hit far more often (win rate 51-68% instead of 80-85%), and the
+  worst falls got bigger, not smaller.
+- Fixed targets at the levels cap the big trend days, which the trailing stop lets run; those days make most of
+  the profit (the hybrid wins more often but makes 40-50% less).
+
 ## How to re-check all of this
 
 - `python research/fair_price_backtest.py` downloads the candles and re-runs the Fair Price test.

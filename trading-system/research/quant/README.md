@@ -79,6 +79,7 @@ Costs: 4 Nifty points or 12 Sensex points per trade. `pip install pandas scikit-
 | `y2026_sniper.py` | 2026 only: sharper entries (stronger volume agreement, time of day, expiry day, 15-minute range width, setups) measured as options |
 | `fetch_fx.py` | 1-minute gold (XAUUSD), WTI crude, EUR/USD, GBP/USD, USD/JPY candles from Dukascopy's free data feed, 15 May - 9 October 2026 |
 | `y2026_markets.py` | The last 3 months: the default strategy on gold, crude and currency pairs (6 h 15 min sessions from 9:00 India / 8:00 London / 8:00 New York) vs Nifty / Sensex, in % of the price |
+| `y2026_t123.py` | 2026: the same calls with T1 / T2 / T3 at the next price levels (a third at each) and smaller or sweep-safe stops, against book half / entry / trail |
 | `y2026_apphistory.py` | The Eden Trader app's history: every 2026 call with its result and whether the index went 50 Nifty / 150 Sensex points its way before the stop (`alerts/history-2026.json`) |
 | `y2026_r1s1.py` | Gap up to R1 -> SELL, gap down to S1 -> BUY: at the touch or after a 5-minute rejection, 24 versions; `years` checks 2023-2026 year by year |
 | `y2026_doji15.py` | The last 90 sessions: gap up above the pivot (and gap down below it) with a doji / green / red first 15-minute candle: which side broke first, how far it ran, the day, the next pivot level, trading the break |
