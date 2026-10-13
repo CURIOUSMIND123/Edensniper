@@ -1,0 +1,7 @@
+[Unit]
+Description=CPR Breakout alerts: pull the latest code from GitHub and restart if it changed
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash /opt/cprb/trading-system/deploy/cprb-update.sh

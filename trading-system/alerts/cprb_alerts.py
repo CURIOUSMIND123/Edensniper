@@ -72,6 +72,14 @@ LOG = True                        # also save everything it prints in cprb_log.t
                                   # afterwards why it stopped (an error is written there; if the log just ends, the
                                   # phone closed Pydroid 3)
 
+# On a server (trading-system/deploy): the same settings from environment variables, which win over the lines above
+TELEGRAM_TOKEN = os.environ.get('CPRB_TELEGRAM_TOKEN') or TELEGRAM_TOKEN
+TELEGRAM_CHAT_ID = os.environ.get('CPRB_TELEGRAM_CHAT_ID') or TELEGRAM_CHAT_ID
+LOTS = int(os.environ.get('CPRB_LOTS') or LOTS)
+CHART_HOST = os.environ.get('CPRB_CHART_HOST') or '127.0.0.1'   # who may open the chart: this device only
+CHART_PORT = int(os.environ.get('CPRB_CHART_PORT') or CHART_PORT)
+CHART_KEY = os.environ.get('CPRB_CHART_KEY') or ''              # if set, the chart opens only at .../?key=CHART_KEY
+
 # ---------------- fixed rules (as tested on 2026) ----------------
 SPEC = {
     'nifty':  dict(name='NIFTY',  key='NSE_INDEX|Nifty 50', bin=5.0,  cost=4.0,  lot=65, step=50,  cap=STOP_CAP['nifty']),
@@ -971,12 +979,14 @@ def day_summary(cx, ts, lots):
 # ---------------- alerts ----------------
 def telegram(text):
     if not (TELEGRAM_TOKEN and TELEGRAM_CHAT_ID):
-        return
+        return False
     try:
         data = urllib.parse.urlencode({'chat_id': TELEGRAM_CHAT_ID, 'text': text}).encode()
         urllib.request.urlopen(urllib.request.Request(f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage", data=data), timeout=15)
+        return True
     except Exception as e:
         print(f"  (Telegram message failed: {e})")
+        return False
 
 def alert(text, push=True):
     print(('\a>>> ' if push else '    ') + text, flush=True)
@@ -1054,7 +1064,8 @@ def chart_update(n, cx, c_all, ts, got, day):
                          rows=rows, status=status, updated=now_ist().strftime('%H:%M:%S'))
 
 CHART_HTML = """<!doctype html><html><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1"><title>CPRB live chart</title>
+<meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#0f1419">
+<meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><title>CPRB live chart</title>
 <style>
 body{margin:0;background:#0f1419;color:#d1d4dc;font:14px system-ui,-apple-system,sans-serif}
 #bar{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:8px}
@@ -1104,7 +1115,7 @@ function buttons() {
 async function load() {
   let d;
   try { d = await (await fetch('/data?i=' + cur, {cache: 'no-store'})).json(); }
-  catch (e) { document.getElementById('st').textContent = 'The program is not running: start it in Pydroid 3.'; return; }
+  catch (e) { document.getElementById('st').textContent = 'No data: the program is not running (start it in Pydroid 3, or check the server).'; return; }
   if (!d.day) return;
   s.setData(agg(d.day, d.candles, agg(d.yday_date, d.yday, [])));
   s.setMarkers(d.marks.map(k => ({time: ts(d.day, bucket(k.m)), position: k.pos, color: k.c, shape: k.pos === 'belowBar' ? 'arrowUp' : 'arrowDown', size: 1.2, text: k.x})));
@@ -1135,15 +1146,41 @@ def chart_library():
     with open(LWC_FILE, 'rb') as f:
         return f.read()
 
+CHART_SERVER = []                 # the chart server, once it runs (it is started only once)
+
+def key_ok(handler):
+    """With CHART_KEY set: the key in the address (?key=...) or in the cookie set the first time."""
+    import hmac
+    if not CHART_KEY:
+        return True, False
+    q = urllib.parse.parse_qs(urllib.parse.urlparse(handler.path).query).get('key', [''])[0]
+    if q and hmac.compare_digest(q, CHART_KEY):
+        return True, True
+    for part in (handler.headers.get('Cookie') or '').split(';'):
+        k, _, v = part.strip().partition('=')
+        if k == 'cprb_key' and hmac.compare_digest(v, CHART_KEY):
+            return True, False
+    return False, False
+
 def serve_chart(names):
-    """Serve the chart page on this phone / computer only (127.0.0.1)."""
+    """Serve the chart page: on this phone / computer only (127.0.0.1), or as set by CPRB_CHART_HOST on a server."""
     import http.server
     import threading
+    if CHART_SERVER:
+        return True
     page = CHART_HTML.replace('%INDICES%', json.dumps([[n, SPEC[n]['name']] for n in names]))
     lib = chart_library()
 
     class Handler(http.server.BaseHTTPRequestHandler):
         def do_GET(self):
+            ok, fresh = key_ok(self)
+            if not ok and not self.path.startswith('/lwc.js'):
+                body = b'This chart needs its key: open the address with ?key=... at the end (see /etc/cprb.env on the server).'
+                self.send_response(403)
+                self.send_header('Content-Type', 'text/plain; charset=utf-8')
+                self.end_headers()
+                self.wfile.write(body)
+                return
             if self.path.startswith('/lwc.js') and not lib:
                 self.send_response(302)
                 self.send_header('Location', LWC_URL)
@@ -1159,6 +1196,9 @@ def serve_chart(names):
             self.send_response(200)
             self.send_header('Content-Type', ctype)
             self.send_header('Cache-Control', 'no-store')
+            if fresh:                                 # remember the key, so the page's data requests carry it
+                secure = '; Secure' if self.headers.get('X-Forwarded-Proto') == 'https' else ''
+                self.send_header('Set-Cookie', f'cprb_key={CHART_KEY}; Path=/; Max-Age=31536000; HttpOnly; SameSite=Lax{secure}')
             self.end_headers()
             self.wfile.write(body)
 
@@ -1166,12 +1206,16 @@ def serve_chart(names):
             pass
 
     try:
-        srv = http.server.ThreadingHTTPServer(('127.0.0.1', CHART_PORT), Handler)
+        srv = http.server.ThreadingHTTPServer((CHART_HOST, CHART_PORT), Handler)
     except OSError as e:
         print(f"  (chart not started: {e})")
         return False
     threading.Thread(target=srv.serve_forever, daemon=True).start()
-    print(f"LIVE CHART: open http://127.0.0.1:{CHART_PORT} in Chrome on this phone.")
+    CHART_SERVER.append(srv)
+    if CHART_HOST == '127.0.0.1':
+        print(f"LIVE CHART: open http://127.0.0.1:{CHART_PORT} in Chrome on this phone.")
+    else:
+        print(f"LIVE CHART: serving on {CHART_HOST}:{CHART_PORT}" + (" (key required)" if CHART_KEY else ""))
     return True
 
 def keep_serving(text):
@@ -1197,7 +1241,7 @@ def load(names, today):
         out[n] = context(SPEC[n], sess, vol, today, daily)
     return out
 
-def replay(names, day, lots, ladder):
+def replay(names, day, lots, ladder, hold=True):
     cxs = load(names, day)
     rows = {n: fetch_range(SPEC[n]['key'], dt.date.fromisoformat(day), dt.date.fromisoformat(day)).get(day, {}) for n in names}
     tvol = {m: v[4] for m, v in fetch_range(BEES, dt.date.fromisoformat(day), dt.date.fromisoformat(day)).get(day, {}).items()}
@@ -1220,10 +1264,10 @@ def replay(names, day, lots, ladder):
                     print(('>>> ' if push else '    ') + text)
         print('    ' + day_summary(cx, ts, lots))
         chart_update(n, cx, c_all, ts, CLOSE - 1, day)
-    if CHART and CHART_DATA and serve_chart(names):
+    if CHART and CHART_DATA and serve_chart(names) and hold:
         keep_serving(f"Replay of {day} is on the chart.")
 
-def live(names, lots, ladder, plan_only=False):
+def live(names, lots, ladder, plan_only=False, forever=False):
     now = now_ist()
     today = str(now.date())
     print(f"CPR Breakout alerts, {now:%Y-%m-%d %H:%M} IST. Loading earlier sessions ...")
@@ -1238,7 +1282,7 @@ def live(names, lots, ladder, plan_only=False):
         print("Market closed today (weekend). The plan above is for the next session.")
         if CHART:
             print(f"Showing the last session ({cxs[names[0]]['prev']}) on the chart.")
-            replay(names, cxs[names[0]]['prev'], lots, ladder)
+            replay(names, cxs[names[0]]['prev'], lots, ladder, hold=not forever)
         return
     if CHART:
         serve_chart(names)
@@ -1313,8 +1357,8 @@ def live(names, lots, ladder, plan_only=False):
             for n in names:
                 if n in last_ts:
                     alert(day_summary(cxs[n], last_ts[n], lots))
-            print("Market closed. Run it again tomorrow before 9:15.")
-            if CHART:
+            print("Market closed." + ("" if forever else " Run it again tomorrow before 9:15."))
+            if CHART and not forever:
                 keep_serving("")
             return
         now = now_ist()
@@ -1371,6 +1415,32 @@ def start_log():
     except Exception as e:
         print(f"(no log file: {e})")
 
+def next_morning():
+    """The next weekday at 8:45 IST (the next session's plan is sent then)."""
+    now = now_ist()
+    t = now.replace(hour=8, minute=45, second=0, microsecond=0)
+    while t <= now or t.weekday() >= 5:
+        t = (t + dt.timedelta(days=1)).replace(hour=8, minute=45)
+    return t
+
+def run_forever(names, lots, ladder):
+    """On a server: every trading day, without stopping (starts each weekday at 8:45 IST)."""
+    while True:
+        try:
+            live(names, lots, ladder, forever=True)
+        except KeyboardInterrupt:
+            return
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            print(f"Stopped by an error: {e}. Starting again in 60 seconds ...", flush=True)
+            time.sleep(60)
+            continue
+        t = next_morning()
+        print(f"Next start {t:%a %d %b %H:%M} IST. The chart keeps showing the last session.", flush=True)
+        while now_ist() < t:
+            time.sleep(60)
+
 if __name__ == '__main__':
     if LOG:
         start_log()
@@ -1384,10 +1454,14 @@ if __name__ == '__main__':
     if '--replay' in args or REPLAY_DAY:
         replay(names, args[args.index('--replay') + 1] if '--replay' in args else REPLAY_DAY, lots, ladder)
     elif '--telegram-test' in args:
-        telegram("Test from cprb_alerts.py: alerts will arrive here.")
-        print("Sent. If nothing arrives, check TELEGRAM_TOKEN and TELEGRAM_CHAT_ID at the top of the file.")
+        if telegram("Test from cprb_alerts.py: alerts will arrive here."):
+            print("Sent: check Telegram.")
+        else:
+            print("Telegram did not take it: check TELEGRAM_TOKEN and TELEGRAM_CHAT_ID (on a server: /etc/cprb.env).")
     elif '--telegram-chat-id' in args:
         pass                                          # telegram_setup() above printed it
+    elif '--forever' in args or os.environ.get('CPRB_FOREVER') == '1':
+        run_forever(names, lots, ladder)
     else:
         while True:                                   # after an error (no internet, a data problem): start again
             try:

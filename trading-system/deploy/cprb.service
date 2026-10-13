@@ -1,0 +1,16 @@
+[Unit]
+Description=CPR Breakout alerts (Nifty / Sensex): Telegram alerts and the live chart, every trading day
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=cprb
+WorkingDirectory=/opt/cprb/trading-system/alerts
+EnvironmentFile=/etc/cprb.env
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/usr/bin/python3 cprb_alerts.py --forever
+Restart=always
+RestartSec=30
+
+[Install]
+WantedBy=multi-user.target

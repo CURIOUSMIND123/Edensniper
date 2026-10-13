@@ -42,6 +42,14 @@ Alerts appear on the screen (with a beep) and, if you set it up, on your phone t
 
 The chart shows a waiting limit order as a blue "LIMIT" line.
 
+## On a server instead of the phone (runs every day by itself)
+
+A phone closes apps it isn't showing. On a server (for example Oracle Cloud) the program runs every trading day
+without stopping: the plan at 8:45, every alert and the day's result in Telegram, and the live chart at a private
+`https://.../?key=...` address you can add to the phone's home screen. It updates itself when this repository
+changes. One command sets it up: see [`../deploy/README.md`](../deploy/README.md). (`python cprb_alerts.py --forever`
+is the mode it runs in; its settings can come from environment variables, `CPRB_TELEGRAM_TOKEN` and the others.)
+
 ## The live chart (free)
 
 While the program runs, open **http://127.0.0.1:8000** in Chrome on the same phone. It's a live candle chart drawn
