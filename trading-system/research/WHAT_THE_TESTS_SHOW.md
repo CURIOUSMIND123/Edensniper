@@ -1411,7 +1411,12 @@ booked now (0.25x the stop, then the stop to entry), T2 / T3 at the next two lev
 - What the calls did (all 2026 calls, `y2026_apphistory.py`): Nifty went on average 112 points its way and 32
   against (median 22), Sensex 395 and 96 (median 62); the next three levels ahead (T1 / T2 / T3, on average 46 / 111 /
   183 Nifty and 151 / 372 / 605 Sensex points away) were reached on 73 / 40 / 23% and 76 / 49 / 26% of the calls. The
-  alerts, the app and the chart now show these targets for reference; the exits stay as they are.
+  alerts, the app and the chart now show targets for reference; the exits stay as they are. Since then **T1 is the
+  price where the call books half** (a volume-line call: its one target) and T2 / T3 the next two levels beyond T1.
+  Book half was reached on 91% of the Nifty and 98% of the Sensex breakout / Magnet calls; with the volume-line calls,
+  whose target (the next line) was reached on 16% / 27% though 63% of them still made money, T1 / T2 / T3 were
+  reached on 60 / 39 / 23% (Nifty) and 72 / 45 / 28% (Sensex) of the calls. 80% of the Nifty and 85% of the Sensex
+  calls made money.
 
 ## How to re-check all of this
 

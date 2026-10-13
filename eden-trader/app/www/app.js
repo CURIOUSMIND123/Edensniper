@@ -65,9 +65,9 @@ function chartView() {
 }
 
 function tgts(c) {
-  // T1 / T2 / T3: the next price levels ahead of the entry, for reference (the exits don't use them)
+  // T1 = where the call books half (or its one target); T2 / T3 = the next price levels after it, for reference
   if (!c.targets) return '-';
-  return c.targets.map((v, k) => `<span class="${c.hit && c.hit[k] ? 'ok' : ''}">T${k + 1} ${num(v, 0)}${c.hit && c.hit[k] ? ' ✓' : ''}</span>`).join(' · ');
+  return c.targets.map((v, k) => `<span class="${c.hit && c.hit[k] ? 'ok' : ''}">T${k + 1} ${num(v, 0)}${k === 0 ? ' (' + esc(c.t1 || 'book half') + ')' : ''}${c.hit && c.hit[k] ? ' ✓' : ''}</span>`).join(' · ');
 }
 
 function callCard(c) {
@@ -125,7 +125,7 @@ function statCard(label, s) {
 function renderHistory() {
   if (!history) return;
   const r = history.rule || {};
-  $('rule').textContent = `A call is a success when the index went at least ${r.NIFTY || 50} points (Nifty) / ${r.SENSEX || 150} points (Sensex) its way before the stop loss. Points = the call's result after costs. avg + / - = how far the index went its way (before the stop) and against it (while the call was open). T1-T3 = how often the next three price levels were reached.`;
+  $('rule').textContent = `A call is a success when the index went at least ${r.NIFTY || 50} points (Nifty) / ${r.SENSEX || 150} points (Sensex) its way before the stop loss. Points = the call's result after costs. avg + / - = how far the index went its way (before the stop) and against it (while the call was open). T1 = how often the call reached its book-half price (a volume-line call: its target); T2 / T3 = how often the next two price levels after it were reached.`;
   $('stats').innerHTML = statCard('All', history.stats.ALL) + statCard('Nifty', history.stats.NIFTY) + statCard('Sensex', history.stats.SENSEX);
   const rows = history.calls.filter((c) => histFilter === 'ALL' || c.index === histFilter);
   let html = '', day = '';

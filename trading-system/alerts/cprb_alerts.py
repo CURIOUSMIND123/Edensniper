@@ -906,10 +906,10 @@ def messages(cx, ts, c1, upto, lots):
                    f"Stop {f2(t['stp0'])} ({sn or 'other side of the 15-minute range'}). Book half at "
                    f"{f2(t['e'] + t['side'] * 0.25 * t['R'])}, then stop to entry; after {f2(t['e'] + t['side'] * t['R'])} "
                    "trail the stop 1R behind the best price.")
-        tg = target_levels(cx, c1, t['side'], t['e'], t['known'])
+        tg = target_levels(cx, c1, t['side'], t['e'], t['known'], half_price(t))
         out.append((tid + ('in',), t['known'], f"{nm} {hhmm(t['m'] if t['src'] != 'MAGNET' else 556)} {t['src']} {sd} at "
-                    f"{f2(t['e'])} -> {option(cx, t['side'], t['e'])}. {how} Levels ahead (for reference): "
-                    f"T1 {f2(tg[0])}, T2 {f2(tg[1])}, T3 {f2(tg[2])}.", True))
+                    f"{f2(t['e'])} -> {option(cx, t['side'], t['e'])}. {how} Targets: T1 {f2(tg[0])} ({t1_word(t)}), "
+                    f"then the next levels T2 {f2(tg[1])}, T3 {f2(tg[2])} (for reference).", True))
         for k, ev in enumerate(t['ev']):
             if ev['kind'] == 'half':
                 txt = (f"{nm} {hhmm(ev['m'])} BOOK HALF at {f2(ev['px'])} ({ev['pts']:+.0f} pts). Move the stop to {f2(ev['stp'])}."
@@ -1068,10 +1068,25 @@ def mfe_before_stop(c1, side, e, stop, start_m, last_m=CLOSE - 1):
             best = max(best, side * (p - e))
     return best, False
 
-def target_levels(cx, c1, side, e, start):
-    """T1 / T2 / T3, for reference only (the exits don't use them): the next three price levels beyond the entry in
+TARGETS_V = 2                     # the T1 / T2 / T3 kind in the saved history (2: T1 = where half is booked)
+
+def half_price(t):
+    """Where the call books half (or, for a single target, its target): T1."""
+    if t.get('small') or t['src'] in ('VOLUME LINE', 'SWEEP'):
+        return t['tgt']
+    if t['src'] == 'MAGNET':
+        return t['t1']
+    return t['e'] + t['side'] * 0.25 * t['R']
+
+def t1_word(t):
+    """What the call does at T1: books half, or (a single target) books all."""
+    return 'target' if t['src'] in ('VOLUME LINE', 'SWEEP') and not t.get('tgt2') else 'book half'
+
+def target_levels(cx, c1, side, e, start, t1=None):
+    """T1 / T2 / T3 for the app, the chart and the alerts. T1 = where the call books half (`t1`; the exits are the
+    same as always). T2 / T3, for reference only (the exits don't use them): the next two price levels beyond T1 in
     the trade's direction (the CPR, the floor pivots R1-R3 / S1-S3, yesterday's high / low, the 15-minute high / low
-    once known, the 3-day volume lines, the POC), at least 0.05% apart."""
+    once known, the 3-day volume lines, the POC), at least 0.05% apart. Without `t1`: the next three levels."""
     lv, yh, yl = cx['lv'], cx['yh'], cx['yl']
     P = lv['p']
     L = [lv['top'], P, lv['bot'], yh, yl, 2 * P - yl, 2 * P - yh, P + (yh - yl), P - (yh - yl),
@@ -1081,8 +1096,8 @@ def target_levels(cx, c1, side, e, start):
     first = [x for x in c1 if x[0] < RANGE_END]
     if start >= RANGE_END and first:
         L += [max(x[2] for x in first), min(x[3] for x in first)]
-    gap, t = 0.0005 * e, []
-    for x in sorted((x for x in L if side * (x - e) >= gap), key=lambda x: side * (x - e)):
+    gap, t = 0.0005 * e, ([] if t1 is None else [t1])
+    for x in sorted((x for x in L if side * (x - (e if t1 is None else t1)) >= gap), key=lambda x: side * (x - e)):
         if not t or side * (x - t[-1]) >= gap:
             t.append(x)
         if len(t) == 3:
@@ -1107,12 +1122,13 @@ def call_info(cx, t, c1):
     mfe, stopped = mfe_before_stop(c1, sd, t['e'], t['stp0'], t['known'])
     need = SUCCESS_PTS.get(cx['name'], 0)
     m0 = 556 if t['src'] == 'MAGNET' else t['m']           # as the alert says it
-    tg = target_levels(cx, c1, sd, t['e'], t['known'])
+    tg = target_levels(cx, c1, sd, t['e'], t['known'], half_price(t))
     mae = mae_until(c1, sd, t['e'], t['known'], x['m'] if x else (c1[-1][0] if c1 else t['known']))
     return dict(time=hhmm(m0), side='BUY' if sd > 0 else 'SELL', setup=t['src'].lower(), entry=round(t['e'], 2),
                 stop=round(t['stp0'], 2), stop_now=round(t['stp'], 2), open=not x, status=(f"{x['why']} at {f2(x['px'])}" if x else 'open'),
                 pts=round(x['pnl'], 1) if x else None, mfe=round(mfe, 1), mae=round(mae, 1), stopped=stopped, success=mfe >= need,
-                need=need, option=option(cx, sd, t['e']), targets=tg, hit=[mfe >= sd * (v - t['e']) for v in tg])
+                need=need, option=option(cx, sd, t['e']), targets=tg, t1=t1_word(t),
+                hit=[mfe >= sd * (v - t['e']) - 0.005 for v in tg])
 
 def record_history(cx, ts, c1, day):
     """At the close: the day's calls, with their result and whether they reached the success move."""
@@ -1122,7 +1138,7 @@ def record_history(cx, ts, c1, day):
             ci = call_info(cx, t, c1)
             rows.append(dict(d=day, index=cx['name'], time=ci['time'], side=ci['side'], setup=ci['setup'], entry=ci['entry'],
                              stop=ci['stop'], pts=ci['pts'], mfe=ci['mfe'], mae=ci['mae'], success=ci['success'],
-                             targets=ci['targets'], hit=ci['hit']))
+                             targets=ci['targets'], hit=ci['hit'], tv=TARGETS_V))
     try:
         old = json.load(open(HISTORY_FILE)) if os.path.exists(HISTORY_FILE) else []
         have = {(r['d'], r['index'], r['time'], r['side']) for r in old}
@@ -1214,8 +1230,9 @@ def chart_update(n, cx, c_all, ts, got, day):
         levels.append(dict(p=pend['px'], c='#2962ff', t='LIMIT ' + ('BUY' if pend['side'] > 0 else 'SELL'), s=2, w=2))
     if open_t:
         levels.append(dict(p=open_t['stp'], c='#ef5350', t='Stop loss', s=2, w=1))
-        for k, v in enumerate(target_levels(cx, c_all, open_t['side'], open_t['e'], open_t['known'])):
-            levels.append(dict(p=v, c='#80cbc4', t=f'T{k + 1}', s=1, w=1))
+        T = target_levels(cx, c_all, open_t['side'], open_t['e'], open_t['known'], half_price(open_t))
+        for k, v in enumerate(T):
+            levels.append(dict(p=v, c='#26a69a' if k == 0 else '#80cbc4', t='T1 ' + t1_word(open_t) if k == 0 else f'T{k + 1}', s=2 if k == 0 else 1, w=1))
         half = any(e['kind'] == 'half' for e in open_t['ev'])
         sd = open_t['side']
         if open_t.get('small'):
@@ -1226,7 +1243,7 @@ def chart_update(n, cx, c_all, ts, got, day):
             tg = open_t['tgt2'] if half else open_t['tgt']
         else:
             tg = None if half else open_t['e'] + sd * 0.25 * open_t['R']      # after half: trailing, no target
-        if tg:
+        if tg and abs(tg - T[0]) > 0.01:
             levels.append(dict(p=tg, c='#26a69a', t='Target', s=2, w=1))
     done_ = [t for t in ts if t['taken'] and t['exit']]
     net = sum(t['exit']['pnl'] for t in done_)
@@ -1639,7 +1656,17 @@ def next_morning():
     return t
 
 def backfill_history(names):
-    """Days after the last one in the history, up to yesterday, that this program didn't run: add their calls."""
+    """Days after the last one in the history, up to yesterday, that this program didn't run: add their calls. Days
+    saved with older targets (T1 / T2 / T3) are worked out again."""
+    try:
+        if os.path.exists(HISTORY_FILE):
+            saved = json.load(open(HISTORY_FILE))
+            keep = [r for r in saved if r.get('tv') == TARGETS_V]
+            if len(keep) < len(saved):
+                with open(HISTORY_FILE, 'w') as f:
+                    json.dump(keep, f)
+    except Exception as e:
+        print(f"  (history targets: {e})")
     have = {r['d'] for r in history_all()['calls']}
     if not have:
         return

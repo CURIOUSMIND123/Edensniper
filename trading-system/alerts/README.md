@@ -15,7 +15,8 @@ or a login. It tells you:
 - **9:30-2:30:** volume-line trades (and liquidity sweeps if switched on);
 - **the volume check (Sensex):** a signal whose volume doesn't agree is skipped, with a message saying so;
 - **every trade:** BUY = buy the ATM call, SELL = buy the ATM put, with the stop, the target (or when to book half
-  and move the stop), and the exit with points and rupees.
+  and move the stop), and the exit with points and rupees. Each entry also names **T1** (where it books half; a
+  volume-line trade: its target) and **T2 / T3**, the next two price levels beyond T1, for reference only.
 
 Alerts appear on the screen (with a beep) and, if you set it up, on your phone through Telegram (free).
 

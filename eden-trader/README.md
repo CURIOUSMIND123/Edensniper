@@ -8,13 +8,17 @@ Nifty / Sensex CPR Breakout calls on your phone: an Android app with **notificat
   with the volume check.
 - **Notifications**: every call (entry with the strike, stop, book half, exit), the plan at 8:45 and the day's
   result after 3:30, also when the app is closed.
-- **Targets T1 / T2 / T3** (for reference; the exits don't use them): the next three price levels ahead of the entry
-  (CPR, pivots R1-R3 / S1-S3, yesterday's high / low, the 15-minute range, the volume lines, the POC), in every call,
-  on the chart and in the history, with how far each call went its way and against it.
+- **Targets T1 / T2 / T3**: **T1 = where the call books half**, as always (a volume-line call has one target: T1 is
+  that target). T2 / T3, for reference only (the exits don't use them): the next two price levels beyond T1 (CPR,
+  pivots R1-R3 / S1-S3, yesterday's high / low, the 15-minute range, the volume lines, the POC). In every call, on the
+  chart and in the history, with how far each call went its way and against it. The trades themselves (entries,
+  stop, book half, trail) are exactly the strategy's.
 - **History**: a call is a **success** when the index went at least **50 points (Nifty) / 150 points (Sensex)** its
   way before the stop loss. 2026 to 13 October: Nifty 68 of 95 calls (72%), Sensex 66 of 86 (77%). On average the
-  Nifty calls went 112 points their way and 32 against; Sensex 395 and 96. T1 / T2 / T3 were reached on 73 / 40 / 23%
-  of the Nifty calls and 76 / 49 / 26% of the Sensex calls.
+  Nifty calls went 112 points their way and 32 against; Sensex 395 and 96. 80% of the Nifty calls and 85% of the
+  Sensex calls made money. T1 (book half) was reached on 91% of the Nifty and 98% of the Sensex breakout / Magnet
+  calls; with the volume-line calls (T1 = their one target), T1 / T2 / T3 were reached on 60 / 39 / 23% of all Nifty
+  calls and 72 / 45 / 28% of all Sensex calls.
 
 ## Install the app
 
