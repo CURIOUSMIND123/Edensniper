@@ -1,0 +1,7 @@
+[Unit]
+Description=Eden Trader: pull new code from GitHub and install it
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash /opt/eden-trader/eden-trader/deploy/update.sh

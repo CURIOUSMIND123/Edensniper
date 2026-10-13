@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0f1419">
+<title>Eden Trader</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <div class="brand">Eden Trader</div>
+  <div id="live" class="live" title="connection">●</div>
+  <button id="gear" class="gear" aria-label="Settings">⚙</button>
+</header>
+
+<main>
+  <section id="v-chart" class="view">
+    <div id="chart-empty" class="empty hidden">Set the server and key in Settings (⚙) first.</div>
+    <iframe id="chart-frame" title="Live chart"></iframe>
+  </section>
+
+  <section id="v-calls" class="view hidden">
+    <div id="calls"></div>
+    <h3>Latest alerts</h3>
+    <div id="feed" class="feed"></div>
+  </section>
+
+  <section id="v-history" class="view hidden">
+    <p id="rule" class="muted"></p>
+    <div id="stats" class="stats"></div>
+    <div class="filter">
+      <button data-f="ALL" class="on">All</button><button data-f="NIFTY">Nifty</button><button data-f="SENSEX">Sensex</button>
+    </div>
+    <div id="hist"></div>
+    <button id="more" class="wide hidden">Show more</button>
+  </section>
+
+  <section id="v-settings" class="view hidden">
+    <h2>Settings</h2>
+    <label>Server<input id="s-server" type="url" autocapitalize="none" autocomplete="off" placeholder="https://trade.munimo.online"></label>
+    <label>Key<input id="s-key" type="password" autocapitalize="none" autocomplete="off" placeholder="the app key"></label>
+    <button id="s-save" class="wide primary">Save</button>
+    <p id="s-msg" class="muted"></p>
+    <h3>Notifications</h3>
+    <p class="muted">Every BUY / SELL call, book-half, exit, the morning plan and the day's result arrive as notifications,
+      also when the app is closed. Keep them reliable: Settings &gt; Apps &gt; Eden Trader &gt; Battery &gt; <b>Unrestricted</b>.</p>
+    <button id="s-perm" class="wide">Allow notifications</button>
+    <button id="s-test" class="wide">Send a test notification</button>
+    <p class="muted small">A call counts as a success in History when the index went at least 50 points (Nifty) /
+      150 points (Sensex) its way before the stop loss. Calls are not advice; trade at your own risk.</p>
+  </section>
+</main>
+
+<nav>
+  <button data-v="chart" class="on">📈<span>Chart</span></button>
+  <button data-v="calls">🔔<span>Calls</span></button>
+  <button data-v="history">🏆<span>History</span></button>
+</nav>
+<script src="app.js"></script>
+</body>
+</html>

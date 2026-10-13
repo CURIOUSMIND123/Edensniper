@@ -23,7 +23,8 @@ def dump(nm):
             if t['taken'] and t['exit']:
                 ci = A.call_info(cx, t, Y.one[d])
                 out.append(dict(d=d, index=cx['name'], time=ci['time'], side=ci['side'], setup=ci['setup'], entry=ci['entry'],
-                                stop=ci['stop'], pts=ci['pts'], mfe=ci['mfe'], success=ci['success']))
+                                stop=ci['stop'], pts=ci['pts'], mfe=ci['mfe'], mae=ci['mae'], success=ci['success'],
+                                targets=ci['targets'], hit=ci['hit']))
     json.dump(out, open(f'../.cache/apphist_{nm}.json', 'w'))
     w = sum(r['success'] for r in out)
     print(nm, len(out), 'calls,', w, f'reached the success move ({100 * w / len(out):.0f}%)')

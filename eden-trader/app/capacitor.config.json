@@ -1,0 +1,17 @@
+{
+  "appId": "online.munimo.trader",
+  "appName": "Eden Trader",
+  "webDir": "www",
+  "server": {
+    "androidScheme": "https"
+  },
+  "plugins": {
+    "LocalNotifications": {
+      "smallIcon": "ic_stat_trader",
+      "iconColor": "#26a69a"
+    }
+  },
+  "android": {
+    "allowMixedContent": false
+  }
+}

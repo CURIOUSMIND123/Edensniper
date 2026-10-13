@@ -81,6 +81,7 @@ CHART_PORT = int(os.environ.get('CPRB_CHART_PORT') or CHART_PORT)
 CHART_KEY = os.environ.get('CPRB_CHART_KEY') or ''              # if set, the chart opens only at .../?key=CHART_KEY
 CHART_KEY_SHA256 = os.environ.get('CPRB_CHART_KEY_SHA256') or ''  # or only the key's SHA-256 (the key itself stays private)
 DATA_DIR = os.environ.get('CPRB_DATA_DIR') or os.path.dirname(os.path.abspath(__file__))   # cache, log, app data
+APP_APK = os.environ.get('CPRB_APP_APK') or ''   # the Eden Trader app, offered at /app.apk (no key needed)
 SUCCESS_PTS = {'NIFTY': 50, 'SENSEX': 150}  # the app's history: a call succeeded if the index went this far its way
                                   # before the stop loss
 
@@ -905,8 +906,10 @@ def messages(cx, ts, c1, upto, lots):
                    f"Stop {f2(t['stp0'])} ({sn or 'other side of the 15-minute range'}). Book half at "
                    f"{f2(t['e'] + t['side'] * 0.25 * t['R'])}, then stop to entry; after {f2(t['e'] + t['side'] * t['R'])} "
                    "trail the stop 1R behind the best price.")
+        tg = target_levels(cx, c1, t['side'], t['e'], t['known'])
         out.append((tid + ('in',), t['known'], f"{nm} {hhmm(t['m'] if t['src'] != 'MAGNET' else 556)} {t['src']} {sd} at "
-                    f"{f2(t['e'])} -> {option(cx, t['side'], t['e'])}. {how}", True))
+                    f"{f2(t['e'])} -> {option(cx, t['side'], t['e'])}. {how} Levels ahead (for reference): "
+                    f"T1 {f2(tg[0])}, T2 {f2(tg[1])}, T3 {f2(tg[2])}.", True))
         for k, ev in enumerate(t['ev']):
             if ev['kind'] == 'half':
                 txt = (f"{nm} {hhmm(ev['m'])} BOOK HALF at {f2(ev['px'])} ({ev['pts']:+.0f} pts). Move the stop to {f2(ev['stp'])}."
@@ -1065,16 +1068,51 @@ def mfe_before_stop(c1, side, e, stop, start_m, last_m=CLOSE - 1):
             best = max(best, side * (p - e))
     return best, False
 
+def target_levels(cx, c1, side, e, start):
+    """T1 / T2 / T3, for reference only (the exits don't use them): the next three price levels beyond the entry in
+    the trade's direction (the CPR, the floor pivots R1-R3 / S1-S3, yesterday's high / low, the 15-minute high / low
+    once known, the 3-day volume lines, the POC), at least 0.05% apart."""
+    lv, yh, yl = cx['lv'], cx['yh'], cx['yl']
+    P = lv['p']
+    L = [lv['top'], P, lv['bot'], yh, yl, 2 * P - yl, 2 * P - yh, P + (yh - yl), P - (yh - yl),
+         yh + 2 * (P - yl), yl - 2 * (yh - P)] + list(cx['lines'])
+    if cx.get('poc') is not None:
+        L.append(cx['poc'])
+    first = [x for x in c1 if x[0] < RANGE_END]
+    if start >= RANGE_END and first:
+        L += [max(x[2] for x in first), min(x[3] for x in first)]
+    gap, t = 0.0005 * e, []
+    for x in sorted((x for x in L if side * (x - e) >= gap), key=lambda x: side * (x - e)):
+        if not t or side * (x - t[-1]) >= gap:
+            t.append(x)
+        if len(t) == 3:
+            break
+    if not t:
+        t = [e + side * 0.0025 * e]
+    while len(t) < 3:
+        t.append(t[-1] + (t[-1] - (t[-2] if len(t) > 1 else e)))
+    return [round(x, 2) for x in t]
+
+def mae_until(c1, side, e, start_m, end_m):
+    """How far the index went against the call (points) from its entry until it closed."""
+    worst = 0.0
+    for m, o, h, l, c in c1:
+        if start_m <= m <= end_m:
+            worst = max(worst, side * (e - (l if side > 0 else h)))
+    return worst
+
 def call_info(cx, t, c1):
     """One taken trade as the app shows it."""
     sd, x = t['side'], t['exit']
     mfe, stopped = mfe_before_stop(c1, sd, t['e'], t['stp0'], t['known'])
     need = SUCCESS_PTS.get(cx['name'], 0)
     m0 = 556 if t['src'] == 'MAGNET' else t['m']           # as the alert says it
+    tg = target_levels(cx, c1, sd, t['e'], t['known'])
+    mae = mae_until(c1, sd, t['e'], t['known'], x['m'] if x else (c1[-1][0] if c1 else t['known']))
     return dict(time=hhmm(m0), side='BUY' if sd > 0 else 'SELL', setup=t['src'].lower(), entry=round(t['e'], 2),
                 stop=round(t['stp0'], 2), stop_now=round(t['stp'], 2), open=not x, status=(f"{x['why']} at {f2(x['px'])}" if x else 'open'),
-                pts=round(x['pnl'], 1) if x else None, mfe=round(mfe, 1), stopped=stopped, success=mfe >= need, need=need,
-                option=option(cx, sd, t['e']))
+                pts=round(x['pnl'], 1) if x else None, mfe=round(mfe, 1), mae=round(mae, 1), stopped=stopped, success=mfe >= need,
+                need=need, option=option(cx, sd, t['e']), targets=tg, hit=[mfe >= sd * (v - t['e']) for v in tg])
 
 def record_history(cx, ts, c1, day):
     """At the close: the day's calls, with their result and whether they reached the success move."""
@@ -1083,7 +1121,8 @@ def record_history(cx, ts, c1, day):
         if t['taken'] and t['exit']:
             ci = call_info(cx, t, c1)
             rows.append(dict(d=day, index=cx['name'], time=ci['time'], side=ci['side'], setup=ci['setup'], entry=ci['entry'],
-                             stop=ci['stop'], pts=ci['pts'], mfe=ci['mfe'], success=ci['success']))
+                             stop=ci['stop'], pts=ci['pts'], mfe=ci['mfe'], mae=ci['mae'], success=ci['success'],
+                             targets=ci['targets'], hit=ci['hit']))
     try:
         old = json.load(open(HISTORY_FILE)) if os.path.exists(HISTORY_FILE) else []
         have = {(r['d'], r['index'], r['time'], r['side']) for r in old}
@@ -1105,7 +1144,13 @@ def history_all():
     calls = sorted(rows.values(), key=lambda r: (r['d'], r['time']), reverse=True)
     def stats(rs):
         n = len(rs); w = sum(r['success'] for r in rs)
-        return dict(calls=n, success=w, rate=round(100 * w / n) if n else None, pts=round(sum(r['pts'] or 0 for r in rs)))
+        avg = lambda k: round(sum(r.get(k) or 0 for r in rs) / n) if n else None
+        hits = [r['hit'] for r in rs if r.get('hit')]
+        return dict(calls=n, success=w, rate=round(100 * w / n) if n else None, pts=round(sum(r['pts'] or 0 for r in rs)),
+                    up=avg('mfe'), down=avg('mae'),
+                    t1=round(100 * sum(h[0] for h in hits) / len(hits)) if hits else None,
+                    t2=round(100 * sum(h[1] for h in hits) / len(hits)) if hits else None,
+                    t3=round(100 * sum(h[2] for h in hits) / len(hits)) if hits else None)
     out = dict(rule={k: v for k, v in SUCCESS_PTS.items()}, calls=calls, stats={})
     cut = str(dt.date.fromisoformat(calls[0]['d']) - dt.timedelta(days=30)) if calls else ''
     for idx in ('ALL', 'NIFTY', 'SENSEX'):
@@ -1169,6 +1214,8 @@ def chart_update(n, cx, c_all, ts, got, day):
         levels.append(dict(p=pend['px'], c='#2962ff', t='LIMIT ' + ('BUY' if pend['side'] > 0 else 'SELL'), s=2, w=2))
     if open_t:
         levels.append(dict(p=open_t['stp'], c='#ef5350', t='Stop loss', s=2, w=1))
+        for k, v in enumerate(target_levels(cx, c_all, open_t['side'], open_t['e'], open_t['known'])):
+            levels.append(dict(p=v, c='#80cbc4', t=f'T{k + 1}', s=1, w=1))
         half = any(e['kind'] == 'half' for e in open_t['ev'])
         sd = open_t['side']
         if open_t.get('small'):
@@ -1314,6 +1361,16 @@ def serve_chart(names):
 
     class Handler(http.server.BaseHTTPRequestHandler):
         def do_GET(self):
+            if self.path.split('?')[0] == '/app.apk' and APP_APK and os.path.exists(APP_APK):
+                with open(APP_APK, 'rb') as f:
+                    body = f.read()
+                self.send_response(200)
+                self.send_header('Content-Type', 'application/vnd.android.package-archive')
+                self.send_header('Content-Disposition', 'attachment; filename="eden-trader.apk"')
+                self.send_header('Content-Length', str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+                return
             ok, fresh = key_ok(self)
             if not ok and not self.path.startswith('/lwc.js'):
                 body = b'This chart needs its key: open the address with ?key=... at the end (see /etc/cprb.env on the server).'

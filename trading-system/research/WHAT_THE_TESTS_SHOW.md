@@ -1391,6 +1391,28 @@ booked now (0.25x the stop, then the stop to entry), T2 / T3 at the next two lev
 - Fixed targets at the levels cap the big trend days, which the trailing stop lets run; those days make most of
   the profit (the hybrid wins more often but makes 40-50% less).
 
+## 2026: a small stop with one re-entry, and reversals from our target levels
+
+`y2026_reentry.py`, on the alert program's calls (default settings):
+
+| 2026, points after costs | Nifty | Sensex |
+|---|---|---|
+| **Now** | **+2,389**, worst trade −145, worst fall −204 | **+9,166**, worst trade −336, worst fall −336 |
+| Stop at most 30 / 40 / 50 Nifty, 100 / 130 / 170 Sensex | +389 / +947 / +1,305 | +3,772 / +4,766 / +6,283 |
+| The same + one re-entry at the entry price after the stop | +616 / +940 / +1,133 | +4,491 / +4,838 / +5,479 |
+| The same + one reversal at the stop ("flip") | +212 / +330 / +848 | +1,886 / +1,544 / +3,559 |
+| Reversal from T2 / T3 after a 5-minute rejection, very small stop (32-40 Nifty, 93-95 Sensex), alone | −144 to −365 | −97 to −1,660 |
+
+- Smaller stops do cut the worst single trade (Nifty −145 -> −54, Sensex −336 -> −182) but they are hit much more
+  often, so the total falls by half or more and the losing runs get longer (worst fall −352 to −665 Nifty, −362 to
+  −1,176 Sensex). A re-entry wins back a little at the smallest stops and nothing at the larger ones; reversing at
+  the stop loses.
+- Reversals at our T2 / T3 levels lost on both indices: price that reached them more often kept going.
+- What the calls did (all 2026 calls, `y2026_apphistory.py`): Nifty went on average 112 points its way and 32
+  against (median 22), Sensex 395 and 96 (median 62); the next three levels ahead (T1 / T2 / T3, on average 46 / 111 /
+  183 Nifty and 151 / 372 / 605 Sensex points away) were reached on 73 / 40 / 23% and 76 / 49 / 26% of the calls. The
+  alerts, the app and the chart now show these targets for reference; the exits stay as they are.
+
 ## How to re-check all of this
 
 - `python research/fair_price_backtest.py` downloads the candles and re-runs the Fair Price test.

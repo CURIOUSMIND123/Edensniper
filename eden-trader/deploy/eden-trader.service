@@ -1,0 +1,16 @@
+[Unit]
+Description=Eden Trader: Nifty / Sensex calls for the phone app (notifications, chart, history), every trading day
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=eden
+WorkingDirectory=/opt/eden-trader/trading-system/alerts
+EnvironmentFile=/etc/eden-trader.env
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/usr/bin/python3 cprb_alerts.py --forever
+Restart=always
+RestartSec=30
+
+[Install]
+WantedBy=multi-user.target
