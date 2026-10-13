@@ -79,6 +79,10 @@ LOTS = int(os.environ.get('CPRB_LOTS') or LOTS)
 CHART_HOST = os.environ.get('CPRB_CHART_HOST') or '127.0.0.1'   # who may open the chart: this device only
 CHART_PORT = int(os.environ.get('CPRB_CHART_PORT') or CHART_PORT)
 CHART_KEY = os.environ.get('CPRB_CHART_KEY') or ''              # if set, the chart opens only at .../?key=CHART_KEY
+CHART_KEY_SHA256 = os.environ.get('CPRB_CHART_KEY_SHA256') or ''  # or only the key's SHA-256 (the key itself stays private)
+DATA_DIR = os.environ.get('CPRB_DATA_DIR') or os.path.dirname(os.path.abspath(__file__))   # cache, log, app data
+SUCCESS_PTS = {'NIFTY': 50, 'SENSEX': 150}  # the app's history: a call succeeded if the index went this far its way
+                                  # before the stop loss
 
 # ---------------- fixed rules (as tested on 2026) ----------------
 SPEC = {
@@ -88,7 +92,7 @@ SPEC = {
 BEES = 'NSE_EQ|INF204KB14I2'      # NIFTYBEES: its volume stands in for the index's (an index has no volume)
 OPEN, RANGE_END, CUTOFF, VOL_END, OUT, CLOSE = 555, 570, 600, 870, 915, 930   # minutes from midnight
 IST = dt.timezone(dt.timedelta(hours=5, minutes=30))
-CACHE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'cprb_cache.json')
+CACHE = os.path.join(DATA_DIR, 'cprb_cache.json')
 
 
 # ---------------- data: Upstox public candles ----------------
@@ -988,10 +992,134 @@ def telegram(text):
         print(f"  (Telegram message failed: {e})")
         return False
 
-def alert(text, push=True):
+def alert(text, push=True, kind='info', index=''):
     print(('\a>>> ' if push else '    ') + text, flush=True)
     if push:
         telegram(text)
+        record_event(text, kind, index or text.split(' ', 1)[0])
+
+
+# ---------------- the app: events (notifications), today's calls, history ----------------
+EVENTS = []                       # the alerts sent, newest last (the app's notifications read them)
+PLANS = {}                        # today's plan text of each index
+EVENTS_FILE = os.path.join(DATA_DIR, 'events.jsonl')
+HISTORY_FILE = os.path.join(DATA_DIR, 'history.json')
+HISTORY_SEED = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'history-2026.json')
+
+def load_events():
+    if EVENTS or not os.path.exists(EVENTS_FILE):
+        return
+    try:
+        with open(EVENTS_FILE, encoding='utf-8') as f:
+            EVENTS.extend(json.loads(x) for x in f.read().splitlines()[-300:] if x.strip())
+    except Exception as e:
+        print(f"  (events not loaded: {e})")
+
+def event_title(text, kind, index):
+    import re
+    if kind == 'plan':
+        return f"{index} plan for today"
+    if kind == 'summary':
+        return f"{index} day result"
+    m = re.match(r'^(\w+) (\d\d?:\d\d) (.+?) (BUY|SELL) at ([\d,.]+)', text)
+    if kind == 'entry' and m:
+        return f"{m.group(1)} {m.group(4)} {m.group(5)} ({m.group(3).lower()})"
+    m = re.match(r'^(\w+) (\d\d?:\d\d) EXIT \(([^)]+)\) at ([\d,.]+): ([+-]?\d+) pts', text)
+    if kind == 'exit' and m:
+        return f"{m.group(1)} EXIT ({m.group(3)}): {m.group(5)} pts"
+    first = text.split('. ')[0].split(' -> ')[0]
+    return first if len(first) <= 70 else first[:67] + '...'
+
+def record_event(text, kind, index):
+    eid = max(int(time.time() * 1000), (EVENTS[-1]['id'] + 1) if EVENTS else 0)
+    e = dict(id=eid, at=now_ist().strftime('%Y-%m-%d %H:%M:%S'), index=index, kind=kind, title=event_title(text, kind, index), text=text)
+    EVENTS.append(e)
+    del EVENTS[:-300]
+    try:
+        with open(EVENTS_FILE, 'a', encoding='utf-8') as f:
+            f.write(json.dumps(e) + '\n')
+    except Exception:
+        pass
+
+def kind_of(mid):
+    if isinstance(mid, tuple):
+        if mid[-1] == 'in':
+            return 'entry'
+        if mid[-1] == 'out':
+            return 'exit'
+        if len(mid) > 1 and mid[-2] == 'ev':
+            return 'update'
+        if mid[0] == 'vskip' or mid[-1] == 'skip':
+            return 'skip'
+    return 'info'
+
+def mfe_before_stop(c1, side, e, stop, start_m, last_m=CLOSE - 1):
+    """How far the index went the call's way (points) before touching the stop loss, and whether the stop was hit."""
+    best = 0.0
+    for m, o, h, l, c in c1:
+        if m < start_m or m > last_m:
+            continue
+        for p in path(o, h, l, c):
+            if side * (p - stop) <= 0:
+                return best, True
+            best = max(best, side * (p - e))
+    return best, False
+
+def call_info(cx, t, c1):
+    """One taken trade as the app shows it."""
+    sd, x = t['side'], t['exit']
+    mfe, stopped = mfe_before_stop(c1, sd, t['e'], t['stp0'], t['known'])
+    need = SUCCESS_PTS.get(cx['name'], 0)
+    m0 = 556 if t['src'] == 'MAGNET' else t['m']           # as the alert says it
+    return dict(time=hhmm(m0), side='BUY' if sd > 0 else 'SELL', setup=t['src'].lower(), entry=round(t['e'], 2),
+                stop=round(t['stp0'], 2), stop_now=round(t['stp'], 2), open=not x, status=(f"{x['why']} at {f2(x['px'])}" if x else 'open'),
+                pts=round(x['pnl'], 1) if x else None, mfe=round(mfe, 1), stopped=stopped, success=mfe >= need, need=need,
+                option=option(cx, sd, t['e']))
+
+def record_history(cx, ts, c1, day):
+    """At the close: the day's calls, with their result and whether they reached the success move."""
+    rows = []
+    for t in ts:
+        if t['taken'] and t['exit']:
+            ci = call_info(cx, t, c1)
+            rows.append(dict(d=day, index=cx['name'], time=ci['time'], side=ci['side'], setup=ci['setup'], entry=ci['entry'],
+                             stop=ci['stop'], pts=ci['pts'], mfe=ci['mfe'], success=ci['success']))
+    try:
+        old = json.load(open(HISTORY_FILE)) if os.path.exists(HISTORY_FILE) else []
+        have = {(r['d'], r['index'], r['time'], r['side']) for r in old}
+        new = [r for r in rows if (r['d'], r['index'], r['time'], r['side']) not in have]
+        if new:
+            with open(HISTORY_FILE, 'w') as f:
+                json.dump(old + new, f)
+    except Exception as e:
+        print(f"  (history not saved: {e})")
+
+def history_all():
+    rows = {}
+    for path_ in (HISTORY_SEED, HISTORY_FILE):
+        try:
+            for r in json.load(open(path_)) if os.path.exists(path_) else []:
+                rows[(r['d'], r['index'], r['time'], r['side'])] = r
+        except Exception as e:
+            print(f"  (history file {path_}: {e})")
+    calls = sorted(rows.values(), key=lambda r: (r['d'], r['time']), reverse=True)
+    def stats(rs):
+        n = len(rs); w = sum(r['success'] for r in rs)
+        return dict(calls=n, success=w, rate=round(100 * w / n) if n else None, pts=round(sum(r['pts'] or 0 for r in rs)))
+    out = dict(rule={k: v for k, v in SUCCESS_PTS.items()}, calls=calls, stats={})
+    cut = str(dt.date.fromisoformat(calls[0]['d']) - dt.timedelta(days=30)) if calls else ''
+    for idx in ('ALL', 'NIFTY', 'SENSEX'):
+        rs = [r for r in calls if idx == 'ALL' or r['index'] == idx]
+        out['stats'][idx] = dict(all=stats(rs), last30=stats([r for r in rs if r['d'] > cut]))
+    return out
+
+def app_state():
+    out = dict(updated=now_ist().strftime('%Y-%m-%d %H:%M:%S'), indices={})
+    for n, d in CHART_DATA.items():
+        out['indices'][n] = dict(name=d.get('name'), day=d.get('day'), status=d.get('status'), plan=PLANS.get(n, ''),
+                                 last=d['candles'][-1][4] if d.get('candles') else None, calls=d.get('calls', []),
+                                 updated=d.get('updated'))
+    return out
 
 def now_ist():
     return dt.datetime.now(IST)
@@ -1059,9 +1187,11 @@ def chart_update(n, cx, c_all, ts, got, day):
     status = (f"{cx['name']} {f2(last[4]) if last else '-'}" + (f" (data to {hhmm(last[0])})" if last else '') +
               f" | CPR {f2(lv['bot'])} - {f2(lv['top'])} " + ('NARROW' if cx['narrow'] else '') +
               f" | {open_note(cx, ts)} | today {len(done_)} trade{'' if len(done_) == 1 else 's'}, {net:+.0f} pts")
+    upto_c = [x for x in c_all if x[0] <= got]
+    calls = [call_info(cx, t, upto_c) for t in ts if t['taken']]
     CHART_DATA[n] = dict(name=cx['name'], day=day, yday_date=cx['prev'], yday=[list(x) for x in cx['yday']],
                          candles=[list(x) for x in c_all], levels=levels, marks=sorted(marks, key=lambda k: k['m']),
-                         rows=rows, status=status, updated=now_ist().strftime('%H:%M:%S'))
+                         rows=rows, status=status, updated=now_ist().strftime('%H:%M:%S'), calls=calls)
 
 CHART_HTML = """<!doctype html><html><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#0f1419">
@@ -1114,7 +1244,8 @@ function buttons() {
 }
 async function load() {
   let d;
-  try { d = await (await fetch('/data?i=' + cur, {cache: 'no-store'})).json(); }
+  const kq = new URLSearchParams(location.search).get('key');
+  try { d = await (await fetch('/data?i=' + cur + (kq ? '&key=' + encodeURIComponent(kq) : ''), {cache: 'no-store'})).json(); }
   catch (e) { document.getElementById('st').textContent = 'No data: the program is not running (start it in Pydroid 3, or check the server).'; return; }
   if (!d.day) return;
   s.setData(agg(d.day, d.candles, agg(d.yday_date, d.yday, [])));
@@ -1131,7 +1262,7 @@ buttons(); load(); setInterval(load, 5000);
 </script></body></html>"""
 
 LWC_URL = 'https://cdn.jsdelivr.net/npm/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js'
-LWC_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'lightweight-charts-4.1.3.js')
+LWC_FILE = os.path.join(DATA_DIR, 'lightweight-charts-4.1.3.js')
 
 def chart_library():
     """TradingView's free open-source chart library, downloaded once and kept next to this file."""
@@ -1149,16 +1280,26 @@ def chart_library():
 CHART_SERVER = []                 # the chart server, once it runs (it is started only once)
 
 def key_ok(handler):
-    """With CHART_KEY set: the key in the address (?key=...) or in the cookie set the first time."""
+    """With a key set (CHART_KEY, or only its SHA-256): the key in the address (?key=...), in an X-Key header, or in
+    the cookie set the first time."""
+    import hashlib
     import hmac
-    if not CHART_KEY:
+    if not (CHART_KEY or CHART_KEY_SHA256):
         return True, False
+    def good(v):
+        if not v:
+            return False
+        if CHART_KEY_SHA256:
+            return hmac.compare_digest(hashlib.sha256(v.encode()).hexdigest(), CHART_KEY_SHA256.lower())
+        return hmac.compare_digest(v, CHART_KEY)
     q = urllib.parse.parse_qs(urllib.parse.urlparse(handler.path).query).get('key', [''])[0]
-    if q and hmac.compare_digest(q, CHART_KEY):
+    if good(q):
         return True, True
+    if good(handler.headers.get('X-Key', '')):
+        return True, False
     for part in (handler.headers.get('Cookie') or '').split(';'):
         k, _, v = part.strip().partition('=')
-        if k == 'cprb_key' and hmac.compare_digest(v, CHART_KEY):
+        if k == 'cprb_key' and good(urllib.parse.unquote(v)):
             return True, False
     return False, False
 
@@ -1191,14 +1332,26 @@ def serve_chart(names):
             elif self.path.startswith('/data'):
                 q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
                 body, ctype = json.dumps(CHART_DATA.get(q.get('i', [names[0]])[0], {})).encode(), 'application/json'
+            elif self.path.startswith('/api/state'):
+                body, ctype = json.dumps(app_state()).encode(), 'application/json'
+            elif self.path.startswith('/api/events'):
+                q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+                since = int((q.get('since') or ['0'])[0] or 0)
+                body, ctype = json.dumps(dict(last=EVENTS[-1]['id'] if EVENTS else 0,
+                                              events=[e for e in EVENTS if e['id'] > since][-50:])).encode(), 'application/json'
+            elif self.path.startswith('/api/history'):
+                body, ctype = json.dumps(history_all()).encode(), 'application/json'
             else:
                 body, ctype = page.encode(), 'text/html; charset=utf-8'
             self.send_response(200)
             self.send_header('Content-Type', ctype)
             self.send_header('Cache-Control', 'no-store')
+            if ctype == 'application/json':
+                self.send_header('Access-Control-Allow-Origin', '*')      # the phone app reads these
             if fresh:                                 # remember the key, so the page's data requests carry it
                 secure = '; Secure' if self.headers.get('X-Forwarded-Proto') == 'https' else ''
-                self.send_header('Set-Cookie', f'cprb_key={CHART_KEY}; Path=/; Max-Age=31536000; HttpOnly; SameSite=Lax{secure}')
+                given = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query).get('key', [''])[0]
+                self.send_header('Set-Cookie', f'cprb_key={urllib.parse.quote(given)}; Path=/; Max-Age=31536000; HttpOnly; SameSite=Lax{secure}')
             self.end_headers()
             self.wfile.write(body)
 
@@ -1212,7 +1365,7 @@ def serve_chart(names):
         return False
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     CHART_SERVER.append(srv)
-    if CHART_HOST == '127.0.0.1':
+    if CHART_HOST == '127.0.0.1' and not (CHART_KEY or CHART_KEY_SHA256):
         print(f"LIVE CHART: open http://127.0.0.1:{CHART_PORT} in Chrome on this phone.")
     else:
         print(f"LIVE CHART: serving on {CHART_HOST}:{CHART_PORT}" + (" (key required)" if CHART_KEY else ""))
@@ -1274,8 +1427,10 @@ def live(names, lots, ladder, plan_only=False, forever=False):
     cxs = load(names, today)
     if TELEGRAM_TOKEN and TELEGRAM_CHAT_ID and not plan_only:
         telegram("CPR Breakout alerts started. The plan follows.")
+    load_events()
     for n in names:
-        alert(plan_text(cxs[n]), push=not plan_only)
+        PLANS[n] = plan_text(cxs[n])
+        alert(PLANS[n], push=not plan_only, kind='plan', index=cxs[n]['name'])
     if plan_only:
         return
     if now.weekday() >= 5:
@@ -1288,7 +1443,7 @@ def live(names, lots, ladder, plan_only=False, forever=False):
         serve_chart(names)
         for n in names:
             chart_update(n, cxs[n], [], [], OPEN - 1, today)
-    seen, first, last_ts, waited, shown = set(), True, {}, False, {}
+    seen, first, last_ts, waited, shown, last_c = set(), True, {}, False, {}, {}
     while True:
         now = now_ist()
         mnow = now.hour * 60 + now.minute
@@ -1346,7 +1501,8 @@ def live(names, lots, ladder, plan_only=False, forever=False):
                 if first and mk < got - 1:
                     print('    [earlier today] ' + text)
                 else:
-                    alert(text, push)
+                    alert(text, push, kind=kind_of(mid), index=cx['name'])
+            last_c[n] = c1
             if CHART:
                 chart_update(n, cx, c_all, ts, got, today)
             if shown.get(n) != got:
@@ -1356,7 +1512,9 @@ def live(names, lots, ladder, plan_only=False, forever=False):
         if mnow >= CLOSE:
             for n in names:
                 if n in last_ts:
-                    alert(day_summary(cxs[n], last_ts[n], lots))
+                    alert(day_summary(cxs[n], last_ts[n], lots), kind='summary', index=cxs[n]['name'])
+                    if n in last_c:
+                        record_history(cxs[n], last_ts[n], last_c[n], today)
             print("Market closed." + ("" if forever else " Run it again tomorrow before 9:15."))
             if CHART and not forever:
                 keep_serving("")
@@ -1405,7 +1563,7 @@ class Tee:
         return getattr(self.stream, k)
 
 def start_log():
-    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'cprb_log.txt')
+    path = os.path.join(DATA_DIR, 'cprb_log.txt')
     try:
         if os.path.exists(path) and os.path.getsize(path) > 2_000_000:
             os.remove(path)
@@ -1423,8 +1581,37 @@ def next_morning():
         t = (t + dt.timedelta(days=1)).replace(hour=8, minute=45)
     return t
 
+def backfill_history(names):
+    """Days after the last one in the history, up to yesterday, that this program didn't run: add their calls."""
+    have = {r['d'] for r in history_all()['calls']}
+    if not have:
+        return
+    d, today = dt.date.fromisoformat(max(have)) + dt.timedelta(days=1), now_ist().date()
+    while d < today and (today - d).days <= 20:
+        day = str(d)
+        if d.weekday() < 5 and day not in have:
+            try:
+                cxs = load(names, day)
+                tvol = {m: v[4] for m, v in fetch_range(BEES, d, d).get(day, {}).items()}
+                for n in names:
+                    rows = fetch_range(SPEC[n]['key'], d, d).get(day, {})
+                    c_all = [(m,) + tuple(rows[m][:4]) for m in sorted(rows)]
+                    if len(c_all) < 300:
+                        continue                          # a holiday, or not a full session
+                    cx = cxs[n]
+                    cx['tvol'] = tvol
+                    record_history(cx, day_trades(cx, c_all, CLOSE - 1, True, False), c_all, day)
+                print(f"  history: {day} checked")
+            except (Exception, SystemExit) as e:
+                print(f"  (history for {day} not added: {e})")
+        d += dt.timedelta(days=1)
+
 def run_forever(names, lots, ladder):
     """On a server: every trading day, without stopping (starts each weekday at 8:45 IST)."""
+    try:
+        backfill_history(names)
+    except Exception as e:
+        print(f"  (history catch-up: {e})")
     while True:
         try:
             live(names, lots, ladder, forever=True)

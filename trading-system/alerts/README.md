@@ -42,6 +42,13 @@ Alerts appear on the screen (with a beep) and, if you set it up, on your phone t
 
 The chart shows a waiting limit order as a blue "LIMIT" line.
 
+## The phone app (Eden Trader)
+
+The same program also serves the **Eden Trader** Android app (repository `CURIOUSMIND123/eden-trader`, which carries a
+copy of this file in `engine/`): `/api/state` (today's calls), `/api/events` (the alerts, which the app turns into
+notifications), `/api/history` (every call and whether the index went 50 Nifty / 150 Sensex points its way before the
+stop; 2026 from `history-2026.json`, later days as they happen). Settings: `CPRB_DATA_DIR`, `CPRB_CHART_KEY_SHA256`.
+
 ## On a server instead of the phone (runs every day by itself)
 
 A phone closes apps it isn't showing. On a server (for example Oracle Cloud) the program runs every trading day
