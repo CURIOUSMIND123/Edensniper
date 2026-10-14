@@ -30,6 +30,7 @@ import json
 import math
 import os
 import sys
+import threading
 import time
 import urllib.parse
 import urllib.request
@@ -68,6 +69,8 @@ TELEGRAM_CHAT_ID = ''             # found by itself once you've messaged your bo
 REPLAY_DAY = ''                   # e.g. '2026-10-08' to replay a past day instead of running live
 CHART = True                      # live chart in the phone's browser: http://127.0.0.1:8000
 CHART_PORT = 8000
+LIVE_PRICE = True                 # the chart's price every 2 seconds (Groww's public data), not just whole minutes;
+                                  # for the chart and the app only: the calls use the 1-minute candles as always
 LOG = True                        # also save everything it prints in cprb_log.txt next to this file, so you can see
                                   # afterwards why it stopped (an error is written there; if the log just ends, the
                                   # phone closed Pydroid 3)
@@ -82,13 +85,17 @@ CHART_KEY = os.environ.get('CPRB_CHART_KEY') or ''              # if set, the ch
 CHART_KEY_SHA256 = os.environ.get('CPRB_CHART_KEY_SHA256') or ''  # or only the key's SHA-256 (the key itself stays private)
 DATA_DIR = os.environ.get('CPRB_DATA_DIR') or os.path.dirname(os.path.abspath(__file__))   # cache, log, app data
 APP_APK = os.environ.get('CPRB_APP_APK') or ''   # the Eden Trader app, offered at /app.apk (no key needed)
+APP_WWW = os.environ.get('CPRB_APP_WWW') or os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..',
+                                                        'eden-trader', 'app', 'www')   # the app's screens, sent over the air
 SUCCESS_PTS = {'NIFTY': 50, 'SENSEX': 150}  # the app's history: a call succeeded if the index went this far its way
                                   # before the stop loss
 
 # ---------------- fixed rules (as tested on 2026) ----------------
 SPEC = {
-    'nifty':  dict(name='NIFTY',  key='NSE_INDEX|Nifty 50', bin=5.0,  cost=4.0,  lot=65, step=50,  cap=STOP_CAP['nifty']),
-    'sensex': dict(name='SENSEX', key='BSE_INDEX|SENSEX',   bin=16.0, cost=12.0, lot=20, step=100, cap=STOP_CAP['sensex']),
+    'nifty':  dict(name='NIFTY',  key='NSE_INDEX|Nifty 50', bin=5.0,  cost=4.0,  lot=65, step=50,  cap=STOP_CAP['nifty'],
+                   live=('NSE', 'NIFTY')),
+    'sensex': dict(name='SENSEX', key='BSE_INDEX|SENSEX',   bin=16.0, cost=12.0, lot=20, step=100, cap=STOP_CAP['sensex'],
+                   live=('BSE', 'SENSEX')),
 }
 BEES = 'NSE_EQ|INF204KB14I2'      # NIFTYBEES: its volume stands in for the index's (an index has no volume)
 OPEN, RANGE_END, CUTOFF, VOL_END, OUT, CLOSE = 555, 570, 600, 870, 915, 930   # minutes from midnight
@@ -143,6 +150,79 @@ def fetch_today(key):
     except Exception:
         rows = http_json(f"https://api.upstox.com/v2/historical-candle/intraday/{q}/1minute", tries=2)['data']['candles']
     return parse(rows)
+
+# ---------------- the live price (for the chart and the app only) ----------------
+LIVE = {}                         # index -> {'day', 'px', 'at' (time.time()), 'bars': {minute: [open, high, low, close]}}
+LIVE_LOCK = threading.Lock()
+LIVE_URL = 'https://groww.in/v1/api/stocks_data/v1/accord_points/exchange/{}/segment/CASH/latest_indices_ohlc/{}'
+LIVE_THREAD = []
+
+def live_prices(names):
+    """Every 2 seconds in market hours: each index's last price, from Groww's public data. It draws the minute still
+    forming on the chart (and the price in the app) until the 1-minute candle arrives; the calls don't use it."""
+    if LIVE_THREAD or not LIVE_PRICE:
+        return
+    def tick(n):
+        ex, sym = SPEC[n]['live']
+        req = urllib.request.Request(LIVE_URL.format(ex, sym), headers={'Accept': 'application/json', 'User-Agent': 'Mozilla/5.0'})
+        with urllib.request.urlopen(req, timeout=5) as r:
+            d = json.load(r)
+        px, at = float(d['value']), float(d.get('tsInMillis') or 0)
+        at = at / 1000 if at > 1e11 else at
+        if at and abs(time.time() - at) > 120:
+            return False                              # an old price (before the open, a holiday): not live
+        now = now_ist()
+        day, m = str(now.date()), now.hour * 60 + now.minute
+        with LIVE_LOCK:
+            L = LIVE.get(n)
+            if not L or L['day'] != day:
+                L = LIVE[n] = dict(day=day, bars={})
+            b = L['bars'].get(m)
+            if b:
+                b[1], b[2], b[3] = max(b[1], px), min(b[2], px), px
+            else:
+                L['bars'][m] = [px, px, px, px]
+            for k in [k for k in L['bars'] if k < m - 10]:
+                del L['bars'][k]
+            L['px'], L['at'] = px, time.time()
+        return True
+    def run():
+        fails = 0
+        while True:
+            now = now_ist()
+            m = now.hour * 60 + now.minute
+            if now.weekday() >= 5 or not OPEN <= m < CLOSE:
+                time.sleep(15)
+                continue
+            ok = False
+            for n in names:
+                try:
+                    ok = tick(n) or ok
+                except Exception:
+                    pass
+            fails = 0 if ok else fails + 1
+            time.sleep(2 if fails < 10 else 30)       # the source is down: look again less often
+    LIVE_THREAD.append(threading.Thread(target=run, daemon=True))
+    LIVE_THREAD[0].start()
+
+def live_now(n, fresh=20):
+    """(price, 'hh:mm:ss') if the live price is recent, else None."""
+    with LIVE_LOCK:
+        L = LIVE.get(n)
+        if not L or 'px' not in L or time.time() - L['at'] > fresh or L['day'] != str(now_ist().date()):
+            return None
+        return L['px'], dt.datetime.fromtimestamp(L['at'], IST).strftime('%H:%M:%S')
+
+def with_live(n, d):
+    """The chart data plus the live minutes after the last 1-minute candle."""
+    lv = live_now(n)
+    if not lv or d.get('day') != str(now_ist().date()):
+        return d
+    with LIVE_LOCK:
+        bars = sorted(LIVE[n]['bars'].items())
+    last = d['candles'][-1][0] if d.get('candles') else OPEN - 1
+    extra = [[m] + list(b) for m, b in bars if m > last and m < CLOSE]
+    return dict(d, candles=d.get('candles', []) + extra, live=dict(px=lv[0], at=lv[1]))
 
 def history(keys, first, last):
     """Earlier sessions' candles for each key (dates first to last), kept in cprb_cache.json between runs."""
@@ -1177,10 +1257,32 @@ def history_all():
 def app_state():
     out = dict(updated=now_ist().strftime('%Y-%m-%d %H:%M:%S'), indices={})
     for n, d in CHART_DATA.items():
+        lv = live_now(n) if d.get('day') == str(now_ist().date()) else None
         out['indices'][n] = dict(name=d.get('name'), day=d.get('day'), status=d.get('status'), plan=PLANS.get(n, ''),
-                                 last=d['candles'][-1][4] if d.get('candles') else None, calls=d.get('calls', []),
-                                 updated=d.get('updated'))
+                                 last=lv[0] if lv else d['candles'][-1][4] if d.get('candles') else None,
+                                 live=lv[1] if lv else None, calls=d.get('calls', []), updated=d.get('updated'))
     return out
+
+def app_ota():
+    """The app's screens (app.js, style.css, index.html), sent over the air: the installed app takes a new version
+    the next time it opens, without a new APK. `ver` changes whenever one of the files does; `apk` is the newest
+    APK's build number (the app offers it when it is newer than the installed one)."""
+    import hashlib
+    files, h = {}, hashlib.sha256()
+    for f in ('app.js', 'style.css', 'index.html'):
+        try:
+            with open(os.path.join(APP_WWW, f), encoding='utf-8') as fh:
+                files[f] = fh.read()
+        except OSError:
+            return dict(ver=None)
+        h.update(f.encode() + b'\0' + files[f].encode() + b'\0')
+    apk = 0
+    try:
+        with open(os.path.join(APP_WWW, '..', '..', 'dist', 'eden-trader.json')) as fh:
+            apk = int(json.load(fh).get('build', 0))
+    except (OSError, ValueError):
+        pass
+    return dict(ver=h.hexdigest()[:12], apk=apk, files=files)
 
 def now_ist():
     return dt.datetime.now(IST)
@@ -1274,16 +1376,19 @@ table{width:100%;border-collapse:collapse;font-size:13px}td,th{padding:5px 8px;b
 <div id="key">Pink: CPR top / pivot / bottom (orange on a narrow day). Purple: the volume POC, where the most volume traded over the
 days its label says (buys above it, sells below; not drawn for an index with no POC filter: Sensex). Teal dots: 3-day volume lines. Green / red dashed: the first 15 minutes' high / low (a BUY on a
 touch of the high, a SELL on the low, until 10:00, if the filters allow), and the open trade's target / stop loss. Yellow dashed:
-yesterday's high / low. Letters: B buy, S sell, T target or half booked, SL stop loss, BE stop at entry, X other exit.</div>
+yesterday's high / low. Letters: B buy, S sell, T target or half booked, SL stop loss, BE stop at entry, X other exit.
+In market hours the last candle moves with the live price (every 2 seconds); the calls use whole 1-minute candles.
+Fit: back to the latest candles with the price scale fitted.</div>
 <table><thead><tr><th>Time</th><th>Trade</th><th>Entry</th><th>Stop</th><th>Result</th></tr></thead><tbody id="list"></tbody></table>
 <script src="/lwc.js"></script>
 <script>
-const IDX = %INDICES%; let cur = IDX[0][0], tf = 5, plines = [], lastKey = '', fitted = '';
+const IDX = %INDICES%; let cur = IDX[0][0], tf = 5, plines = [], lastKey = '', fitted = '', seq = 0, shownSeq = 0;
 const box = document.getElementById('c');
 if (!window.LightweightCharts) document.getElementById('bar').textContent = 'The chart library did not load: check the internet connection and reload.';
 const chart = LightweightCharts.createChart(box, {layout: {background: {color: '#0f1419'}, textColor: '#d1d4dc', fontSize: 14},
   grid: {vertLines: {color: '#18202a'}, horzLines: {color: '#18202a'}}, rightPriceScale: {borderColor: '#2a3240'},
   timeScale: {timeVisible: true, secondsVisible: false, borderColor: '#2a3240', rightOffset: 6}, crosshair: {mode: 0},
+  handleScroll: {vertTouchDrag: false},      // a finger moving up / down scrolls the page, not the price scale
   localization: {locale: 'en-IN'}});
 const s = chart.addCandlestickSeries({upColor: '#26a69a', downColor: '#ef5350', borderVisible: false,
   wickUpColor: '#26a69a', wickDownColor: '#ef5350', priceLineVisible: false});
@@ -1301,28 +1406,41 @@ function agg(day, rows, out) {
 function buttons() {
   const bar = document.getElementById('bar'); bar.innerHTML = '';
   for (const [k, name] of IDX) { const b = document.createElement('button'); b.textContent = name; b.className = k === cur ? 'on' : '';
-    b.onclick = () => { cur = k; lastKey = ''; fitted = ''; buttons(); load(); }; bar.appendChild(b); }
+    b.onclick = () => { if (k !== cur) { cur = k; clear(); } fitted = ''; buttons(); load(); }; bar.appendChild(b); }
   for (const f of [1, 3, 5, 15]) { const b = document.createElement('button'); b.textContent = f + 'm'; b.className = f === tf ? 'on' : '';
     b.onclick = () => { tf = f; fitted = ''; buttons(); load(); }; bar.appendChild(b); }
+  const fit = document.createElement('button'); fit.textContent = 'Fit'; fit.title = 'Show the latest candles, price scale to fit';
+  fit.onclick = () => { fitted = ''; load(); }; bar.appendChild(fit);
   const st = document.createElement('div'); st.id = 'st'; st.textContent = 'loading...'; bar.appendChild(st);
+}
+function clear() {                          // another index: nothing of the last one stays on the chart
+  plines.forEach(p => s.removePriceLine(p)); plines = []; lastKey = '';
+  s.setData([]); s.setMarkers([]);
+  document.getElementById('list').innerHTML = '';
 }
 async function load() {
   let d;
+  const want = cur, my = ++seq;
   const kq = new URLSearchParams(location.search).get('key');
-  try { d = await (await fetch('/data?i=' + cur + (kq ? '&key=' + encodeURIComponent(kq) : ''), {cache: 'no-store'})).json(); }
-  catch (e) { document.getElementById('st').textContent = 'No data: the program is not running (start it in Pydroid 3, or check the server).'; return; }
-  if (!d.day) return;
+  try { d = await (await fetch('/data?i=' + want + (kq ? '&key=' + encodeURIComponent(kq) : ''), {cache: 'no-store'})).json(); }
+  catch (e) { if (want === cur) document.getElementById('st').textContent = 'No data: the program is not running (start it in Pydroid 3, or check the server).'; return; }
+  if (want !== cur || my < shownSeq) return;   // an older answer, or for the index shown before: ignore it
+  shownSeq = my;
+  if (!d.day) { document.getElementById('st').textContent = 'No data for this index yet.'; return; }
   s.setData(agg(d.day, d.candles, agg(d.yday_date, d.yday, [])));
   s.setMarkers(d.marks.map(k => ({time: ts(d.day, bucket(k.m)), position: k.pos, color: k.c, shape: k.pos === 'belowBar' ? 'arrowUp' : 'arrowDown', size: 1.2, text: k.x})));
   const key = JSON.stringify(d.levels);
   if (key !== lastKey) { plines.forEach(p => s.removePriceLine(p)); lastKey = key;
     plines = d.levels.map(l => s.createPriceLine({price: l.p, color: l.c, lineWidth: l.w, lineStyle: l.s, axisLabelVisible: l.t !== '', title: l.t})); }
-  if (fitted !== cur + tf) { fitted = cur + tf; chart.timeScale().setVisibleLogicalRange({from: Math.max(0, s.data().length - 90), to: s.data().length + 6}); }
-  document.getElementById('st').textContent = d.status + ' | updated ' + d.updated;
+  if (fitted !== cur + tf) { fitted = cur + tf; chart.priceScale('right').applyOptions({autoScale: true});
+    chart.timeScale().setVisibleLogicalRange({from: Math.max(0, s.data().length - 90), to: s.data().length + 6}); }
+  const px = n => Number(n).toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+  document.getElementById('st').textContent = (d.live ? '● LIVE ' + d.name + ' ' + px(d.live.px) + ' at ' + d.live.at + ' | ' : '') +
+    d.status + ' | updated ' + d.updated;
   document.getElementById('list').innerHTML = d.rows.map(r => '<tr>' + r.map(x => '<td>' + x + '</td>').join('') + '</tr>').join('') ||
     '<tr><td colspan="5">No trades yet today.</td></tr>';
 }
-buttons(); load(); setInterval(load, 5000);
+buttons(); load(); setInterval(load, 2000);
 </script></body></html>"""
 
 LWC_URL = 'https://cdn.jsdelivr.net/npm/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js'
@@ -1405,7 +1523,10 @@ def serve_chart(names):
                 body, ctype = lib, 'application/javascript'
             elif self.path.startswith('/data'):
                 q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
-                body, ctype = json.dumps(CHART_DATA.get(q.get('i', [names[0]])[0], {})).encode(), 'application/json'
+                i = q.get('i', [names[0]])[0]
+                body, ctype = json.dumps(with_live(i, CHART_DATA.get(i, {}))).encode(), 'application/json'
+            elif self.path.startswith('/app/ota.json'):
+                body, ctype = json.dumps(app_ota()).encode(), 'application/json'
             elif self.path.startswith('/api/state'):
                 body, ctype = json.dumps(app_state()).encode(), 'application/json'
             elif self.path.startswith('/api/events'):
@@ -1515,6 +1636,7 @@ def live(names, lots, ladder, plan_only=False, forever=False):
         return
     if CHART:
         serve_chart(names)
+        live_prices(names)
         for n in names:
             chart_update(n, cxs[n], [], [], OPEN - 1, today)
     seen, first, last_ts, waited, shown, last_c = set(), True, {}, False, {}, {}

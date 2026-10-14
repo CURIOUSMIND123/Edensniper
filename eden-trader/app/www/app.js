@@ -97,7 +97,7 @@ async function callsView() {
       if (!d) continue;
       const calls = d.calls || [];
       parts.push(`<div class="card">
-        <div class="row"><div class="idx">${esc(d.name)}</div><div class="price">${num(d.last)}</div></div>
+        <div class="row"><div class="idx">${esc(d.name)}</div><div class="price">${num(d.last)}${d.live ? `<span class="livepx">● live ${esc(d.live)}</span>` : ''}</div></div>
         <div class="status">${esc(d.day || '')} · ${calls.length ? calls.length + ' call' + (calls.length > 1 ? 's' : '') + ' today' : 'no call yet today'} · updated ${esc(d.updated || '')}</div>
         ${calls.slice().reverse().map(callCard).join('')}
         ${d.plan ? `<details><summary>Today's plan</summary><pre>${esc(d.plan)}</pre></details>` : ''}
@@ -178,6 +178,30 @@ async function testNotification() {
   await LN.schedule({ notifications: [{ id: 7, title: 'Eden Trader', body: 'Test: calls will arrive like this.', schedule: { at: new Date(Date.now() + 1500) } }] });
 }
 
+// ---------------- over-the-air updates (boot.js loads them) and a newer APK ----------------
+let otaBusy = false;
+async function checkOta() {
+  if (!ready() || otaBusy) return;
+  otaBusy = true;
+  try {
+    const j = await getJSON('/app/ota.json');
+    const up = $('update');
+    if (up && j.apk && j.apk > (window.__apkBuild || 0)) {
+      up.href = cfg.server.replace(/\/+$/, '') + '/app.apk';
+      up.classList.remove('hidden');
+    }
+    let bad = null;
+    try { bad = localStorage.getItem('ota_bad'); } catch (e) { /* ignore */ }
+    if (!j.ver || !j.files || j.ver === window.__otaVer || j.ver === bad || (j.min || 0) > (window.__apkBuild || 0)) return;
+    localStorage.setItem('ota', JSON.stringify({ ver: j.ver, min: j.min || 0, status: 'ready', files: j.files }));
+    if (view !== 'settings') location.reload();       // the new screens now (in Settings: when the app next opens)
+  } catch (e) {
+    /* offline or an older server: try again later */
+  } finally {
+    otaBusy = false;
+  }
+}
+
 // ---------------- start ----------------
 async function main() {
   await loadCfg();
@@ -204,15 +228,18 @@ async function main() {
       await getJSON('/api/state');
       $('s-msg').textContent = 'Connected. Calls will arrive as notifications.';
       await askPermission();
+      checkOta();
       show('calls');
     } catch (e) {
       $('s-msg').textContent = e.message || 'Cannot reach the server.';
     }
   };
-  timer = setInterval(() => { if (!document.hidden && view === 'calls') callsView(); }, 10000);
-  document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(); });
+  timer = setInterval(() => { if (!document.hidden && view === 'calls') callsView(); }, 3000);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) { refresh(); checkOta(); } });
+  if (window.__otaBooted) window.__otaBooted();
   if (!ready()) { show('settings'); return; }
   show('calls');
   askPermission().catch(() => {});
+  checkOta();
 }
 main();

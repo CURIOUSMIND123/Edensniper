@@ -29,6 +29,7 @@ setkv CPRB_CHART_HOST 127.0.0.1
 setkv CPRB_CHART_PORT "$PORT"
 setkv CPRB_CHART_KEY_SHA256 "$(tr -d ' \n' < "$APP/eden-trader/deploy/app-key.sha256")"
 setkv CPRB_APP_APK "$APP/eden-trader/dist/eden-trader.apk"
+setkv CPRB_APP_WWW "$APP/eden-trader/app/www"
 grep -qE '^CPRB_TELEGRAM_TOKEN=' "$ENV" || echo "CPRB_TELEGRAM_TOKEN=" >> "$ENV"
 grep -qE '^CPRB_TELEGRAM_CHAT_ID=' "$ENV" || echo "CPRB_TELEGRAM_CHAT_ID=" >> "$ENV"
 

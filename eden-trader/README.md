@@ -42,6 +42,14 @@ Nifty / Sensex CPR Breakout calls on your phone: an Android app with **notificat
   (`app/native/java/.../TraderService.java`) checks `/api/events` every 10 seconds on weekdays 8:40-15:45 IST (every 5
   minutes otherwise) and shows each new alert as a notification. The built APK is `dist/eden-trader.apk`, which the
   server offers at `/app.apk`.
+- **Live price**: the chart's last candle and the price in Calls move every 2 seconds in market hours (Groww's public
+  data), until the 1-minute candle arrives; the calls use the 1-minute candles only.
+- **Over-the-air updates** (from 1.0.5, like the Adidev app): `app/www/boot.js` loads the screens (`app.js`,
+  `style.css`, `index.html`) from the copy the server sends at `/app/ota.json` (this branch's `app/www`), or from the
+  APK. The app checks when it opens and when it comes back to the front, and takes a new version at once; a version
+  that fails to start is dropped and the built-in one used. A change to `app/www` needs only a push. The native
+  service and `boot.js` need a new APK: build it with `BUILD_NUMBER` one higher, set the same number in `boot.js` and
+  `dist/eden-trader.json`, run `node app/native/ota-ver.js`; the app then shows "A new version is ready".
 - **Key**: only its SHA-256 is in this repository (`deploy/app-key.sha256`). To change the key, put the SHA-256 of a
   new one there and push.
 
