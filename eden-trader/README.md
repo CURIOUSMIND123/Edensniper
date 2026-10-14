@@ -36,14 +36,16 @@ Nifty / Sensex CPR Breakout calls on your phone: an Android app with **notificat
   (`deploy/bootstrap.sh`, one paste on the server). It pulls this branch to `/opt/eden-trader` and runs
   `deploy/install.sh` when something changed: the service `eden-trader` (user `eden`, data in `/var/lib/eden-trader`,
   settings in `/etc/eden-trader.env`) and the address `https://trade.munimo.online` in Caddy. During market hours a
-  restart waits until 15:36 IST.
+  restart for new code waits for a safe moment (`deploy/tick.sh`): no trade open, not 9:10-10:05, 1-2 minutes after
+  a 5-minute candle; the program goes through the day again within seconds and doesn't repeat an alert it sent.
 - **App** (`app/`): Capacitor, like the Adidev app. Chart, Calls and History read the server's API (`/api/state`,
   `/api/events`, `/api/history`, `/data`; every request needs the key). A native foreground service
   (`app/native/java/.../TraderService.java`) checks `/api/events` every 10 seconds on weekdays 8:40-15:45 IST (every 5
   minutes otherwise) and shows each new alert as a notification. The built APK is `dist/eden-trader.apk`, which the
   server offers at `/app.apk`.
-- **Live price**: the chart's last candle and the price in Calls move every 2 seconds in market hours (Groww's public
-  data), until the 1-minute candle arrives; the calls use the 1-minute candles only.
+- **Live price**: the chart's last candle and price line move every second in market hours (Groww's public data), the
+  price in Calls every 3 seconds, until the 1-minute candle arrives; the calls use the 1-minute candles only. Each
+  trade is drawn like TradingView's long / short position tool (green to T1 / T3, red to the stop loss).
 - **Over-the-air updates** (from 1.0.5, like the Adidev app): `app/www/boot.js` loads the screens (`app.js`,
   `style.css`, `index.html`) from the copy the server sends at `/app/ota.json` (this branch's `app/www`), or from the
   APK. The app checks when it opens and when it comes back to the front, and takes a new version at once; a version

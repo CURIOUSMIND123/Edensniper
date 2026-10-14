@@ -69,7 +69,7 @@ TELEGRAM_CHAT_ID = ''             # found by itself once you've messaged your bo
 REPLAY_DAY = ''                   # e.g. '2026-10-08' to replay a past day instead of running live
 CHART = True                      # live chart in the phone's browser: http://127.0.0.1:8000
 CHART_PORT = 8000
-LIVE_PRICE = True                 # the chart's price every 2 seconds (Groww's public data), not just whole minutes;
+LIVE_PRICE = True                 # the chart's price every second (Groww's public data), not just whole minutes;
                                   # for the chart and the app only: the calls use the 1-minute candles as always
 LOG = True                        # also save everything it prints in cprb_log.txt next to this file, so you can see
                                   # afterwards why it stopped (an error is written there; if the log just ends, the
@@ -158,7 +158,7 @@ LIVE_URL = 'https://groww.in/v1/api/stocks_data/v1/accord_points/exchange/{}/seg
 LIVE_THREAD = []
 
 def live_prices(names):
-    """Every 2 seconds in market hours: each index's last price, from Groww's public data. It draws the minute still
+    """Every second in market hours: each index's last price, from Groww's public data. It draws the minute still
     forming on the chart (and the price in the app) until the 1-minute candle arrives; the calls don't use it."""
     if LIVE_THREAD or not LIVE_PRICE:
         return
@@ -201,7 +201,7 @@ def live_prices(names):
                 except Exception:
                     pass
             fails = 0 if ok else fails + 1
-            time.sleep(2 if fails < 10 else 30)       # the source is down: look again less often
+            time.sleep(1 if fails < 10 else 30)       # the source is down: look again less often
     LIVE_THREAD.append(threading.Thread(target=run, daemon=True))
     LIVE_THREAD[0].start()
 
@@ -213,16 +213,20 @@ def live_now(n, fresh=20):
             return None
         return L['px'], dt.datetime.fromtimestamp(L['at'], IST).strftime('%H:%M:%S')
 
-def with_live(n, d):
-    """The chart data plus the live minutes after the last 1-minute candle."""
+def live_part(n, d):
+    """The live price and the live minutes after the last 1-minute candle (the chart draws them until the candle
+    arrives), or None."""
     lv = live_now(n)
     if not lv or d.get('day') != str(now_ist().date()):
-        return d
+        return None
     with LIVE_LOCK:
         bars = sorted(LIVE[n]['bars'].items())
     last = d['candles'][-1][0] if d.get('candles') else OPEN - 1
-    extra = [[m] + list(b) for m, b in bars if m > last and m < CLOSE]
-    return dict(d, candles=d.get('candles', []) + extra, live=dict(px=lv[0], at=lv[1]))
+    return dict(px=lv[0], at=lv[1], bars=[[m] + list(b) for m, b in bars if last < m < CLOSE])
+
+def with_live(n, d):
+    """The chart data plus its live part."""
+    return dict(d, live=live_part(n, d)) if d else d
 
 def history(keys, first, last):
     """Earlier sessions' candles for each key (dates first to last), kept in cprb_cache.json between runs."""
@@ -1076,6 +1080,8 @@ def telegram(text):
         return False
 
 def alert(text, push=True, kind='info', index=''):
+    if push and said_today(text):
+        push = False                  # sent already today (the program was restarted): not again
     print(('\a>>> ' if push else '    ') + text, flush=True)
     if push:
         telegram(text)
@@ -1112,6 +1118,10 @@ def event_title(text, kind, index):
         return f"{m.group(1)} EXIT ({m.group(3)}): {m.group(5)} pts"
     first = text.split('. ')[0].split(' -> ')[0]
     return first if len(first) <= 70 else first[:67] + '...'
+
+def said_today(text):
+    day = now_ist().strftime('%Y-%m-%d')
+    return any(e.get('text') == text and str(e.get('at', '')).startswith(day) for e in EVENTS)
 
 def record_event(text, kind, index):
     eid = max(int(time.time() * 1000), (EVENTS[-1]['id'] + 1) if EVENTS else 0)
@@ -1308,12 +1318,16 @@ def chart_update(n, cx, c_all, ts, got, day):
     if first and got >= RANGE_END - 1:
         levels += [dict(p=max(x[2] for x in first), c='#4caf50', t='15-min high', s=2, w=1),
                    dict(p=min(x[3] for x in first), c='#f44336', t='15-min low', s=2, w=1)]
-    marks, rows, open_t = [], [], None
+    marks, rows, open_t, boxes = [], [], None, []
     for t in ts:
         if not t['taken']:
             continue
         sd = t['side']
         m0 = 555 if t['src'] == 'MAGNET' else t['m'] - 1 if t['src'] in ('VOLUME LINE', 'SWEEP') else t['m']
+        # the position, drawn like TradingView's long / short position tool: green to the targets, red to the stop
+        boxes.append(dict(m0=m0, m1=t['exit']['m'] if t['exit'] else None, side=sd, e=round(t['e'], 2), sl=round(t['stp0'], 2),
+                          sl_now=round(t['stp'], 2), t=target_levels(cx, c_all, sd, t['e'], t['known'], half_price(t)),
+                          t1w=t1_word(t), pnl=round(t['exit']['pnl'], 1) if t['exit'] else None))
         marks.append(dict(m=m0, pos='belowBar' if sd > 0 else 'aboveBar', c='#26a69a' if sd > 0 else '#ef5350', x='B' if sd > 0 else 'S'))
         for ev in t['ev']:
             if ev['kind'] == 'half':
@@ -1331,10 +1345,9 @@ def chart_update(n, cx, c_all, ts, got, day):
     if pend and got < 720 and not any(t['src'] == 'PULLBACK' for t in ts):
         levels.append(dict(p=pend['px'], c='#2962ff', t='LIMIT ' + ('BUY' if pend['side'] > 0 else 'SELL'), s=2, w=2))
     if open_t:
-        levels.append(dict(p=open_t['stp'], c='#ef5350', t='Stop loss', s=2, w=1))
+        levels.append(dict(p=open_t['stp'], c='#ef5350', t='SL', s=2, w=1))
         T = target_levels(cx, c_all, open_t['side'], open_t['e'], open_t['known'], half_price(open_t))
-        for k, v in enumerate(T):
-            levels.append(dict(p=v, c='#26a69a' if k == 0 else '#80cbc4', t='T1 ' + t1_word(open_t) if k == 0 else f'T{k + 1}', s=2 if k == 0 else 1, w=1))
+        levels.append(dict(p=T[0], c='#26a69a', t='T1', s=2, w=1))      # T2 / T3: in the position box
         half = any(e['kind'] == 'half' for e in open_t['ev'])
         sd = open_t['side']
         if open_t.get('small'):
@@ -1355,46 +1368,69 @@ def chart_update(n, cx, c_all, ts, got, day):
               f" | {open_note(cx, ts)} | today {len(done_)} trade{'' if len(done_) == 1 else 's'}, {net:+.0f} pts")
     upto_c = [x for x in c_all if x[0] <= got]
     calls = [call_info(cx, t, upto_c) for t in ts if t['taken']]
-    CHART_DATA[n] = dict(name=cx['name'], day=day, yday_date=cx['prev'], yday=[list(x) for x in cx['yday']],
-                         candles=[list(x) for x in c_all], levels=levels, marks=sorted(marks, key=lambda k: k['m']),
-                         rows=rows, status=status, updated=now_ist().strftime('%H:%M:%S'), calls=calls)
+    import hashlib
+    d = dict(name=cx['name'], day=day, yday_date=cx['prev'], yday=[list(x) for x in cx['yday']],
+             candles=[list(x) for x in c_all], levels=levels, marks=sorted(marks, key=lambda k: k['m']),
+             rows=rows, boxes=boxes, status=status)
+    d['ver'] = hashlib.sha256(json.dumps(d, sort_keys=True).encode()).hexdigest()[:12]   # changes with what is drawn
+    CHART_DATA[n] = dict(d, updated=now_ist().strftime('%H:%M:%S'), calls=calls)
 
 CHART_HTML = """<!doctype html><html><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#0f1419">
+<meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#131722">
 <meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><title>CPRB live chart</title>
 <style>
-body{margin:0;background:#0f1419;color:#d1d4dc;font:14px system-ui,-apple-system,sans-serif}
-#bar{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:8px}
-button{background:#1e2530;color:#d1d4dc;border:1px solid #2a3240;border-radius:6px;padding:6px 12px;font:inherit}
-button.on{background:#2962ff;border-color:#2962ff;color:#fff}
-#st{width:100%;font-size:13px;color:#9aa4b2}
-#c{height:68vh}
-table{width:100%;border-collapse:collapse;font-size:13px}td,th{padding:5px 8px;border-bottom:1px solid #222a35;text-align:left}
-#key{font-size:12px;color:#7d8794;padding:6px 8px}
+body{margin:0;background:#131722;color:#d1d4dc;font:14px -apple-system,BlinkMacSystemFont,Roboto,Ubuntu,'Trebuchet MS',sans-serif}
+#bar{display:flex;flex-wrap:wrap;gap:2px;align-items:center;padding:4px 6px;border-bottom:1px solid #2a2e39}
+button{background:transparent;color:#d1d4dc;border:0;border-radius:4px;padding:7px 9px;font:inherit}
+button.on{color:#2962ff;background:#1e222d;font-weight:600}
+.sep{width:1px;height:20px;background:#2a2e39;margin:0 4px}
+#wrap{position:relative;height:68vh}
+#c{position:absolute;inset:0}
+#legend{position:absolute;left:6px;top:4px;z-index:3;font-size:12px;line-height:1.6;pointer-events:none;background:rgba(19,23,34,0.75);padding:0 4px;border-radius:3px}
+#legend b{font-weight:600;color:#d1d4dc;margin-right:6px}
+#legend i{font-style:normal;color:#787b86;margin-left:6px}
+.up{color:#26a69a}.dn{color:#ef5350}
+#st{font-size:12px;color:#787b86;padding:5px 8px;border-top:1px solid #2a2e39}
+#st .lv{color:#26a69a;font-weight:600}
+table{width:100%;border-collapse:collapse;font-size:13px}td,th{padding:5px 8px;border-bottom:1px solid #2a2e39;text-align:left}
+th{color:#787b86;font-weight:normal}
+#key{font-size:12px;color:#787b86;padding:6px 8px}
 </style></head><body>
-<div id="bar"></div><div id="c"></div>
-<div id="key">Pink: CPR top / pivot / bottom (orange on a narrow day). Purple: the volume POC, where the most volume traded over the
-days its label says (buys above it, sells below; not drawn for an index with no POC filter: Sensex). Teal dots: 3-day volume lines. Green / red dashed: the first 15 minutes' high / low (a BUY on a
-touch of the high, a SELL on the low, until 10:00, if the filters allow), and the open trade's target / stop loss. Yellow dashed:
-yesterday's high / low. Letters: B buy, S sell, T target or half booked, SL stop loss, BE stop at entry, X other exit.
-In market hours the last candle moves with the live price (every 2 seconds); the calls use whole 1-minute candles.
-Fit: back to the latest candles with the price scale fitted.</div>
+<div id="bar"></div>
+<div id="wrap"><div id="c"></div><div id="legend"></div></div>
+<div id="st">loading...</div>
 <table><thead><tr><th>Time</th><th>Trade</th><th>Entry</th><th>Stop</th><th>Result</th></tr></thead><tbody id="list"></tbody></table>
+<div id="key">Each trade is drawn like TradingView's long / short position tool: green from the entry to T1 (where half is
+booked; a volume-line trade: its target), lighter green on to T3 (T2 / T3: the next price levels, for reference), red to
+the stop loss; an open trade's box runs to the right edge, with its stop now (dashed) once it has moved. Pink: CPR top /
+pivot / bottom (orange on a narrow day). Purple: the volume POC (not drawn for Sensex, which has no POC filter). Teal
+dots: 3-day volume lines. Green / red dashed: the first 15 minutes' high / low. Yellow dashed: yesterday's high / low.
+Letters: B buy, S sell, T target or half booked, SL stop loss, BE stop at entry, X other exit. In market hours the last
+candle and the price line move with the live price every second; the calls use whole 1-minute candles. Fit: back to the
+latest candles with the price scale fitted.</div>
 <script src="/lwc.js"></script>
 <script>
-const IDX = %INDICES%; let cur = IDX[0][0], tf = 5, plines = [], lastKey = '', fitted = '', seq = 0, shownSeq = 0;
-const box = document.getElementById('c');
-if (!window.LightweightCharts) document.getElementById('bar').textContent = 'The chart library did not load: check the internet connection and reload.';
-const chart = LightweightCharts.createChart(box, {layout: {background: {color: '#0f1419'}, textColor: '#d1d4dc', fontSize: 14},
-  grid: {vertLines: {color: '#18202a'}, horzLines: {color: '#18202a'}}, rightPriceScale: {borderColor: '#2a3240'},
-  timeScale: {timeVisible: true, secondsVisible: false, borderColor: '#2a3240', rightOffset: 6}, crosshair: {mode: 0},
+const IDX = %INDICES%;
+let cur = IDX[0][0], tf = 5, plines = [], linesKey = '', fitted = '', seq = 0, shown = 0, D = null, loading = false;
+const $ = (id) => document.getElementById(id);
+const box = $('c');
+const fmt = (n) => Number(n).toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+const fmt0 = (n) => Number(n).toLocaleString('en-IN', {maximumFractionDigits: 0});
+const sgn = (n) => (n > 0 ? '+' : n < 0 ? '-' : '') + Math.abs(Math.round(n));
+if (!window.LightweightCharts) $('bar').textContent = 'The chart library did not load: check the internet connection and reload.';
+const chart = LightweightCharts.createChart(box, {
+  layout: {background: {type: 'solid', color: '#131722'}, textColor: '#d1d4dc', fontSize: 12},
+  grid: {vertLines: {color: 'rgba(42,46,57,0.5)'}, horzLines: {color: 'rgba(42,46,57,0.5)'}},
+  rightPriceScale: {borderColor: '#2a2e39', scaleMargins: {top: 0.12, bottom: 0.08}},
+  timeScale: {timeVisible: true, secondsVisible: false, borderColor: '#2a2e39', rightOffset: 8},
+  crosshair: {mode: 0, vertLine: {color: '#758696', labelBackgroundColor: '#363a45'}, horzLine: {color: '#758696', labelBackgroundColor: '#363a45'}},
   handleScroll: {vertTouchDrag: false},      // a finger moving up / down scrolls the page, not the price scale
-  localization: {locale: 'en-IN'}});
+  localization: {locale: 'en-IN', priceFormatter: fmt}});
 const s = chart.addCandlestickSeries({upColor: '#26a69a', downColor: '#ef5350', borderVisible: false,
-  wickUpColor: '#26a69a', wickDownColor: '#ef5350', priceLineVisible: false});
+  wickUpColor: '#26a69a', wickDownColor: '#ef5350', priceLineVisible: true, priceLineStyle: 1, lastValueVisible: true});
 new ResizeObserver(() => chart.applyOptions({width: box.clientWidth, height: box.clientHeight})).observe(box);
 const ts = (day, m) => { const [y, mo, d] = day.split('-').map(Number); return Date.UTC(y, mo - 1, d) / 1000 + m * 60; };
-const bucket = m => 555 + Math.floor((m - 555) / tf) * tf;
+const bucket = (m) => 555 + Math.floor((m - 555) / tf) * tf;
 function agg(day, rows, out) {
   for (const [m, o, h, l, c] of rows) {
     const t = ts(day, bucket(m)), x = out[out.length - 1];
@@ -1403,44 +1439,176 @@ function agg(day, rows, out) {
   }
   return out;
 }
+
+// ---- trades as TradingView's long / short position tool ----
+function pill(g, x, y, text, bg, right) {
+  g.font = '11px -apple-system,Roboto,sans-serif';
+  const w = g.measureText(text).width + 10, h = 17, x0 = right ? x - w : x;
+  g.fillStyle = bg; g.beginPath();
+  if (g.roundRect) g.roundRect(x0, y - h / 2, w, h, 3); else g.rect(x0, y - h / 2, w, h);
+  g.fill(); g.fillStyle = '#fff'; g.textBaseline = 'middle'; g.fillText(text, x0 + 5, y + 0.5);
+  return w;
+}
+function hline(g, x1, x2, y, color, dash) {
+  if (y == null) return;
+  g.strokeStyle = color; g.lineWidth = 1; g.setLineDash(dash); g.beginPath(); g.moveTo(x1, Math.round(y) + 0.5); g.lineTo(x2, Math.round(y) + 0.5); g.stroke(); g.setLineDash([]);
+}
+class Positions {
+  constructor() { this.items = []; }
+  attached(p) { this.chart = p.chart; this.series = p.series; this.req = p.requestUpdate; }
+  detached() { this.req = null; }
+  set(items) { this.items = items || []; if (this.req) this.req(); }
+  updateAllViews() {}
+  autoscaleInfo() {                          // the price scale always shows an open trade's T1 and stop loss
+    const o = this.items.filter((b) => b.t1 == null);
+    if (!o.length) return null;
+    const v = [].concat(...o.map((b) => [b.e, b.sl, b.sl_now, b.t[0]]));
+    return {priceRange: {minValue: Math.min(...v), maxValue: Math.max(...v)}};
+  }
+  paneViews() {                              // the zones under the candles, the labels over them
+    return [{zOrder: () => 'bottom', renderer: () => ({draw: (t) => this.draw(t, false)})},
+            {zOrder: () => 'top', renderer: () => ({draw: (t) => this.draw(t, true)})}];
+  }
+  draw(target, labels) {
+    target.useMediaCoordinateSpace(({context: g, mediaSize: sz}) => {
+      const tsc = this.chart.timeScale(), y = (p) => (p == null ? null : this.series.priceToCoordinate(p));
+      for (const b of this.items) {
+        const x1 = tsc.timeToCoordinate(b.t0);
+        if (x1 == null) continue;
+        const open = b.t1 == null;
+        let x2 = open ? sz.width : tsc.timeToCoordinate(b.t1);      // an open trade: on to the price scale
+        if (x2 == null || x2 - x1 < 14) x2 = x1 + 14;
+        const ye = y(b.e), ys = y(b.sl), y1 = y(b.t[0]), y2 = y(b.t[1]), y3 = y(b.t[2]), yn = y(b.sl_now);
+        if (ye == null || ys == null || y1 == null) continue;
+        const moved = open && Math.abs(b.sl_now - b.sl) > 0.01, dir = b.side > 0 ? 1 : -1;
+        if (!labels) {
+          const fill = (ya, yb, c) => { g.fillStyle = c; g.fillRect(x1, Math.min(ya, yb), x2 - x1, Math.abs(yb - ya)); };
+          fill(ye, ys, 'rgba(242,54,69,0.22)');
+          fill(ye, y1, 'rgba(8,153,129,0.30)');
+          if (y3 != null) fill(y1, y3, 'rgba(8,153,129,0.10)');
+          hline(g, x1, x2, ye, '#9598a1', []);
+          hline(g, x1, x2, y2, 'rgba(38,166,154,0.8)', [4, 3]);
+          hline(g, x1, x2, y3, 'rgba(38,166,154,0.8)', [4, 3]);
+          if (moved) hline(g, x1, x2, yn, '#f23645', [4, 3]);
+          continue;
+        }
+        const left = x2 - x1 < 110, used = [];       // a narrow box (a recent entry): the labels left of it
+        const put = (yy, text, bg) => {              // a label at its price, moved aside if it would cover another
+          if (yy == null) return;
+          let xx = left ? x1 - 3 : x1 + 3;
+          for (const u of used) if (Math.abs(u.y - yy) < 17) xx = left ? Math.min(xx, u.l - 4) : Math.max(xx, u.r + 4);
+          const w = pill(g, xx, yy, text, bg, left);
+          used.push({y: yy, l: left ? xx - w : xx, r: left ? xx : xx + w});
+        };
+        put(ye, (b.side > 0 ? 'BUY ' : 'SELL ') + fmt0(b.e) + (open ? '' : '  ' + sgn(b.pnl) + ' pts'), open ? '#2962ff' : '#5d606b');
+        put(y1, 'T1 ' + fmt0(b.t[0]) + ' (' + sgn(dir * (b.t[0] - b.e)) + ')', '#089981');
+        if (open || x2 - x1 > 90) {
+          put(y2, 'T2 ' + fmt0(b.t[1]) + ' (' + sgn(dir * (b.t[1] - b.e)) + ')', 'rgba(8,153,129,0.8)');
+          put(y3, 'T3 ' + fmt0(b.t[2]) + ' (' + sgn(dir * (b.t[2] - b.e)) + ')', 'rgba(8,153,129,0.8)');
+        }
+        put(ys, 'SL ' + fmt0(b.sl) + ' (' + sgn(dir * (b.sl - b.e)) + ')', '#f23645');
+        if (moved) put(yn, 'SL now ' + fmt0(b.sl_now), '#f23645');
+      }
+    });
+  }
+}
+const pos = new Positions();
+s.attachPrimitive(pos);
+
+// ---- legend (like TradingView's: symbol, timeframe, O H L C and the change) ----
+function legend(bar) {
+  if (!D || !bar) { $('legend').innerHTML = ''; return; }
+  const data = s.data(), i = data.findIndex((x) => x.time === bar.time), prev = i > 0 ? data[i - 1].close : bar.open;
+  const ch = bar.close - prev, cls = ch >= 0 ? 'up' : 'dn';
+  $('legend').innerHTML = '<b>' + D.name + ' &middot; ' + tf + 'm</b>' +
+    ['O', 'H', 'L', 'C'].map((k, j) => '<i>' + k + '</i> <span class="' + cls + '">' + fmt([bar.open, bar.high, bar.low, bar.close][j]) + '</span>').join('') +
+    ' <span class="' + cls + '">' + (ch >= 0 ? '+' : '') + fmt(ch) + ' (' + (ch >= 0 ? '+' : '') + (100 * ch / prev).toFixed(2) + '%)</span>';
+}
+let hover = false;
+chart.subscribeCrosshairMove((p) => {
+  const b = p && p.time ? p.seriesData.get(s) : null;
+  hover = !!b; legend(b || lastBar());
+});
+const lastBar = () => { const d = s.data(); return d.length ? d[d.length - 1] : null; };
+
+// ---- buttons ----
 function buttons() {
-  const bar = document.getElementById('bar'); bar.innerHTML = '';
-  for (const [k, name] of IDX) { const b = document.createElement('button'); b.textContent = name; b.className = k === cur ? 'on' : '';
-    b.onclick = () => { if (k !== cur) { cur = k; clear(); } fitted = ''; buttons(); load(); }; bar.appendChild(b); }
-  for (const f of [1, 3, 5, 15]) { const b = document.createElement('button'); b.textContent = f + 'm'; b.className = f === tf ? 'on' : '';
-    b.onclick = () => { tf = f; fitted = ''; buttons(); load(); }; bar.appendChild(b); }
-  const fit = document.createElement('button'); fit.textContent = 'Fit'; fit.title = 'Show the latest candles, price scale to fit';
-  fit.onclick = () => { fitted = ''; load(); }; bar.appendChild(fit);
-  const st = document.createElement('div'); st.id = 'st'; st.textContent = 'loading...'; bar.appendChild(st);
+  const bar = $('bar'); bar.innerHTML = '';
+  const add = (text, on, fn) => { const b = document.createElement('button'); b.textContent = text; b.className = on ? 'on' : ''; b.onclick = fn; bar.appendChild(b); };
+  const sep = () => { const d = document.createElement('div'); d.className = 'sep'; bar.appendChild(d); };
+  for (const [k, name] of IDX) add(name, k === cur, () => { if (k !== cur) { cur = k; clear(); } fitted = ''; buttons(); full(); });
+  sep();
+  for (const f of [1, 3, 5, 15]) add(f + 'm', f === tf, () => { tf = f; fitted = ''; buttons(); draw(); });
+  sep();
+  add('Fit', false, () => { fitted = ''; draw(); });
 }
 function clear() {                          // another index: nothing of the last one stays on the chart
-  plines.forEach(p => s.removePriceLine(p)); plines = []; lastKey = '';
-  s.setData([]); s.setMarkers([]);
-  document.getElementById('list').innerHTML = '';
+  plines.forEach((p) => s.removePriceLine(p)); plines = []; linesKey = ''; D = null;
+  s.setData([]); s.setMarkers([]); pos.set([]); $('list').innerHTML = ''; $('legend').innerHTML = ''; $('st').textContent = 'loading...';
 }
-async function load() {
-  let d;
-  const want = cur, my = ++seq;
-  const kq = new URLSearchParams(location.search).get('key');
-  try { d = await (await fetch('/data?i=' + want + (kq ? '&key=' + encodeURIComponent(kq) : ''), {cache: 'no-store'})).json(); }
-  catch (e) { if (want === cur) document.getElementById('st').textContent = 'No data: the program is not running (start it in Pydroid 3, or check the server).'; return; }
-  if (want !== cur || my < shownSeq) return;   // an older answer, or for the index shown before: ignore it
-  shownSeq = my;
-  if (!d.day) { document.getElementById('st').textContent = 'No data for this index yet.'; return; }
-  s.setData(agg(d.day, d.candles, agg(d.yday_date, d.yday, [])));
-  s.setMarkers(d.marks.map(k => ({time: ts(d.day, bucket(k.m)), position: k.pos, color: k.c, shape: k.pos === 'belowBar' ? 'arrowUp' : 'arrowDown', size: 1.2, text: k.x})));
-  const key = JSON.stringify(d.levels);
-  if (key !== lastKey) { plines.forEach(p => s.removePriceLine(p)); lastKey = key;
-    plines = d.levels.map(l => s.createPriceLine({price: l.p, color: l.c, lineWidth: l.w, lineStyle: l.s, axisLabelVisible: l.t !== '', title: l.t})); }
-  if (fitted !== cur + tf) { fitted = cur + tf; chart.priceScale('right').applyOptions({autoScale: true});
-    chart.timeScale().setVisibleLogicalRange({from: Math.max(0, s.data().length - 90), to: s.data().length + 6}); }
-  const px = n => Number(n).toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-  document.getElementById('st').textContent = (d.live ? '● LIVE ' + d.name + ' ' + px(d.live.px) + ' at ' + d.live.at + ' | ' : '') +
-    d.status + ' | updated ' + d.updated;
-  document.getElementById('list').innerHTML = d.rows.map(r => '<tr>' + r.map(x => '<td>' + x + '</td>').join('') + '</tr>').join('') ||
+const keyq = () => { const k = new URLSearchParams(location.search).get('key'); return k ? '&key=' + encodeURIComponent(k) : ''; };
+function status() {
+  if (!D) return;
+  const L = D.live;
+  $('st').innerHTML = (L ? '<span class="lv">&#9679; LIVE ' + fmt(L.px) + '</span> at ' + L.at + ' | ' : '') + D.status;
+}
+
+// ---- drawing ----
+function draw() {
+  if (!D) return;
+  const live = (D.live && D.live.bars) || [];
+  s.setData(agg(D.day, D.candles.concat(live), agg(D.yday_date, D.yday, [])));
+  s.setMarkers(D.marks.map((k) => ({time: ts(D.day, bucket(k.m)), position: k.pos, color: k.c, shape: k.pos === 'belowBar' ? 'arrowUp' : 'arrowDown', size: 1.2, text: k.x})));
+  const key = JSON.stringify(D.levels);
+  if (key !== linesKey) {
+    plines.forEach((p) => s.removePriceLine(p)); linesKey = key;
+    plines = D.levels.map((l) => s.createPriceLine({price: l.p, color: l.c, lineWidth: l.w, lineStyle: l.s, axisLabelVisible: l.t !== '', title: l.t}));
+  }
+  pos.set((D.boxes || []).map((b) => Object.assign({}, b, {t0: ts(D.day, bucket(b.m0)), t1: b.m1 == null ? null : ts(D.day, bucket(b.m1))})));
+  if (fitted !== cur + tf) {
+    fitted = cur + tf;
+    chart.priceScale('right').applyOptions({autoScale: true});
+    const n = s.data().length;
+    chart.timeScale().setVisibleLogicalRange({from: Math.max(0, n - 90), to: n + 8});
+  }
+  if (!hover) legend(lastBar());
+  status();
+  $('list').innerHTML = D.rows.map((r) => '<tr>' + r.map((x) => '<td>' + x + '</td>').join('') + '</tr>').join('') ||
     '<tr><td colspan="5">No trades yet today.</td></tr>';
 }
-buttons(); load(); setInterval(load, 2000);
+async function full() {
+  const want = cur, my = ++seq;
+  loading = true;
+  try {
+    const d = await (await fetch('/data?i=' + want + keyq(), {cache: 'no-store'})).json();
+    if (want !== cur || my < shown) return;    // an older answer, or for the index shown before: ignore it
+    shown = my;
+    if (!d.day) { $('st').textContent = 'No data for this index yet.'; return; }
+    D = d; draw();
+  } catch (e) {
+    if (want === cur) $('st').textContent = 'No data: the program is not running (start it in Pydroid 3, or check the server).';
+  } finally { loading = false; }
+}
+async function tick() {                       // every second: the live price only (small); all of it when something new is drawn
+  if (!D || loading) return;
+  const want = cur;
+  let L;
+  try { L = await (await fetch('/live?i=' + want + keyq(), {cache: 'no-store'})).json(); } catch (e) { return; }
+  if (want !== cur || !D) return;
+  if (L.ver !== D.ver || L.day !== D.day) return full();
+  D.live = L.live; D.status = L.status;
+  const live = (L.live && L.live.bars) || [];
+  if (live.length) {
+    const from = bucket(live[0][0]);
+    try { for (const b of agg(D.day, D.candles.filter((r) => bucket(r[0]) >= from).concat(live), [])) s.update(b); }
+    catch (e) { return full(); }
+    if (!hover) legend(lastBar());
+  }
+  status();
+}
+buttons(); full();
+setInterval(tick, 1000);
+setInterval(() => { if (!loading) full(); }, 60000);
 </script></body></html>"""
 
 LWC_URL = 'https://cdn.jsdelivr.net/npm/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js'
@@ -1525,6 +1693,12 @@ def serve_chart(names):
                 q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
                 i = q.get('i', [names[0]])[0]
                 body, ctype = json.dumps(with_live(i, CHART_DATA.get(i, {}))).encode(), 'application/json'
+            elif self.path.startswith('/live'):
+                q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+                d = CHART_DATA.get(q.get('i', [names[0]])[0], {})
+                body = json.dumps(dict(ver=d.get('ver'), day=d.get('day'), status=d.get('status'), updated=d.get('updated'),
+                                       live=live_part(q.get('i', [names[0]])[0], d) if d else None)).encode()
+                ctype = 'application/json'
             elif self.path.startswith('/app/ota.json'):
                 body, ctype = json.dumps(app_ota()).encode(), 'application/json'
             elif self.path.startswith('/api/state'):

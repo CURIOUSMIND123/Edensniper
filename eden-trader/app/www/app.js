@@ -15,6 +15,7 @@ let histFilter = 'ALL';
 let histShown = 60;
 let history = null;
 let timer = null;
+let evList = [], evLast = 0;
 
 // ---------------- settings (Capacitor Preferences = the native service's storage; localStorage in a browser) -----
 async function getPref(k) {
@@ -89,7 +90,9 @@ function callCard(c) {
 async function callsView() {
   if (!ready()) { $('calls').innerHTML = '<div class="empty">Set the server and key in Settings (⚙) first.</div>'; return; }
   try {
-    const [st, ev] = await Promise.all([getJSON('/api/state'), getJSON('/api/events?since=0')]);
+    const [st, ev] = await Promise.all([getJSON('/api/state'), getJSON('/api/events?since=' + evLast)]);
+    evList = evList.concat(ev.events || []).slice(-30);           // only the new alerts come each time
+    if (ev.last != null) evLast = Math.max(evLast, ev.last);
     live(true, 'updated ' + st.updated);
     const parts = [];
     for (const n of ['nifty', 'sensex']) {
@@ -104,7 +107,7 @@ async function callsView() {
       </div>`);
     }
     $('calls').innerHTML = parts.join('') || '<div class="empty">The server has no data yet today.</div>';
-    const evs = (ev.events || []).slice().reverse().slice(0, 30);
+    const evs = evList.slice().reverse();
     $('feed').innerHTML = evs.map((e) => `<div class="ev"><div class="t">${esc(e.title)}</div><div class="when">${esc(e.at)}</div>
       <div class="small">${esc(e.text).slice(0, 400)}</div></div>`).join('') || '<p class="muted">No alerts yet.</p>';
   } catch (e) {

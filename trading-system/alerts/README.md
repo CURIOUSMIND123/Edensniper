@@ -64,11 +64,14 @@ While the program runs, open **http://127.0.0.1:8000** in Chrome on the same pho
 from the same free Upstox prices: NIFTY / SENSEX buttons, 1 / 3 / 5 / 15-minute candles, the CPR as three pink lines
 (orange on a narrow day), the POC (purple, Nifty only), the 3-day volume lines (teal dots), the 15-minute high / low, yesterday's high / low (yellow), the
 open trade's stop loss and target, each named in words on the price scale, and every trade as a small letter: B buy, S sell, T target or half booked,
-SL stop loss, BE stop at entry, X other exit. Under the chart: today's trades with entry, stop and result. It
-refreshes every 2 seconds. In market hours the last candle moves with the **live price** (Groww's public data, every
-2 seconds; the status line shows "● LIVE" and the time), until Upstox's 1-minute candle for that minute arrives;
-the calls are worked out from the 1-minute candles only, as always (`LIVE_PRICE = False` switches the live price
-off). **Fit** brings back the latest candles with the price scale fitted. On a weekend it shows the last session.
+SL stop loss, BE stop at entry, X other exit. Each trade is drawn like TradingView's **long / short position tool**:
+green from the entry to T1 (where half is booked), lighter green on to T3, red to the stop loss, with the prices and
+points as labels (an open trade's box runs to the right, and the price scale always shows its T1 and stop). A legend
+shows the bar's open / high / low / close and change, as on TradingView. Under the chart: today's trades with entry,
+stop and result. In market hours the last candle and the price line move with the **live price every second**
+(Groww's public data; the status line shows "● LIVE" and the time) until Upstox's 1-minute candle for that minute
+arrives; the calls are worked out from the 1-minute candles only, as always (`LIVE_PRICE = False` switches the live
+price off). **Fit** brings back the latest candles with the price scale fitted. On a weekend it shows the last session.
 The chart library (TradingView's free open-source Lightweight Charts) is downloaded once and kept next to the
 program. `CHART = False` at the top switches the chart off.
 

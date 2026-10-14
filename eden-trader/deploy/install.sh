@@ -73,8 +73,8 @@ else
   log "Caddy not found: the app's API stays on 127.0.0.1:$PORT"
 fi
 
-# start now if it isn't running; restart only when the program, its history or these files changed, and not during
-# market hours (then at 15:36 via tick.sh)
+# start now if it isn't running; restart only when the program, its history or these files changed; in market hours
+# tick.sh restarts it at a safe moment (no trade open, between 5-minute candles, not 9:10-10:05) or after the close
 sum="$(cat "$APP/trading-system/alerts/cprb_alerts.py" "$APP/trading-system/alerts/history-2026.json" "$APP"/eden-trader/deploy/* "$ENV" 2>/dev/null | sha256sum | cut -d' ' -f1)"
 if ! systemctl is-active --quiet eden-trader.service; then
   systemctl start eden-trader.service && log "started"
@@ -85,7 +85,7 @@ else
   echo "$sum" > "$DATA/.deployed"
   hm=$((10#$(TZ=Asia/Kolkata date +%H%M))); dow=$(TZ=Asia/Kolkata date +%u)
   if [ "$dow" -le 5 ] && [ "$hm" -ge 900 ] && [ "$hm" -le 1535 ]; then
-    touch "$DATA/.restart-pending" && log "new code: restart after the market closes"
+    touch "$DATA/.restart-pending" && log "new code: restart at a safe moment (tick.sh)"
   else
     systemctl restart eden-trader.service && log "restarted with the new code"
   fi
