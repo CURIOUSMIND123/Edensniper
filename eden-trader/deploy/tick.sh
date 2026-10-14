@@ -5,7 +5,7 @@
 #    to 10:05 (the Magnet and the 9:30 breakout), and 1-2 minutes after a 5-minute candle closed (the volume-line
 #    signals come at the 5-minute closes). The program is back within seconds and goes through the day again; it
 #    doesn't send an alert it already sent.
-# A stopped service is started again.
+# A new line in deploy/restart-now restarts it at once (asked for by hand). A stopped service is started again.
 DATA="${EDEN_DATA:-/var/lib/eden-trader}"
 hm=$((10#$(TZ=Asia/Kolkata date +%H%M))); dow=$(TZ=Asia/Kolkata date +%u)
 in_market=0; [ "$dow" -le 5 ] && [ "$hm" -ge 900 ] && [ "$hm" -le 1535 ] && in_market=1
@@ -40,6 +40,14 @@ safe_now() {
 }
 
 [ "${1:-}" = "--open-trades" ] && { open_trades; exit 0; }       # for a check by hand
+
+# A restart asked for by hand: a new line in deploy/restart-now restarts at once, whatever the time or open trades.
+REQ="$(dirname "$0")/restart-now"
+if [ -f "$REQ" ] && [ "$(cat "$REQ")" != "$(cat "$DATA/.restart-now" 2>/dev/null)" ]; then
+  cp "$REQ" "$DATA/.restart-now"
+  rm -f "$DATA/.restart-pending"
+  systemctl restart eden-trader.service && echo "[eden-trader] restarted now, as asked ($(TZ=Asia/Kolkata date +%H:%M) IST)"
+fi
 
 if [ -f "$DATA/.restart-pending" ] && safe_now; then
   rm -f "$DATA/.restart-pending" && systemctl restart eden-trader.service && echo "[eden-trader] restarted with the new code ($(TZ=Asia/Kolkata date +%H:%M) IST)"
