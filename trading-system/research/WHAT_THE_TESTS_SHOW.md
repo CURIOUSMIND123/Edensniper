@@ -1513,6 +1513,40 @@ A 1-minute candle reaching both the stop and the target counts as the stop; cost
   A steady 70%+ with a stop no bigger than 1.5x the target would be a large edge; none of these entries had it before
   2025.
 
+## Why 80% success and still losses; entering on the pullback; a closer first stop (2023-2026)
+
+**Where the losses come from** (all calls 2023-2026): a call that goes the wrong way loses the whole stop (Nifty
+breakout 77 points on average, Sensex 276), while a winner books half at a quarter of the stop and the rest often comes
+back to the entry. Nifty breakouts: 36 of 240 calls hit the full stop and lost −2,805; the other 204 made +3,758.
+Sensex breakouts: 24 of 172, −6,758 against +8,768; Sensex volume lines: 42 of 116, −9,288 against +16,034.
+Winning breakouts hardly pulled back before T1: half of them less than 0.11-0.13 of the stop, 90% less than 0.53-0.57.
+
+**Entering on the pullback** (`pullback.py`, same calls, only the entry and the stop changed): a limit back at the
+breakout level after a 5-minute close beyond it (stop as now / mid-range), a sweep back through the level and a
+1- / 5-minute close beyond it again (stop beyond the dip, up to 2 entries), a fair value gap beyond the level; for
+volume lines, the retest of the broken line or the sweep and reclaim. About 1 in 4 breakouts never came back (the best
+of them), the ones that did were more often losers, and the closer stops were hit more: won % fell (Nifty breakouts
+82% -> 53-75%) and none was better in every year. Sensex breakouts, retest + mid-range stop + all at T2: +3,912
+(2023 −368) against +1,999 now, 35% won.
+
+**Reversals at key levels with a rejection candle and volume** (a 5-minute candle with a long wick back from P, CPR,
+R1 / S1, R2 / S2, yesterday's high / low, the 15-minute range, the volume lines or the POC; NIFTYBEES volume at least
+1.5x the last hour's, or any): lost in every year on both indices (won 21-45%).
+
+**A closer first stop, the same entries and management** (`tighter_stop.py`: the first stop at 0.75 / 0.6 / 0.5 of
+the setup's distance; book half, targets and trail unchanged):
+
+| All calls, points (won %) | 2023 | 2024 | 2025 | 2026 | worst trade |
+|---|---|---|---|---|---|
+| Nifty now | −276 (67%) | −281 (57%) | −416 (66%) | +2,388 (80%) | −183 |
+| Nifty, stop 0.75x | +8 (67%) | −536 (51%) | −400 (62%) | +1,749 (73%) | −145 |
+| Sensex now | +802 (80%) | −754 (61%) | +952 (73%) | +9,144 (84%) | −789 |
+| **Sensex, stop 0.75x** | **+697** (78%) | **+265** (57%) | **+644** (70%) | **+6,342** (74%) | **−598** |
+
+Sensex with the first stop at 0.75x made money in every year (Magnet +1,327 against +915 now; volume lines every year
+positive) and lost less on the worst trade and the worst run (−2,291 against −2,760), giving up part of 2026. Nifty: no
+closer stop helped.
+
 ## How to re-check all of this
 
 - `python research/fair_price_backtest.py` downloads the candles and re-runs the Fair Price test.
