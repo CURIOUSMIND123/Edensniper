@@ -1345,7 +1345,9 @@ def chart_update(n, cx, c_all, ts, got, day):
     if pend and got < 720 and not any(t['src'] == 'PULLBACK' for t in ts):
         levels.append(dict(p=pend['px'], c='#2962ff', t='LIMIT ' + ('BUY' if pend['side'] > 0 else 'SELL'), s=2, w=2))
     if open_t:
-        levels.append(dict(p=open_t['stp'], c='#ef5350', t='SL', s=2, w=1))
+        moved = open_t['side'] * (open_t['stp'] - open_t['e'])
+        levels.append(dict(p=open_t['stp'], c='#9e9e9e' if abs(moved) < 0.01 else '#ef5350', s=2, w=1,
+                           t='BE' if abs(moved) < 0.01 else 'Trailing SL' if moved > 0 else 'SL'))
         T = target_levels(cx, c_all, open_t['side'], open_t['e'], open_t['known'], half_price(open_t))
         levels.append(dict(p=T[0], c='#26a69a', t='T1', s=2, w=1))      # T2 / T3: in the position box
         half = any(e['kind'] == 'half' for e in open_t['ev'])
@@ -1379,12 +1381,14 @@ CHART_HTML = """<!doctype html><html><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#131722">
 <meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><title>CPRB live chart</title>
 <style>
-body{margin:0;background:#131722;color:#d1d4dc;font:14px -apple-system,BlinkMacSystemFont,Roboto,Ubuntu,'Trebuchet MS',sans-serif}
+html,body{height:100%}
+body{margin:0;background:#131722;color:#d1d4dc;font:14px -apple-system,BlinkMacSystemFont,Roboto,Ubuntu,'Trebuchet MS',sans-serif;
+  display:flex;flex-direction:column;overflow:hidden}
 #bar{display:flex;flex-wrap:wrap;gap:2px;align-items:center;padding:4px 6px;border-bottom:1px solid #2a2e39}
 button{background:transparent;color:#d1d4dc;border:0;border-radius:4px;padding:7px 9px;font:inherit}
 button.on{color:#2962ff;background:#1e222d;font-weight:600}
 .sep{width:1px;height:20px;background:#2a2e39;margin:0 4px}
-#wrap{position:relative;height:68vh}
+#wrap{position:relative;flex:1;min-height:200px}
 #c{position:absolute;inset:0}
 #legend{position:absolute;left:6px;top:4px;z-index:3;font-size:12px;line-height:1.6;pointer-events:none;background:rgba(19,23,34,0.75);padding:0 4px;border-radius:3px}
 #legend b{font-weight:600;color:#d1d4dc;margin-right:6px}
@@ -1395,19 +1399,28 @@ button.on{color:#2962ff;background:#1e222d;font-weight:600}
 table{width:100%;border-collapse:collapse;font-size:13px}td,th{padding:5px 8px;border-bottom:1px solid #2a2e39;text-align:left}
 th{color:#787b86;font-weight:normal}
 #key{font-size:12px;color:#787b86;padding:6px 8px}
+#panel{position:fixed;left:0;right:0;bottom:0;max-height:55%;overflow:auto;background:#1e222d;border-top:1px solid #2a2e39;z-index:5;
+  box-shadow:0 -4px 16px rgba(0,0,0,0.4)}
+#panel.hidden{display:none}
+#panel h4{margin:8px;font-size:13px;color:#d1d4dc}
 </style></head><body>
 <div id="bar"></div>
 <div id="wrap"><div id="c"></div><div id="legend"></div></div>
 <div id="st">loading...</div>
+<div id="panel" class="hidden"><h4>Today's trades</h4>
 <table><thead><tr><th>Time</th><th>Trade</th><th>Entry</th><th>Stop</th><th>Result</th></tr></thead><tbody id="list"></tbody></table>
-<div id="key">Each trade is drawn like TradingView's long / short position tool: green from the entry to T1 (where half is
+<h4>How to read it</h4>
+<div id="key"><b>SL</b>: the stop loss when the trade starts. <b>BE</b> (breakeven): after half is booked at T1 the stop
+moves to the entry price, so the rest can't lose. <b>Trailing SL</b>: once price has gone as far beyond the entry as the
+first stop was (1R), the stop follows 1R behind the best price, locking in profit. Each trade is drawn like TradingView's long / short position tool: green from the entry to T1 (where half is
 booked; a volume-line trade: its target), lighter green on to T3 (T2 / T3: the next price levels, for reference), red to
 the stop loss; an open trade's box runs to the right edge, with its stop now (dashed) once it has moved. Pink: CPR top /
 pivot / bottom (orange on a narrow day). Purple: the volume POC (not drawn for Sensex, which has no POC filter). Teal
 dots: 3-day volume lines. Green / red dashed: the first 15 minutes' high / low. Yellow dashed: yesterday's high / low.
 Letters: B buy, S sell, T target or half booked, SL stop loss, BE stop at entry, X other exit. In market hours the last
 candle and the price line move with the live price every second; the calls use whole 1-minute candles. Fit: back to the
-latest candles with the price scale fitted.</div>
+latest candles with the price scale fitted. Zoom: pinch the chart, or drag the price scale (right) up / down and the
+time scale (bottom) left / right; double-tap a scale or press Fit to reset.</div></div>
 <script src="/lwc.js"></script>
 <script>
 const IDX = %INDICES%;
@@ -1424,7 +1437,6 @@ const chart = LightweightCharts.createChart(box, {
   rightPriceScale: {borderColor: '#2a2e39', scaleMargins: {top: 0.12, bottom: 0.08}},
   timeScale: {timeVisible: true, secondsVisible: false, borderColor: '#2a2e39', rightOffset: 8},
   crosshair: {mode: 0, vertLine: {color: '#758696', labelBackgroundColor: '#363a45'}, horzLine: {color: '#758696', labelBackgroundColor: '#363a45'}},
-  handleScroll: {vertTouchDrag: false},      // a finger moving up / down scrolls the page, not the price scale
   localization: {locale: 'en-IN', priceFormatter: fmt}});
 const s = chart.addCandlestickSeries({upColor: '#26a69a', downColor: '#ef5350', borderVisible: false,
   wickUpColor: '#26a69a', wickDownColor: '#ef5350', priceLineVisible: true, priceLineStyle: 1, lastValueVisible: true});
@@ -1507,10 +1519,14 @@ class Positions {
           put(y3, 'T3 ' + fmt0(b.t[2]) + ' (' + sgn(dir * (b.t[2] - b.e)) + ')', 'rgba(8,153,129,0.8)');
         }
         put(ys, 'SL ' + fmt0(b.sl) + ' (' + sgn(dir * (b.sl - b.e)) + ')', '#f23645');
-        if (moved) put(yn, 'SL now ' + fmt0(b.sl_now), '#f23645');
+        if (moved) put(yn, stopName(b) + ' ' + fmt0(b.sl_now), stopName(b) === 'BE' ? '#787b86' : '#f23645');
       }
     });
   }
+}
+function stopName(b) {                      // the stop now: the first one, at the entry (breakeven), or trailing
+  const d = (b.side > 0 ? 1 : -1) * (b.sl_now - b.e);
+  return Math.abs(d) < 0.01 ? 'BE' : d > 0 ? 'Trailing SL' : 'SL';
 }
 const pos = new Positions();
 s.attachPrimitive(pos);
@@ -1541,6 +1557,7 @@ function buttons() {
   for (const f of [1, 3, 5, 15]) add(f + 'm', f === tf, () => { tf = f; fitted = ''; buttons(); draw(); });
   sep();
   add('Fit', false, () => { fitted = ''; draw(); });
+  add('☰', !$('panel').classList.contains('hidden'), () => { $('panel').classList.toggle('hidden'); buttons(); });
 }
 function clear() {                          // another index: nothing of the last one stays on the chart
   plines.forEach((p) => s.removePriceLine(p)); plines = []; linesKey = ''; D = null;
@@ -1653,13 +1670,32 @@ def key_ok(handler):
             return True, False
     return False, False
 
+CHART_PAGE = {}
+
+def chart_page():
+    """CHART_HTML, read again from this file whenever the file changes (on a server, a change to the chart page
+    shows without restarting the program)."""
+    src = os.path.abspath(__file__)
+    try:
+        mt = os.path.getmtime(src)
+        if CHART_PAGE.get('mt') != mt:
+            import ast
+            with open(src, encoding='utf-8') as f:
+                tree = ast.parse(f.read())
+            html = next(n.value.value for n in tree.body if isinstance(n, ast.Assign)
+                        and getattr(n.targets[0], 'id', '') == 'CHART_HTML')
+            CHART_PAGE.update(mt=mt, html=html)
+    except Exception:
+        pass
+    return CHART_PAGE.get('html', CHART_HTML)
+
 def serve_chart(names):
     """Serve the chart page: on this phone / computer only (127.0.0.1), or as set by CPRB_CHART_HOST on a server."""
     import http.server
     import threading
     if CHART_SERVER:
         return True
-    page = CHART_HTML.replace('%INDICES%', json.dumps([[n, SPEC[n]['name']] for n in names]))
+    idx = json.dumps([[n, SPEC[n]['name']] for n in names])
     lib = chart_library()
 
     class Handler(http.server.BaseHTTPRequestHandler):
@@ -1711,7 +1747,7 @@ def serve_chart(names):
             elif self.path.startswith('/api/history'):
                 body, ctype = json.dumps(history_all()).encode(), 'application/json'
             else:
-                body, ctype = page.encode(), 'text/html; charset=utf-8'
+                body, ctype = chart_page().replace('%INDICES%', idx).encode(), 'text/html; charset=utf-8'
             self.send_response(200)
             self.send_header('Content-Type', ctype)
             self.send_header('Cache-Control', 'no-store')
