@@ -1459,6 +1459,33 @@ at these levels sometimes, but more often it keeps going.
 
 **Calls + level trades** (pullback re-entries with the call's direction, reversals against it): both lost.
 
+## The 'A+ entry setup': liquidity sweep -> change of character -> fair value gap retrace (both directions)
+
+`aplus_setup.py`: a candle sweeps liquidity (today's earlier swing low / high, yesterday's low / high, the 9:15-9:30
+range) and closes back; within 12 candles a close beyond the last swing point the other way (CHoCH); a limit order back
+in the fair value gap that move left; stop beyond the sweep (or the gap's first candle); target 2x / 3x the stop, half
+at 1x + rest at 3x, or the day's extreme before the sweep. 1- / 3- / 5-minute candles, 192 versions per index, costs
+in, a candle reaching both the stop and the target counts as the stop. Textbook version: 5-minute candles, entry at
+the middle of the gap, stop beyond the sweep, 3x target.
+
+| Points after costs | 2026 (Jan-Jun / Jul-Oct) | 2023 | 2024 | 2025 |
+|---|---|---|---|---|
+| Nifty: our calls | **+2,389** (+1,990 / +399) | −275 | −267 | −416 |
+| Nifty: A+ textbook alone | +16 (80 trades, 39% won) | −220 | −6 | +143 |
+| Nifty: ours + A+ textbook, one trade at a time | +2,007 | −391 | −216 | −167 |
+| Sensex: our calls | **+9,166** (+7,575 / +1,591) | +805 | −738 | +972 |
+| Sensex: A+ textbook alone | **+4,495** (+3,927 / +568; 82 trades, 50% won) | −846 | +1,090 | −2,134 |
+| Sensex: ours + A+ textbook, one trade at a time | **+12,440** (worst fall −702) | +181 | +395 | −893 |
+
+- Of the 192 versions, 60-61 made money in 2026 and only 2 in every year 2023-2026, on each index.
+- Nifty: no help in 2026 (the best version in hindsight lost in all three earlier years).
+- Sensex: the textbook version was the best of all in 2026 and added +3,274 to our calls, but it lost in 2023
+  and 2025; together with our calls 2023-2025 made −317 against +1,039 for our calls alone. The version that did best
+  on 2023-2025 (5-minute, 1-candle swings, sweep back within 2 candles, stop beyond the sweep, target the day's
+  extreme) was positive in every year alone (+705 / +4,852 / +1,013 / +698) but added nothing to our calls in 2026
+  (+9,120 in one book) and doubled the worst fall.
+- So the setup's results swing from year to year; it suited 2026's Sensex.
+
 ## How to re-check all of this
 
 - `python research/fair_price_backtest.py` downloads the candles and re-runs the Fair Price test.
