@@ -1547,6 +1547,23 @@ Sensex with the first stop at 0.75x made money in every year (Magnet +1,327 agai
 positive) and lost less on the worst trade and the worst run (−2,291 against −2,760), giving up part of 2026. Nifty: no
 closer stop helped.
 
+## Bitcoin: Rs 5,000 -> Rs 50,000 in a week at 50x? (`btc_10x_week.py`)
+
+Every week from 6 October 2025 to 5 October 2026 (53 weeks), Binance BTCUSDT 1-minute candles: Rs 5,000 at 50x, the
+whole balance in every trade, compounding, one trade after another until Rs 50,000, below Rs 500, or the week's end.
+Target = stop = 0.5% / 1% / 1.5% of price (50x is liquidated at about 1.6%); direction by coin flip (200 runs a week),
+with the last hour or against it; costs 0.11% of the position = 5.5% of the margin a trade.
+
+| Target / stop | Reached Rs 50,000 | Lost it all |
+|---|---|---|
+| 0.5% | 0-0.1% of the weeks | 98-100% |
+| 1% | 0-2.1% | 90-94% |
+| 1.5% | 1.9-7.5% (best: 4 weeks of 53) | 85-93% |
+
+Even with no costs and a fair coin, the chance of turning 5,000 into 50,000 before losing it is at most 10%, whatever
+the strategy; the costs at 50x (5.5% of the money every trade) push it lower. Only a real edge changes that, and no
+intraday strategy here had one on Bitcoin (see the sections above).
+
 ## How to re-check all of this
 
 - `python research/fair_price_backtest.py` downloads the candles and re-runs the Fair Price test.
