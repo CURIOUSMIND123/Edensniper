@@ -1486,6 +1486,33 @@ the middle of the gap, stop beyond the sweep, 3x target.
   (+9,120 in one book) and doubled the worst fall.
 - So the setup's results swing from year to year; it suited 2026's Sensex.
 
+## 2023-2026: looking for 70%+ accuracy with small targets (`highwin.py`, `highwin2.py`)
+
+Asked for: at least 70% of trades won, small targets (Nifty 30-50, Sensex 100-200 points), small losses, several
+entries a day. Counted only when it held in each of 2023, 2024 and 2025 (chosen without 2026), with money made in each.
+A 1-minute candle reaching both the stop and the target counts as the stop; costs in.
+
+- `highwin.py`: our calls and the A+ setup (12 kinds), fixed targets, the entry's own stop or one capped at 1.5 / 2x the
+  target (or the trade skipped), breakeven at 60% of the way, direction filters: 1,140 versions per index. **None**
+  qualified. Our calls with a 30 / 40-point target won 52% / 44% (2023), 66% / 60% (2024), 78% / 72% (2025) and 83% /
+  83% (2026) on Nifty; Sensex 100 points: 62%, 65%, 76%, 87%. Every one of them lost money in 2023 and 2024.
+- `highwin2.py`: the same entries with one or two conditions (opening gap, pivot side, the 15-minute range, the last
+  30 minutes, time of day, room to the next level, the last 10 days' volatility, narrow CPR), stop at most 1.5x the
+  target: about 4,300 combinations per index. **None** qualified. Nifty: nothing close (the best lost in 2026).
+  Sensex came closest, made money in every year, and held in 2026, which it wasn't chosen on:
+
+| Sensex, won % (points after costs) | 2023 | 2024 | 2025 | 2026 |
+|---|---|---|---|---|
+| CPR Magnet (9:16), target 100, stop 150 | 67% (+70) | 74% (+524) | 75% (+510) | 80% (+570) |
+| Our calls, target 150, stop 225, no level within 150 ahead, CPR not narrow | 65% (+266) | 72% (+858) | 70% (+639) | 89% (+1,957) |
+| A+ (5-minute, 1-candle swings), 10:30-12:30 on days the open gapped against it, target 100, stop 150 | 67% (+524) | 65% (+143) | 70% (+1,098) | 74% (+1,027) |
+
+  15-57 trades a year each. Picked from thousands of combinations, so some of it may be luck.
+- Why 70% is hard: with the stop 1.5x the target, a market that is just noise gives 60%, and breaking even after costs
+  needs about 62-64% (Nifty 40 / 60) to 63% (Sensex 100 / 150); with the stop as big as the target, 50% and about 55%.
+  A steady 70%+ with a stop no bigger than 1.5x the target would be a large edge; none of these entries had it before
+  2025.
+
 ## How to re-check all of this
 
 - `python research/fair_price_backtest.py` downloads the candles and re-runs the Fair Price test.

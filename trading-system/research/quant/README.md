@@ -80,6 +80,7 @@ Costs: 4 Nifty points or 12 Sensex points per trade. `pip install pandas scikit-
 | `fetch_fx.py` | 1-minute gold (XAUUSD), WTI crude, EUR/USD, GBP/USD, USD/JPY candles from Dukascopy's free data feed, 15 May - 9 October 2026 |
 | `y2026_markets.py` | The last 3 months: the default strategy on gold, crude and currency pairs (6 h 15 min sessions from 9:00 India / 8:00 London / 8:00 New York) vs Nifty / Sensex, in % of the price |
 | `y2026_reentry.py` | 2026: small stops with one re-entry (or a flip), and reversals from our T2 / T3 levels with a very small stop |
+| `highwin.py` / `highwin2.py` | 2023-2026: looking for 70%+ won with small fixed targets and limited stops (1,140 versions; then ~4,300 combinations of simple conditions), chosen on 2023-2025 |
 | `aplus_setup.py` | 2023-2026: the 'A+ entry setup' (liquidity sweep -> change of character -> fair value gap retrace), both directions, 192 versions, alone and with our calls |
 | `levels_style.py` | 2023-2026: the calls year by year; small stops (last 2-3 one- / five-minute candles) with every exit; reversals at key levels with a very small stop (144 versions, chosen on 2023-2025); how often price goes P <-> R1 / S1 |
 | `target_probs.py` | 2023-2026: how often the calls reached T1 (book half) / T2 / T3; writes `alerts/target-probs.json` (the chances the app shows) |
