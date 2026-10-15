@@ -1,0 +1,89 @@
+{
+ "note": "How often the calls reached T1 / T2 / T3 before the stop (after T1: before the entry), January 2023 - October 2026 (research/quant/target_probs.py).",
+ "probs": {
+  "NIFTY": {
+   "BREAKOUT": {
+    "n": 240,
+    "t1": 83,
+    "t2": 29,
+    "t3": 12,
+    "t2_after_t1": 34,
+    "t3_after_t2": 43
+   },
+   "ALL": {
+    "n": 435,
+    "t1": 54,
+    "t2": 20,
+    "t3": 9,
+    "t2_after_t1": 38,
+    "t3_after_t2": 46
+   },
+   "VOLUME LINE": {
+    "n": 186,
+    "t1": 15,
+    "t2": 9,
+    "t3": 5,
+    "t2_after_t1": 63,
+    "t3_after_t2": 59
+   },
+   "MAGNET": {
+    "n": 6,
+    "t1": 83,
+    "t2": 33,
+    "t3": 17,
+    "t2_after_t1": 40,
+    "t3_after_t2": 50
+   },
+   "REVERSAL": {
+    "n": 3,
+    "t1": 100,
+    "t2": 33,
+    "t3": 0,
+    "t2_after_t1": 33,
+    "t3_after_t2": 0
+   }
+  },
+  "SENSEX": {
+   "BREAKOUT": {
+    "n": 172,
+    "t1": 83,
+    "t2": 29,
+    "t3": 12,
+    "t2_after_t1": 35,
+    "t3_after_t2": 40
+   },
+   "ALL": {
+    "n": 363,
+    "t1": 63,
+    "t2": 25,
+    "t3": 12,
+    "t2_after_t1": 39,
+    "t3_after_t2": 49
+   },
+   "VOLUME LINE": {
+    "n": 116,
+    "t1": 20,
+    "t2": 12,
+    "t3": 9,
+    "t2_after_t1": 61,
+    "t3_after_t2": 71
+   },
+   "MAGNET": {
+    "n": 73,
+    "t1": 85,
+    "t2": 33,
+    "t3": 16,
+    "t2_after_t1": 39,
+    "t3_after_t2": 50
+   },
+   "REVERSAL": {
+    "n": 2,
+    "t1": 100,
+    "t2": 100,
+    "t3": 100,
+    "t2_after_t1": 100,
+    "t3_after_t2": 100
+   }
+  }
+ }
+}

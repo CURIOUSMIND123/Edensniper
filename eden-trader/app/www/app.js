@@ -66,9 +66,10 @@ function chartView() {
 }
 
 function tgts(c) {
-  // T1 = where the call books half (or its one target); T2 / T3 = the next price levels after it, for reference
+  // T1 = where the call books half (or its one target); T2 / T3 = the next price levels after it, for reference;
+  // the % = how often calls of this kind got there (2023-2026)
   if (!c.targets) return '-';
-  return c.targets.map((v, k) => `<span class="${c.hit && c.hit[k] ? 'ok' : ''}">T${k + 1} ${num(v, 0)}${k === 0 ? ' (' + esc(c.t1 || 'book half') + ')' : ''}${c.hit && c.hit[k] ? ' ✓' : ''}</span>`).join(' · ');
+  return c.targets.map((v, k) => `<span class="${c.hit && c.hit[k] ? 'ok' : ''}">T${k + 1} ${num(v, 0)}${k === 0 ? ' (' + esc(c.t1 || 'book half') + ')' : ''}${c.prob && c.prob[k] != null ? ' ' + c.prob[k] + '%' : ''}${c.hit && c.hit[k] ? ' ✓' : ''}</span>`).join(' · ');
 }
 
 function callCard(c) {

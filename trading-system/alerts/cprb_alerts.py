@@ -991,12 +991,17 @@ def messages(cx, ts, c1, upto, lots):
                    f"{f2(t['e'] + t['side'] * 0.25 * t['R'])}, then stop to entry; after {f2(t['e'] + t['side'] * t['R'])} "
                    "trail the stop 1R behind the best price.")
         tg = target_levels(cx, c1, t['side'], t['e'], t['known'], half_price(t))
+        pr = t_probs(cx['name'], t['src'])
+        pc = lambda k: f", {pr['t' + str(k + 1)]}% of such calls got there" if pr and k == 0 else (f" {pr['t' + str(k + 1)]}%" if pr else '')
         out.append((tid + ('in',), t['known'], f"{nm} {hhmm(t['m'] if t['src'] != 'MAGNET' else 556)} {t['src']} {sd} at "
-                    f"{f2(t['e'])} -> {option(cx, t['side'], t['e'])}. {how} Targets: T1 {f2(tg[0])} ({t1_word(t)}), "
-                    f"then the next levels T2 {f2(tg[1])}, T3 {f2(tg[2])} (for reference).", True))
+                    f"{f2(t['e'])} -> {option(cx, t['side'], t['e'])}. {how} Targets: T1 {f2(tg[0])} ({t1_word(t)}{pc(0)}), "
+                    f"then the next levels T2 {f2(tg[1])}{pc(1)}, T3 {f2(tg[2])}{pc(2)} (for reference).", True))
         for k, ev in enumerate(t['ev']):
             if ev['kind'] == 'half':
                 txt = (f"{nm} {hhmm(ev['m'])} BOOK HALF at {f2(ev['px'])} ({ev['pts']:+.0f} pts). Move the stop to {f2(ev['stp'])}."
+                       + (f" From here, T2 {f2(tg[1])} was reached on {pr['t2_after_t1']}% of such calls, T3 {f2(tg[2])} on "
+                          f"{round(pr['t2_after_t1'] * pr['t3_after_t2'] / 100)}%." if pr and pr.get('t2_after_t1') is not None
+                          and t['src'] not in ('VOLUME LINE', 'SWEEP') else "")
                        + (f" Rest to {f2(t['tgt2'])}." if t['src'] == 'VOLUME LINE' and t.get('tgt2') else ""))
             else:
                 txt = f"{nm} {hhmm(ev['m'])} +1R reached: trail the stop 1R behind the best price (now {f2(ev['stp'])})."
@@ -1168,6 +1173,22 @@ def half_price(t):
         return t['t1']
     return t['e'] + t['side'] * 0.25 * t['R']
 
+PROBS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'target-probs.json')
+PROBS = {}
+
+def t_probs(name, src):
+    """How often calls like this one reached T1 / T2 / T3 (percent), and T2 / T3 once T1 / T2 was reached, 2023-2026
+    (research/quant/target_probs.py); a setup with fewer than 30 calls: all calls of the index."""
+    if not PROBS:
+        try:
+            with open(PROBS_FILE, encoding='utf-8') as f:
+                PROBS.update(json.load(f)['probs'])
+        except Exception:
+            PROBS['-'] = {}
+    by = PROBS.get(name, {})
+    v = by.get(src) if by.get(src, {}).get('n', 0) >= 30 else by.get('ALL')
+    return v or None
+
 def t1_word(t):
     """What the call does at T1: books half, or (a single target) books all."""
     return 'target' if t['src'] in ('VOLUME LINE', 'SWEEP') and not t.get('tgt2') else 'book half'
@@ -1213,11 +1234,13 @@ def call_info(cx, t, c1):
     need = SUCCESS_PTS.get(cx['name'], 0)
     m0 = 556 if t['src'] == 'MAGNET' else t['m']           # as the alert says it
     tg = target_levels(cx, c1, sd, t['e'], t['known'], half_price(t))
+    pr = t_probs(cx['name'], t['src'])
     mae = mae_until(c1, sd, t['e'], t['known'], x['m'] if x else (c1[-1][0] if c1 else t['known']))
     return dict(time=hhmm(m0), side='BUY' if sd > 0 else 'SELL', setup=t['src'].lower(), entry=round(t['e'], 2),
                 stop=round(t['stp0'], 2), stop_now=round(t['stp'], 2), open=not x, status=(f"{x['why']} at {f2(x['px'])}" if x else 'open'),
                 pts=round(x['pnl'], 1) if x else None, mfe=round(mfe, 1), mae=round(mae, 1), stopped=stopped, success=mfe >= need,
                 need=need, option=option(cx, sd, t['e']), targets=tg, t1=t1_word(t),
+                prob=[pr['t1'], pr['t2'], pr['t3']] if pr else None,
                 hit=[mfe >= sd * (v - t['e']) - 0.005 for v in tg])
 
 def record_history(cx, ts, c1, day):
@@ -1327,7 +1350,8 @@ def chart_update(n, cx, c_all, ts, got, day):
         # the position, drawn like TradingView's long / short position tool: green to the targets, red to the stop
         boxes.append(dict(m0=m0, m1=t['exit']['m'] if t['exit'] else None, side=sd, e=round(t['e'], 2), sl=round(t['stp0'], 2),
                           sl_now=round(t['stp'], 2), t=target_levels(cx, c_all, sd, t['e'], t['known'], half_price(t)),
-                          t1w=t1_word(t), pnl=round(t['exit']['pnl'], 1) if t['exit'] else None))
+                          t1w=t1_word(t), pnl=round(t['exit']['pnl'], 1) if t['exit'] else None,
+                          prob=[(t_probs(cx['name'], t['src']) or {}).get(k) for k in ('t1', 't2', 't3')]))
         marks.append(dict(m=m0, pos='belowBar' if sd > 0 else 'aboveBar', c='#26a69a' if sd > 0 else '#ef5350', x='B' if sd > 0 else 'S'))
         for ev in t['ev']:
             if ev['kind'] == 'half':
@@ -1410,7 +1434,8 @@ th{color:#787b86;font-weight:normal}
 <div id="panel" class="hidden"><h4>Today's trades</h4>
 <table><thead><tr><th>Time</th><th>Trade</th><th>Entry</th><th>Stop</th><th>Result</th></tr></thead><tbody id="list"></tbody></table>
 <h4>How to read it</h4>
-<div id="key"><b>SL</b>: the stop loss when the trade starts. <b>BE</b> (breakeven): after half is booked at T1 the stop
+<div id="key">The % after T1 / T2 / T3: how often calls of this kind got there (2023-2026; after T1, before price came
+back to the entry). <b>SL</b>: the stop loss when the trade starts. <b>BE</b> (breakeven): after half is booked at T1 the stop
 moves to the entry price, so the rest can't lose. <b>Trailing SL</b>: once price has gone as far beyond the entry as the
 first stop was (1R), the stop follows 1R behind the best price, locking in profit. Each trade is drawn like TradingView's long / short position tool: green from the entry to T1 (where half is
 booked; a volume-line trade: its target), lighter green on to T3 (T2 / T3: the next price levels, for reference), red to
@@ -1513,10 +1538,11 @@ class Positions {
           used.push({y: yy, l: left ? xx - w : xx, r: left ? xx : xx + w});
         };
         put(ye, (b.side > 0 ? 'BUY ' : 'SELL ') + fmt0(b.e) + (open ? '' : '  ' + sgn(b.pnl) + ' pts'), open ? '#2962ff' : '#5d606b');
-        put(y1, 'T1 ' + fmt0(b.t[0]) + ' (' + sgn(dir * (b.t[0] - b.e)) + ')', '#089981');
+        const pct = (k) => (b.prob && b.prob[k] != null ? ' ' + b.prob[k] + '%' : '');
+        put(y1, 'T1 ' + fmt0(b.t[0]) + ' (' + sgn(dir * (b.t[0] - b.e)) + ')' + pct(0), '#089981');
         if (open || x2 - x1 > 90) {
-          put(y2, 'T2 ' + fmt0(b.t[1]) + ' (' + sgn(dir * (b.t[1] - b.e)) + ')', 'rgba(8,153,129,0.8)');
-          put(y3, 'T3 ' + fmt0(b.t[2]) + ' (' + sgn(dir * (b.t[2] - b.e)) + ')', 'rgba(8,153,129,0.8)');
+          put(y2, 'T2 ' + fmt0(b.t[1]) + ' (' + sgn(dir * (b.t[1] - b.e)) + ')' + pct(1), 'rgba(8,153,129,0.8)');
+          put(y3, 'T3 ' + fmt0(b.t[2]) + ' (' + sgn(dir * (b.t[2] - b.e)) + ')' + pct(2), 'rgba(8,153,129,0.8)');
         }
         put(ys, 'SL ' + fmt0(b.sl) + ' (' + sgn(dir * (b.sl - b.e)) + ')', '#f23645');
         if (moved) put(yn, stopName(b) + ' ' + fmt0(b.sl_now), stopName(b) === 'BE' ? '#787b86' : '#f23645');

@@ -1418,6 +1418,47 @@ booked now (0.25x the stop, then the stop to entry), T2 / T3 at the next two lev
   reached on 60 / 39 / 23% (Nifty) and 72 / 45 / 28% (Sensex) of the calls. 80% of the Nifty and 85% of the Sensex
   calls made money.
 
+## 2023-2026: small stops, booking by probability, reversals at key levels, P <-> R1 / S1
+
+`levels_style.py` and `target_probs.py`, on every day with data (15 February 2023 - 9 October 2026, 899 days), with
+NIFTYBEES volume downloaded back to 2023 so the volume lines and the POC exist on every day. Costs 4 Nifty / 12 Sensex
+points a trade. Inside a 1-minute candle that reaches both the stop and the target, the stop counts.
+
+**The calls as they are, year by year** (the settings were chosen on 2026):
+
+| Points after costs | 2023 | 2024 | 2025 | 2026 |
+|---|---|---|---|---|
+| Nifty | −275 (67% won) | −267 (58%) | −416 (66%) | **+2,389** (80%) |
+| Sensex | +805 (80%) | −738 (61%) | +972 (74%) | **+9,166** (85%) |
+
+2026 was far better than the three years before it: the 80-85% won is a 2026 figure.
+
+**Small stop on the same calls** (beyond the low / high of the last 2-3 candles): with 1-minute candles the stop is
+20-24 Nifty / 70-80 Sensex points from the entry and is hit before the first level on 56-67% of the calls; every exit
+(all at T1 / T2 / T3, half and half, 2x / 3x the stop, today's book half and trail) made less than the setup's stop,
+and most lost money over 2023-2026. With the last 2-3 five-minute candles (48-62 Nifty, 141-190 Sensex points) the
+best was "hold to T3, stop to entry at T1": Sensex +209 / +1,974 / +1,236 / +4,663 (2023-2026, every year positive,
+worst fall −1,851 against −2,753 now; but only 24-28% of the calls win), Nifty −497 / −358 / +211 / +1,721.
+
+**Book at T1, T2 or T3** (setup stop): all at T1 wins most often (65-67%) but made the least (Nifty −431, Sensex +872
+over the four years); holding to T3 (stop to entry at T1) wins 32% and made the most (Nifty +2,191, Sensex +8,785):
+the profit is in the few calls that run. Once T1 (book half) is reached, T2 follows on only 34-35% of the breakout
+calls and T3 on 14-15% (`target_probs.py`; the alerts, the chart and the app now show these chances).
+
+**Reversal at key levels with a very small stop** (P, CPR, R1 / S1, R2 / S2, yesterday's high / low, the 15-minute
+range, the volume lines, the POC; 'doesn't hold' = 1 / 3 one-minute closes or a 5-minute close back; stop beyond the
+last 2-3 candles, at most 0.08 / 0.12 / 0.20%; target the next level or 1.5-3x the stop; 144 versions): **none** made
+money over 2023-2025 on either index, and every one lost over the four years (Nifty −4,045 at best, Sensex −13,403 at
+best). Won 25-41%: with stops this small the costs and the noise take the edge. Only single level types look good
+(Sensex SELL at R1, +1,204, every year positive; Nifty BUY at yesterday's low, 26 trades), one or two out of 52, so
+likely luck.
+
+**P <-> R1 / S1**: after price first reached R1 on a day, it went 0.2% beyond R1 before coming back to P on 49-51% of
+the days, and came back to P first on only 26-27% (S1: 58% beyond, 25% back to P), on both indices. Price does turn
+at these levels sometimes, but more often it keeps going.
+
+**Calls + level trades** (pullback re-entries with the call's direction, reversals against it): both lost.
+
 ## How to re-check all of this
 
 - `python research/fair_price_backtest.py` downloads the candles and re-runs the Fair Price test.
