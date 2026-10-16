@@ -80,6 +80,7 @@ Costs: 4 Nifty points or 12 Sensex points per trade. `pip install pandas scikit-
 | `fetch_fx.py` | 1-minute gold (XAUUSD), WTI crude, EUR/USD, GBP/USD, USD/JPY candles from Dukascopy's free data feed, 15 May - 9 October 2026 |
 | `y2026_markets.py` | The last 3 months: the default strategy on gold, crude and currency pairs (6 h 15 min sessions from 9:00 India / 8:00 London / 8:00 New York) vs Nifty / Sensex, in % of the price |
 | `y2026_reentry.py` | 2026: small stops with one re-entry (or a flip), and reversals from our T2 / T3 levels with a very small stop |
+| `t2_full.py` | 2023-2026: the same calls booked in full at T2 with the stop at half of T2, no half booking, no trailing |
 | `btc_10x_week.py` | Bitcoin, Rs 5,000 at 50x, all in: how often it reached Rs 50,000 within a week (Oct 2025 - Oct 2026) |
 | `pullback.py` | 2023-2026: entering the calls on the pullback (retest, sweep and reclaim, fair value gap) instead of at the breakout; reversals at key levels with a rejection candle and volume |
 | `tighter_stop.py` | 2023-2026: the same calls with the first stop at 0.75 / 0.6 / 0.5 of the setup's distance |

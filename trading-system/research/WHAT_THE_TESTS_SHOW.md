@@ -1564,6 +1564,22 @@ Even with no costs and a fair coin, the chance of turning 5,000 into 50,000 befo
 the strategy; the costs at 50x (5.5% of the money every trade) push it lower. Only a real edge changes that, and no
 intraday strategy here had one on Bitcoin (see the sections above).
 
+## All at T2, stop at half of T2, no half booking, no trailing (`t2_full.py`)
+
+The same calls (2023-2026), booked in full at T2 (the app's T2: the next price level beyond T1), the stop at half the
+distance to T2, out at 3:15 otherwise; costs in, pessimistic fills.
+
+| Points (won %) | 2023 | 2024 | 2025 | 2026 | all |
+|---|---|---|---|---|---|
+| Nifty now | −275 (67%) | −267 (58%) | −416 (66%) | +2,389 (80%) | +1,430 |
+| Nifty all at T2 | −449 (37%) | −1,205 (39%) | +42 (50%) | +1,733 (52%) | +122 |
+| Sensex now | +805 (80%) | −738 (61%) | +972 (74%) | +9,166 (85%) | +10,205 |
+| Sensex all at T2 | −1,077 (33%) | +3,910 (50%) | +2,691 (50%) | +7,669 (55%) | +13,194 |
+
+T2 was reached on 24% (Nifty) / 29% (Sensex) of the calls, the stop on 47% / 44%, the rest closed at 3:15. T2 was on
+average 140 Nifty / 394 Sensex points away, so the stop was 70 / 197 (now 72 / 248). Average win +66 / +240, loss
+−52 / −147.
+
 ## How to re-check all of this
 
 - `python research/fair_price_backtest.py` downloads the candles and re-runs the Fair Price test.
