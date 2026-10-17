@@ -1633,6 +1633,17 @@ Sensex with the stop capped at 200 points made money in every year, a little mor
 Nifty never better; Sensex 30 points better with the stop at most 150: +8 / +1,012 / +1,968 / +6,539 (+9,528), below
 the plain 200-point cap.
 
+## Buying 30 (Nifty) / 100 (Sensex) points lower than the call (`lower_buy.py`)
+
+The call at the breakout as now, the order waiting 30 / 100 points better until 2:30, the stop at the same price (30 /
+100 points smaller risk), the same T1 and management. Most winners come back only a little before T1 (half of them
+less than 8 / 37 points), while every call that goes on to the full stop passes through the lower price:
+
+| 2023-2026 | Calls | Lower order filled | Points (won %) |
+|---|---|---|---|
+| Nifty: reached T1 first / hit the full stop / neither | 235 / 126 / 74 | 59% / **94%** / 50% (often after T1, later in the day) | now +1,430 (67%); lower −74 (35%) |
+| Sensex: reached T1 first / hit the full stop / neither | 230 / 77 / 56 | 60% / **91%** / 54% | now +10,205 (74%); lower −68 (41%) |
+
 ## How to re-check all of this
 
 - `python research/fair_price_backtest.py` downloads the candles and re-runs the Fair Price test.
