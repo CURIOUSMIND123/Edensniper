@@ -18,6 +18,8 @@ import y2026_rr as RR, y2026_smc as M, y2026_sweep as SW
 sys.path.insert(0, '../../alerts')
 import cprb_alerts as A
 POC_NOW, VC_NOW = dict(A.POC_DAYS), A.VOLCHECK
+STOP_NOW = dict(A.STOP_MAX)
+A.STOP_MAX = dict.fromkeys(A.STOP_MAX, 0)             # the backtests in 1.-3. have each setup's own stop (no cap)
 A.POC_DAYS = dict.fromkeys(A.POC_DAYS, 30)           # the backtests in 1. and 2. use the 30-day POC
 
 spec = A.SPEC[Y.B.name]
@@ -104,6 +106,8 @@ print(f"  default: {f'POC of the last {N} sessions' if N else 'no POC filter'}, 
       f"net {sum(p for v in a.values() for _, p in v):+,.0f} | y2026_pocdays: {sum(len(v) for v in ref_p.values())} trades, "
       f"net {sum(p for v in ref_p.values() for _, p in v):+,.0f} | days that differ: {len(diff)} {diff[:5]}")
 
+A.STOP_MAX = STOP_NOW                                 # 4. as it runs: with the stop caps
+print(f"  stop caps now: {STOP_NOW} ({A.STOP_MODE})")
 for rules, sweep, vcheck in (('classic', False, VC_NOW), ('classic', False, True), ('classic', False, False), ('classic', True, False), ('small', False, False), ('rr', False, False)):
     A.SWEEP, A.VOLCHECK = sweep, vcheck
     changed = 0

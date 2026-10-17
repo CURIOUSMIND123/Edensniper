@@ -18,6 +18,13 @@
 //   2026 (1 Jan - 9 Oct), after costs: Nifty 93 trades, 80% won, net +2,389 (Jan-Jun +1,990, Jul-Oct +398), worst
 //   fall -204; Sensex 82 trades, 85% won, net +9,166 (Jan-Jun +7,575, Jul-Oct +1,590), worst fall -336.
 //   Reference: research/quant/y2026_pocdays.py (and alerts/cprb_alerts.py, POC_DAYS and VOLCHECK).
+//   THE LARGEST STOP (from 17 October 2026): NIFTY 55 POINTS, SENSEX 170 POINTS. A wider stop (the other side of the
+//   15-minute range, 0.3% Magnet, the previous volume line) is moved in to it; book half, the targets and the trail
+//   stay where they were. 2023-2026: 95% of the calls that reached T1 came back less than 55 Nifty / 171 Sensex
+//   points first. The alert program's own trades 2023 / 2024 / 2025 / 2026: Sensex +682 / +528 / +1,206 / +8,183
+//   (before: +805 / -738 / +972 / +9,166; worst trade -182 instead of -789); Nifty -135 / -505 / -224 / +1,638
+//   (before: -275 / -267 / -416 / +2,389; worst trade -59 instead of -183). Settings: 'the largest stop'
+//   (0 = each setup's own stop). research/quant/mae_study.py.
 // THE POC WINDOW AND THE VOLUME CHECK (y2026_pocdays.py), net points 2026:
 //   Nifty, with the check:     POC of 30 sessions +2,214, 15 +2,177, 7 +2,028, 3 +2,086, 2 +2,114, 1 +2,114, none +1,964
 //   Nifty, without the check:  30 +2,274, 15 +2,284, 7 +2,254, 3 +2,312, 2 +2,332, 1 +2,389 (worst fall -204), none +1,793
@@ -101,6 +108,8 @@ rrMult   = input.float(4.0, "1:4 targets: target = this x the stop", step = 0.5,
 smallCap = input.float(0, "Small stops: the largest stop in points (0 = Sensex 150, Nifty 45)", step = 5, group = G0)
 holdMin  = input.int(60, "Small stops: out after this many minutes at the latest", minval = 5, maxval = 375, group = G0)
 pbMult   = input.float(2.0, "Small stops: the pullback trade's target = this x its stop", step = 0.25, group = G0)
+maxN     = input.float(55, "Original rules: the largest stop on Nifty, points (0 = each setup's own stop)", step = 5, group = G0, tooltip = "A wider stop (the other side of the 15-minute range, 0.3% Magnet, the previous volume line) is moved in to this many points; book half, the targets and the trail stay where they were. 2023-2026: 95% of the calls that reached T1 came back less than 55 Nifty points first.")
+maxS     = input.float(170, "Original rules: the largest stop on Sensex, points (0 = each setup's own stop)", step = 10, group = G0, tooltip = "2023-2026: 95% of the calls that reached T1 came back less than 171 Sensex points first; with the stop at most 170 every year made money (+682 / +528 / +1,206 / +8,183) and the worst trade was -182 instead of -789.")
 G1 = "Rules"
 cprF   = input.string("Off", "Direction from the open vs the CPR", options = ["With the CPR", "Not against the CPR", "Off"], group = G1)
 pocF   = input.string("Beyond the POC", "Volume zone filter (buys above the POC, sells below)", options = ["Off", "Beyond the POC", "Beyond the value area"], group = G1)
@@ -221,6 +230,8 @@ CUT  = cutH * 60 + cutMn     // no new entries from this time
 TOUT = 915     // out at 15:15
 CAP  = smallCap > 0 ? smallCap : close > 50000 ? 150.0 : 45.0     // small stops: the largest stop
 capAt(float px) => rrMode ? rrStop / 100 * px : CAP             // the largest stop for an entry at px
+SMAX = shortMode ? 0.0 : close > 50000 ? maxS : maxN             // original rules: the largest stop (book half / trail unchanged)
+capStop(int sd, float px, float s0) => SMAX > 0 and sd * (px - s0) > SMAX ? px - sd * SMAX : s0
 profN = close > 50000 ? pocNs : pocNn                            // the volume POC from this many sessions
 pocOn = profN > 0                                                // 0: no POC filter on this index
 vcOn  = close > 50000 ? vcSx : vcNf                              // the volume check on this index
@@ -580,7 +591,7 @@ if is5 and n1 > 0
                     side := ms
                     e := ck
                     R := shortMode ? math.min(magStop / 100 * ck, capAt(ck)) : magStop / 100 * ck
-                    stp := ck - ms * R
+                    stp := capStop(ms, ck, ck - ms * R)
                     tgt2 := ms < 0 ? top : bot
                     tgt := rrMode ? ck + ms * rrMult * R : shortMode ? tgt2 : magHalf ? ck + ms * 0.25 * R : tgt2
                     lastMin := rrMode ? TOUT : 555 + holdMin
@@ -744,7 +755,7 @@ if is5 and n1 > 0
                         openPx := px
                         side := sd
                         e := px
-                        stp := s0
+                        stp := capStop(sd, px, s0)
                         R := sd * (px - s0)
                         tgt := tgtFor(sd, px, R)
                         halfDone := false
@@ -824,7 +835,7 @@ if is5 and not shortMode and not volOpen and entF == "5-minute close beyond the 
                 openPx := close
                 side := sd
                 e := close
-                stp := s0
+                stp := capStop(sd, close, s0)
                 R := sd * (close - s0)
                 tgt := tgtFor(sd, close, R)
                 halfDone := false
@@ -869,7 +880,7 @@ if is5 and vlOn and not rrMode and barstate.isconfirmed and not volOpen and stat
                 vKind := "VOL"
                 vSide := vs
                 vE := close
-                vStp := shortMode ? close - vs * rk : vp
+                vStp := shortMode ? close - vs * rk : capStop(vs, close, vp)
                 vTgt := vt
                 vTgt2 := shortMode ? na : vt2
                 vLast := mins + 4 + holdMin
@@ -898,9 +909,10 @@ if is5 and vlOn and not rrMode and barstate.isconfirmed and not volOpen and stat
 if is5 and swOn and not shortMode and barstate.isconfirmed and not volOpen and state != 1 and not opened and mins >= 570 and mins + 5 <= 870 and swDay < swMax and not na(pH)
     int ws = close[1] < pH and high > pH and close < pH ? -1 : close[1] > pL and low < pL and close > pL ? 1 : 0
     if ws != 0
-        float wStp = (ws < 0 ? high : low) - ws * 0.0002 * close
+        float wStp0 = (ws < 0 ? high : low) - ws * 0.0002 * close
+        float wStp = capStop(ws, close, wStp0)
         float wRk = ws * (close - wStp)
-        if wRk > 0 and wRk <= 0.005 * close and volOk(ws, true)
+        if wRk > 0 and ws * (close - wStp0) <= 0.005 * close and volOk(ws, true)
             volOpen := true
             vKind := "SWEEP"
             vSide := ws

@@ -48,9 +48,11 @@ VOLCHECK = {'nifty': False, 'sensex': True}   # 'classic' rules: the volume chec
                                   # the down candles (price and volume moving together); a SELL only when the down
                                   # candles did. One setting for each index (or True / False for both)
 VOL_WINDOW = 24                   # 24 five-minute candles = the last 2 hours (early in the day: yesterday's last ones)
-STOP_MAX = {'nifty': 0, 'sensex': 0}   # 'classic' rules: the most a stop may be from entry, in index points
-                                  # (0 = each setup's own stop: 0.3% Magnet, the 15-minute range, the previous line)
-STOP_MODE = 'pull'                # a wider stop is: 'pull' moved in (book half / trail scaled to the new stop),
+STOP_MAX = {'nifty': 55, 'sensex': 170}   # 'classic' rules: the most a stop may be from entry, in index points
+                                  # (0 = each setup's own stop: 0.3% Magnet, the 15-minute range, the previous line).
+                                  # 2023-2026: 95% of the calls that reached T1 came back less than 55 Nifty / 171
+                                  # Sensex points first (research/quant/mae_study.py)
+STOP_MODE = 'stop'                # a wider stop is: 'pull' moved in (book half / trail scaled to the new stop),
                                   # 'stop' moved in (book half / trail as before), 'skip' not traded
 POC_DAYS = {'nifty': 1, 'sensex': 0}    # the volume POC filter (buys only above it, sells only below) from the
                                   # last N sessions' volume (1 = yesterday's); 0 = no POC filter. 2026 tests
@@ -961,7 +963,7 @@ def messages(cx, ts, c1, upto, lots):
         if upto >= CUTOFF and not plan:
             out.append(('nobo', CUTOFF, f"{nm} 10:00: no breakout trade. Volume-line" + (" and sweep" if SWEEP else "") +
                         " trades only from now (till 2:30).", False))
-    sn = f"at most {stop_max(cx):g} points" if stop_max(cx) else ''
+    cap = stop_max(cx)
     for (src, side), m in sorted((cx.get('vlog') or {}).items(), key=lambda kv: kv[1]):
         out.append((('vskip', src, side), m, f"{nm} {hhmm(m)} {src} {'BUY' if side > 0 else 'SELL'} signal skipped: the volume "
                     f"doesn't agree (over the last 2 hours the {'down' if side > 0 else 'up'} candles carried more volume). "
@@ -969,6 +971,7 @@ def messages(cx, ts, c1, upto, lots):
     for t in ts:
         sd = 'BUY' if t['side'] > 0 else 'SELL'
         tid = (t['src'], t['m'])
+        sn = f"capped at {cap:g} points" if cap and abs(abs(t['e'] - t['stp0']) - cap) < 0.01 else ''
         if not t['taken']:
             out.append((tid + ('skip',), t['known'], f"{nm} {hhmm(t['m'])} {t['src']} {sd} signal at {f2(t['e'])} skipped: " +
                         (f"{SWEEP_MAX} sweep trades already today." if t.get('full') else "another trade is still open."), False))
@@ -1163,7 +1166,8 @@ def mfe_before_stop(c1, side, e, stop, start_m, last_m=CLOSE - 1):
             best = max(best, side * (p - e))
     return best, False
 
-TARGETS_V = 2                     # the T1 / T2 / T3 kind in the saved history (2: T1 = where half is booked)
+TARGETS_V = 3                     # the saved history's version (2: T1 = where half is booked; 3: stops capped at
+                                  # 55 Nifty / 170 Sensex points): days saved with an older one are worked out again
 
 def half_price(t):
     """Where the call books half (or, for a single target, its target): T1."""
@@ -1735,6 +1739,29 @@ def serve_chart(names):
                 self.send_header('Content-Length', str(len(body)))
                 self.end_headers()
                 self.wfile.write(body)
+                return
+            pth = self.path.split('?')[0]
+            if pth == '/web':                          # the app's screens in a web browser (data still needs the key)
+                self.send_response(302)
+                self.send_header('Location', '/web/' + (self.path[4:] if '?' in self.path else ''))
+                self.end_headers()
+                return
+            if pth.startswith('/web/'):
+                name = pth[5:] or 'index.html'
+                kinds = {'index.html': 'text/html; charset=utf-8', 'app.js': 'application/javascript',
+                         'boot.js': 'application/javascript', 'ota-ver.js': 'application/javascript', 'style.css': 'text/css'}
+                fp = os.path.join(APP_WWW, name)
+                if name in kinds and os.path.exists(fp):
+                    with open(fp, 'rb') as f:
+                        body = f.read()
+                    self.send_response(200)
+                    self.send_header('Content-Type', kinds[name])
+                    self.send_header('Cache-Control', 'no-store')
+                    self.end_headers()
+                    self.wfile.write(body)
+                else:
+                    self.send_response(404)
+                    self.end_headers()
                 return
             ok, fresh = key_ok(self)
             if not ok and not self.path.startswith('/lwc.js'):

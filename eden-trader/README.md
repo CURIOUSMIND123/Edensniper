@@ -14,11 +14,9 @@ Nifty / Sensex CPR Breakout calls on your phone: an Android app with **notificat
   chart and in the history, with how far each call went its way and against it. The trades themselves (entries,
   stop, book half, trail) are exactly the strategy's.
 - **History**: a call is a **success** when the index went at least **50 points (Nifty) / 150 points (Sensex)** its
-  way before the stop loss. 2026 to 13 October: Nifty 68 of 95 calls (72%), Sensex 66 of 86 (77%). On average the
-  Nifty calls went 112 points their way and 32 against; Sensex 395 and 96. 80% of the Nifty calls and 85% of the
-  Sensex calls made money. T1 (book half) was reached on 91% of the Nifty and 98% of the Sensex breakout / Magnet
-  calls; with the volume-line calls (T1 = their one target), T1 / T2 / T3 were reached on 60 / 39 / 23% of all Nifty
-  calls and 72 / 45 / 28% of all Sensex calls.
+  way before the stop loss. With the largest stop Nifty 55 / Sensex 170 points (from 17 October 2026), the 2026 calls
+  to 9 October: Nifty 62 of 97 (64%), Sensex 60 of 85 (71%); 70% / 78% of them made money. 2023-2026: T1 (book half)
+  reached on 80% of the Nifty and 77% of the Sensex breakouts, 82-83% of the Magnet calls.
 
 ## Install the app
 
@@ -28,6 +26,12 @@ Nifty / Sensex CPR Breakout calls on your phone: an Android app with **notificat
 3. Open Eden Trader > Settings: server `https://trade.munimo.online`, and the key you were given. Save.
 4. Allow notifications, and allow it to run in the background when Android asks (or Settings > Apps > Eden Trader
    > Battery > **Unrestricted**). That's what keeps the notifications coming with the app closed.
+
+## On a computer (web)
+
+Open **https://trade.munimo.online/web/?key=YOUR-KEY** in any browser (Chrome, Edge, Safari). The same Chart, Calls
+and History as the app; the browser remembers the key, so next time **https://trade.munimo.online/web/** is enough.
+Notifications come only in the phone app. The chart alone: **https://trade.munimo.online/?key=YOUR-KEY**.
 
 ## How it runs
 

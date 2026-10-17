@@ -1647,6 +1647,20 @@ less than 8 / 37 points), while every call that goes on to the full stop passes 
 | Nifty: reached T1 first / hit the full stop / neither | 235 / 126 / 74 | 59% / **94%** / 50% (often after T1, later in the day) | now +1,430 (67%); lower −74 (35%) |
 | Sensex: reached T1 first / hit the full stop / neither | 230 / 77 / 56 | 60% / **91%** / 54% | now +10,205 (74%); lower −68 (41%) |
 
+## The default from 17 October 2026: the largest stop Nifty 55 / Sensex 170 points
+
+Chosen by the user from `mae_study.py` (95% of the calls that reached T1 came back less than 55 Nifty / 171 Sensex
+points first). In the alert program `STOP_MAX = {'nifty': 55, 'sensex': 170}`, `STOP_MODE = 'stop'` (the stop moved in;
+book half, targets and trail unchanged); the same in the indicator. The program's own trades (one trade at a time, so
+a shorter loss can let a later signal in):
+
+| Points (won %) | 2023 | 2024 | 2025 | 2026 | all | worst trade | worst fall |
+|---|---|---|---|---|---|---|---|
+| Nifty, setup stop | −275 (67%) | −267 (58%) | −416 (66%) | +2,389 (80%) | +1,430 | −183 | −1,241 |
+| **Nifty, at most 55** | −135 (67%) | −505 (51%) | −224 (61%) | +1,638 (70%) | +775 | **−59** | −1,169 |
+| Sensex, setup stop | +805 (80%) | −738 (61%) | +972 (74%) | +9,166 (85%) | +10,205 | −789 | −2,753 |
+| **Sensex, at most 170** | +682 (78%) | **+528** (55%) | +1,206 (68%) | +8,183 (78%) | **+10,598** | **−182** | −1,957 |
+
 ## How to re-check all of this
 
 - `python research/fair_price_backtest.py` downloads the candles and re-runs the Fair Price test.

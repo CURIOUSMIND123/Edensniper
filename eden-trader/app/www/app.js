@@ -28,7 +28,16 @@ async function setPref(k, v) {
   if (Pr) return Pr.set({ key: k, value: v });
   try { localStorage.setItem(k, v); } catch (e) { /* private mode */ }
 }
+const NATIVE = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
 async function loadCfg() {
+  if (!NATIVE && /^https?:$/.test(location.protocol) && location.pathname.startsWith('/web')) {
+    await setPref('server', location.origin);          // in a web browser, from the server itself
+  }
+  const qk = new URLSearchParams(location.search).get('key');
+  if (qk) {                                           // .../web/?key=... remembers the key, then hides it
+    await setPref('key', qk);
+    window.history.replaceState(null, '', location.pathname);
+  }
   cfg.server = (await getPref('server')) || DEFAULT_SERVER;
   cfg.key = await getPref('key');
 }
@@ -171,7 +180,7 @@ async function refresh() {
 // ---------------- notifications (the native service sends them; this asks for permission and tests) ----------
 async function askPermission() {
   const LN = P().LocalNotifications;
-  if (!LN) { $('s-msg').textContent = 'Notifications work in the installed app.'; return; }
+  if (!LN) { if (NATIVE) $('s-msg').textContent = 'Notifications work in the installed app.'; return; }
   const r = await LN.requestPermissions();
   $('s-msg').textContent = r.display === 'granted' ? 'Notifications are on.' : 'Notifications are off: allow them in the phone settings.';
 }
@@ -185,7 +194,7 @@ async function testNotification() {
 // ---------------- over-the-air updates (boot.js loads them) and a newer APK ----------------
 let otaBusy = false;
 async function checkOta() {
-  if (!ready() || otaBusy) return;
+  if (!NATIVE || !ready() || otaBusy) return;          // the web version always has the server's newest screens
   otaBusy = true;
   try {
     const j = await getJSON('/app/ota.json');
@@ -230,7 +239,7 @@ async function main() {
     $('s-msg').textContent = 'Checking ...';
     try {
       await getJSON('/api/state');
-      $('s-msg').textContent = 'Connected. Calls will arrive as notifications.';
+      $('s-msg').textContent = NATIVE ? 'Connected. Calls will arrive as notifications.' : 'Connected.';
       await askPermission();
       checkOta();
       show('calls');

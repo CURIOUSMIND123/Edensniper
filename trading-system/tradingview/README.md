@@ -9,6 +9,10 @@ File: [`cpr_breakout.pine`](cpr_breakout.pine). An indicator; reads 1-minute can
 - **Nifty:** the Magnet and the 9:30 breakout only on the volume side of **yesterday's POC** (buys above it, sells
   below); **no volume check**.
 - **Sensex:** **the volume check** on every signal; **no POC filter**.
+- **The largest stop** (from 17 October 2026): **Nifty 55, Sensex 170 points** (Settings: "the largest stop", 0 = each
+  setup's own). A wider stop is moved in to it; book half, the targets and the trail stay where they were. 2023-2026:
+  Sensex made money every year (+682 / +528 / +1,206 / +8,183; worst trade −182 instead of −789); Nifty −135 / −505 /
+  −224 / +1,638 (worst −59 instead of −183) (`research/quant/mae_study.py`).
 - The volume check (Dr David Paul's reading of volume: in a healthy up move price and volume move together; in
   distribution the falls come on heavy volume and the rallies on light volume): a BUY only if, over the last 24
   five-minute candles (2 hours), the up candles carried more volume (NIFTYBEES) than the down candles; a SELL only if

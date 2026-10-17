@@ -28,6 +28,13 @@ Alerts appear on the screen (with a beep) and, if you set it up, on your phone t
   down candles did. A signal it stops is reported ("skipped: the volume doesn't agree"). About the same points as
   without it from a third fewer trades, with much smaller losing runs. `SWEEP = True` adds liquidity sweeps of
   yesterday's high / low (more points, twice the trades); `LADDER = True` the volume-line ladder.
+  **The largest stop** (from 17 October 2026): `STOP_MAX = {'nifty': 55, 'sensex': 170}` points with `STOP_MODE =
+  'stop'`: a wider stop (the other side of the 15-minute range, 0.3% Magnet, the previous line) is moved in to it;
+  book half, the targets and the trail stay where they were; the alert says "capped at 55 / 170 points". 2023-2026
+  (the program's own trades): Sensex +682 / +528 / +1,206 / +8,183 a year (before +805 / −738 / +972 / +9,166), worst
+  trade −182 (before −789); Nifty −135 / −505 / −224 / +1,638 (before −275 / −267 / −416 / +2,389), worst −59 (before
+  −183). 95% of the calls that reached T1 came back less than 55 / 171 points first (`research/quant/mae_study.py`).
+  `STOP_MAX = {'nifty': 0, 'sensex': 0}` goes back to each setup's own stop.
   **Set for each index:** `VOLCHECK = {'nifty': False, 'sensex': True}` and `POC_DAYS = {'nifty': 1, 'sensex': 0}`:
   on Nifty the Magnet and the breakout buy only above yesterday's volume POC and sell only below it, with no volume
   check; on Sensex the volume check, with no POC filter (0). Tested on 2026 (`y2026_pocdays.py`): Nifty 93 trades,
