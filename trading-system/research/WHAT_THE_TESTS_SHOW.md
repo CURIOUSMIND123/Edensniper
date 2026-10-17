@@ -1627,7 +1627,10 @@ range, the deeper the pullbacks (Nifty range over 83 points: 12% of the breakout
 | Nifty, stop at most 50 | −37 | −259 | −530 | +1,428 | +601 | −54 | −1,198 |
 
 Sensex with the stop capped at 200 points made money in every year, a little more in total, with the worst trade
-−217 instead of −789. Nifty: no cap (20-50) helped.
+−217 instead of −789. Nifty: no cap (20-50) helped. At the 90% / 95% lines exactly: Nifty 37 points +249 (−31 / −116 / −602 / +998), 55
+points +554 (−77 / −476 / −252 / +1,358), both below now (+1,430): the cap also stops out calls that never reached T1
+but closed in profit at 3:15 after a deep dip. Sensex 142 points +6,828 (2024 −345); **171 points +10,108, every
+year positive** (+546 / +792 / +1,414 / +7,356, worst trade −185); 200 points +11,292 (worst −217).
 
 **Entering lower** (a limit order 5-20 Nifty / 15-60 Sensex points better, the same stop and T1 prices): 62-90% filled;
 Nifty never better; Sensex 30 points better with the stop at most 150: +8 / +1,012 / +1,968 / +6,539 (+9,528), below
