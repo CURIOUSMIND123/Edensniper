@@ -1580,6 +1580,23 @@ T2 was reached on 24% (Nifty) / 29% (Sensex) of the calls, the stop on 47% / 44%
 average 140 Nifty / 394 Sensex points away, so the stop was 70 / 197 (now 72 / 248). Average win +66 / +240, loss
 −52 / −147.
 
+## All at T1, stop at half of T1, no half booking, no trailing (`t2_full.py ... 1`)
+
+The same calls (2023-2026), booked in full at T1 (where half was booked; a volume-line call's target), the stop at half
+the distance to T1, out at 3:15 otherwise.
+
+| Points (won %) | 2023 | 2024 | 2025 | 2026 | all |
+|---|---|---|---|---|---|
+| Nifty now | −275 (67%) | −267 (58%) | −416 (66%) | +2,389 (80%) | +1,430 |
+| Nifty all at T1 | −445 (35%) | −1,087 (39%) | −28 (51%) | +1,358 (55%) | −201 |
+| Sensex now | +805 (80%) | −738 (61%) | +972 (74%) | +9,166 (85%) | +10,205 |
+| Sensex all at T1 | −274 (37%) | −520 (38%) | +1,329 (50%) | +4,671 (44%) | +5,206 |
+
+T1 was reached on 31% (Nifty) / 32% (Sensex) of the calls and the stop on 49% / 53%. On the breakout calls T1 is close
+(Nifty 19 / Sensex 69 points), so the stop at half of it (10 / 34 points) sits inside the normal swings and is hit
+first: T1 reached on 44% / 41% of them, against 83% with today's stop. Sensex volume lines (T1 = the next line, 540
+points away, stop 270) made +6,898; Sensex Magnet −1,192.
+
 ## How to re-check all of this
 
 - `python research/fair_price_backtest.py` downloads the candles and re-runs the Fair Price test.

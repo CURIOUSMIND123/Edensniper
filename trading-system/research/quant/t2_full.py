@@ -1,12 +1,16 @@
-"""The same calls, booked in full at T2, no half booking, no trailing; the stop at half the distance to T2 (asked on
-16 October 2026). T1 / T2 as the app shows them (T1 = where half was booked, T2 = the next price level beyond it).
+"""The same calls, booked in full at T2 (or T1), no half booking, no trailing; the stop at half the distance to that
+target (asked on 16 / 17 October 2026). T1 / T2 as the app shows them (T1 = where half was booked, for a volume-line
+call its target; T2 = the next price level beyond T1).
 Out at T2, at the stop, or at 3:15. 2023-2026, costs 4 Nifty / 12 Sensex points, a candle reaching both counts as
 the stop.
 
-    python t2_full.py nifty        (or sensex)
+    python t2_full.py nifty        (or sensex)        all at T2
+    python t2_full.py nifty 1      (or sensex 1)      all at T1
 """
-import collections
+import collections, sys
 import levels_style as LS
+
+K = int(sys.argv[2]) if len(sys.argv) > 2 else 2         # 1: T1, 2: T2
 
 A = LS.A
 
@@ -18,7 +22,7 @@ if __name__ == '__main__':
             if not (t['taken'] and t['exit']):
                 continue
             sd, e, st = t['side'], t['e'], t['known']
-            T2 = A.target_levels(cx, c1, sd, e, st, A.half_price(t))[1]
+            T2 = A.target_levels(cx, c1, sd, e, st, A.half_price(t))[K - 1]
             d2 = sd * (T2 - e)
             stp = e - sd * 0.5 * d2
             pnl, xm, k = LS.walk(c1, sd, e, st, stp, (T2,), (1,))
@@ -29,10 +33,10 @@ if __name__ == '__main__':
             info['all'].append(info[y][-1])
     print(f"{LS.NM.upper()} 2023-2026, the same {len(new)} calls; per year: trades, won %, net points")
     LS.line('now (half at T1, stop to entry, trail)', LS.stats(now))
-    LS.line('all at T2, stop half of T2, no trailing', LS.stats(new))
+    LS.line(f'all at T{K}, stop half of T{K}, no trailing', LS.stats(new))
     for y in LS.YEARS + ('all',):
         r = info[y]
         w = [x['pnl'] for x in r if x['pnl'] > 0]; l_ = [x['pnl'] for x in r if x['pnl'] <= 0]
-        print(f"  {y:4}: T2 reached {100 * sum(x['hit'] for x in r) / len(r):3.0f}%, stop hit {100 * sum(x['stop'] for x in r) / len(r):3.0f}%, "
-              f"the rest out at 3:15 | T2 on average {sum(x['d2'] for x in r) / len(r):4.0f} pts away, stop {sum(x['d2'] for x in r) / len(r) / 2:4.0f} "
+        print(f"  {y:4}: T{K} reached {100 * sum(x['hit'] for x in r) / len(r):3.0f}%, stop hit {100 * sum(x['stop'] for x in r) / len(r):3.0f}%, "
+              f"the rest out at 3:15 | T{K} on average {sum(x['d2'] for x in r) / len(r):4.0f} pts away, stop {sum(x['d2'] for x in r) / len(r) / 2:4.0f} "
               f"(now {sum(x['old'] for x in r) / len(r):4.0f}) | average win {sum(w) / max(1, len(w)):+5.0f}, loss {sum(l_) / max(1, len(l_)):+5.0f}")
