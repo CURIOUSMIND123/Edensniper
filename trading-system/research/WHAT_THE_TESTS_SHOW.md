@@ -1597,6 +1597,42 @@ T1 was reached on 31% (Nifty) / 32% (Sensex) of the calls and the stop on 49% / 
 first: T1 reached on 44% / 41% of them, against 83% with today's stop. Sensex volume lines (T1 = the next line, 540
 points away, stop 270) made +6,898; Sensex Magnet −1,192.
 
+## How far price came back before the calls worked; a capped stop; entering lower (`mae_study.py`)
+
+All calls 2023-2026 with today's stop: how far price went against the call before T1 (book half; a volume-line call's
+target), in points ('never' = never 1 point (Sensex 3) beyond the entry). Share of all calls of that kind:
+
+| | T1, never came back | small | medium | deep | deeper | deepest | full stop | neither by 3:15 |
+|---|---|---|---|---|---|---|---|---|
+| Nifty breakout (0-10 / 10-20 / 20-30 / 30-50 / 50+) | 23% | 27% | 13% | 8% | 8% | 4% | 15% | 2% |
+| Sensex breakout (0-30 / 30-60 / 60-100 / 100-170 / 170+) | 18% | 21% | 17% | 12% | 9% | 6% | 14% | 3% |
+| Sensex Magnet | 7% | 25% | 25% | 18% | 8% | 3% | 15% | 0% |
+| Nifty volume line | 1% | 4% | 3% | 3% | 3% | 1% | 48% | 38% |
+| Sensex volume line | 2% | 4% | 6% | 3% | 5% | 0% | 36% | 44% |
+
+Of the calls that reached T1, half came back less than 8 (Nifty) / 37 (Sensex) points, 75% less than 21 / 80, 90% less
+than 37 / 142, 95% less than 55 / 171; T1 came 7-8 minutes after the entry (median). The wider the first 15-minute
+range, the deeper the pullbacks (Nifty range over 83 points: 12% of the breakouts came back 50+ before T1; Sensex over
+287: 27% came back 100+); breakouts at 9:30-9:44 and 9:45-10:00 alike. Volume-line calls rarely reach their target
+(the next line): most hit the stop or are still open at 3:15, especially after 1 pm.
+
+**A capped stop** (book half, targets and trail as now):
+
+| Points (won %) | 2023 | 2024 | 2025 | 2026 | all | worst trade | worst fall |
+|---|---|---|---|---|---|---|---|
+| Sensex now | +805 (80%) | −738 (61%) | +972 (74%) | +9,166 (85%) | +10,205 | −789 | −2,753 |
+| **Sensex, stop at most 200** | **+346** (78%) | **+495** (59%) | **+1,428** (71%) | **+9,024** (83%) | **+11,292** | **−217** | **−1,861** |
+| Sensex, stop at most 150 | +375 | −36 | +1,501 | +5,893 | +7,733 | −166 | −2,047 |
+| Nifty now | −275 | −267 | −416 | +2,389 | +1,430 | −183 | −1,241 |
+| Nifty, stop at most 50 | −37 | −259 | −530 | +1,428 | +601 | −54 | −1,198 |
+
+Sensex with the stop capped at 200 points made money in every year, a little more in total, with the worst trade
+−217 instead of −789. Nifty: no cap (20-50) helped.
+
+**Entering lower** (a limit order 5-20 Nifty / 15-60 Sensex points better, the same stop and T1 prices): 62-90% filled;
+Nifty never better; Sensex 30 points better with the stop at most 150: +8 / +1,012 / +1,968 / +6,539 (+9,528), below
+the plain 200-point cap.
+
 ## How to re-check all of this
 
 - `python research/fair_price_backtest.py` downloads the candles and re-runs the Fair Price test.
