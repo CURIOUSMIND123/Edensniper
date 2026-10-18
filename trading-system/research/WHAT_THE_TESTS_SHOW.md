@@ -1661,6 +1661,28 @@ a shorter loss can let a later signal in):
 | Sensex, setup stop | +805 (80%) | −738 (61%) | +972 (74%) | +9,166 (85%) | +10,205 | −789 | −2,753 |
 | **Sensex, at most 170** | +682 (78%) | **+528** (55%) | +1,206 (68%) | +8,183 (78%) | **+10,598** | **−182** | −1,957 |
 
+## The weekly CPR next to the daily one (`weekly_cpr.py`)
+
+Weekly pivot / CPR / R1-S1 / R2-S2 / last week's high-low from the previous week; the calls with today's defaults
+(largest stop 55 / 170). 2023-2026, points:
+
+| | 2023 | 2024 | 2025 | 2026 | all | won | worst fall |
+|---|---|---|---|---|---|---|---|
+| Nifty calls now | −135 | −505 | −224 | +1,638 | +775 | 61% | −1,169 |
+| Nifty, BUY above / SELL below the weekly pivot | −90 | +218 | −451 | +1,097 | +775 | 69% | −594 |
+| Nifty, no weekly level between the entry and T1 | −72 | +169 | −40 | +711 | +768 | 72% | −697 |
+| Sensex calls now | +682 | +528 | +1,206 | +8,183 | +10,598 | 68% | −1,957 |
+| Sensex, BUY above / SELL below the weekly pivot | +528 | +1,153 | −531 | +4,440 | +5,591 | 73% | −1,011 |
+| Sensex, no weekly level between the entry and T1 | +775 | +2,146 | −704 | +2,834 | +5,050 | 74% | −1,270 |
+
+- On Nifty the weekly filters left the total as it was (the calls they took away made +0 / +7 in all) with 35-42%
+  fewer trades, more of them won and half the worst fall; on Sensex they took away about half the profit.
+- Reversals at weekly levels, 10:00-2:30 (a 5-minute candle reaches the level and closes back, any candle or a long
+  wick; every weekly level or only those within 0.1% of a daily one; target 40 / 150 points, 2x the stop or the next
+  level): every version lost over the four years on both indices (Nifty −493 to −6,072, Sensex −4,182 to −16,967).
+- Weekly CPR breaks after 10:00 (target weekly R1 / S1): Nifty +147, Sensex +1,537, both losing in 2023 and 2025;
+  added to the Sensex calls +11,787 against +10,598 but 2023 and 2025 negative and a worse fall (−3,010).
+
 ## How to re-check all of this
 
 - `python research/fair_price_backtest.py` downloads the candles and re-runs the Fair Price test.
