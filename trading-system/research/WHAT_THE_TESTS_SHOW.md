@@ -1821,8 +1821,10 @@ Exits: when the SELL trade on the other chart closes (mirror), +20% / -10% of th
 | Nifty, nearest weekly (rebuilt) | 50 | 36% | +782 pts (Rs +50,806 a lot) | +100 | +991 |
 | Sensex, nearest weekly (rebuilt) | 65 | 38% | +2,025 pts (Rs +40,499) | +294 | +2,897 |
 | Nifty, real candles (mostly the monthly) | 24 | 29% | +88 | −103 | +389 |
+| Sensex, real candles (21 Sep - 19 Oct only: 16 days) | 17 | 53% | +1,296 | +581 | +1,997 |
 
-- July and August lost on both indices; all the profit came in September-October, when the market fell. Three
+- July and August lost on both indices; all the profit came in September-October, when the market fell. The real
+  Sensex candles exist only from 21 September (older contracts have no free data), so they cover only the good stretch. Three
   days made 704 of Nifty's 782 points and 1,850 of Sensex's 2,025; the other 32 / 43 days together made +79 / +175.
 - Most of it came from SELLs on the call -> buying the put (the market falling). A plain BUY on an option's own
   chart did about as well (Sensex weekly +2,874 held to 3:15): a SELL on the call is simply the index starting to
