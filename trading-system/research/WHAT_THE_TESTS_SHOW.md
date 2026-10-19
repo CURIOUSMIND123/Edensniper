@@ -1683,6 +1683,19 @@ Weekly pivot / CPR / R1-S1 / R2-S2 / last week's high-low from the previous week
 - Weekly CPR breaks after 10:00 (target weekly R1 / S1): Nifty +147, Sensex +1,537, both losing in 2023 and 2025;
   added to the Sensex calls +11,787 against +10,598 but 2023 and 2025 negative and a worse fall (−3,010).
 
+## Reversing the losing strategies (`reverse_losers.py`)
+
+Every version of the losing families (key-level reversals with a very small stop 144, the A+ setup 192, weekly-level
+reversals and weekly CPR breaks 14, rejection candles with volume 4: 354 per index), each trade taken the other way
+(same entry and time, stop and target swapped), costs paid again. 2023-2026:
+
+- Before costs the originals made a median **+0.8 (Nifty) / +1.2 (Sensex) points a trade**, i.e. about nothing: they
+  lost because of the costs (4 / 12 points a trade), not because they picked the wrong way. Reversed, the costs are
+  paid again: **0 of 354 reversed versions made money** over the four years, on either index; none won 70%+ with
+  money made in each of 2023-2025.
+- Reversing a 25% winner gives a 75% winner with small wins and big losses: e.g. Sensex key-level 1-minute
+  rejections reversed won 74-77% of the trades every year and lost −29,484 points over the four years.
+
 ## How to re-check all of this
 
 - `python research/fair_price_backtest.py` downloads the candles and re-runs the Fair Price test.

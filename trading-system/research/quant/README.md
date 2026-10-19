@@ -81,6 +81,7 @@ Costs: 4 Nifty points or 12 Sensex points per trade. `pip install pandas scikit-
 | `y2026_markets.py` | The last 3 months: the default strategy on gold, crude and currency pairs (6 h 15 min sessions from 9:00 India / 8:00 London / 8:00 New York) vs Nifty / Sensex, in % of the price |
 | `y2026_reentry.py` | 2026: small stops with one re-entry (or a flip), and reversals from our T2 / T3 levels with a very small stop |
 | `lower_buy.py` | 2023-2026: the order 30 (Nifty) / 100 (Sensex) points lower than the call, same stop price: which calls fill, and what it makes |
+| `reverse_losers.py` | 2023-2026: every losing version (354 per index) taken the other way, costs paid again |
 | `weekly_cpr.py` | 2023-2026: the weekly CPR as a filter on the calls, reversals at weekly levels (and with daily confluence) after 10:00, weekly CPR breaks |
 | `mae_study.py` | 2023-2026: how far price came back against each call before T1 (by setup, time, range width, year); a capped stop; entering on the pullback |
 | `t2_full.py` | 2023-2026: the same calls booked in full at T2 with the stop at half of T2, no half booking, no trailing |
