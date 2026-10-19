@@ -1717,6 +1717,42 @@ comes first on 37% (Nifty) / 33% (Sensex) of the trades; costs make the break-ev
   Reversed, every one of them lost. The best of all in 2026 was the A+ setup on Sensex (5-minute, 2-candle swings:
   +3,502, 53% won), which lost in each of 2023-2025.
 
+## Daily CPR breakouts with other indicators (`cpr_confluence.py`)
+
+Every daily CPR breakout (the first 1-minute touch of the CPR top from below -> BUY, of the bottom from above -> SELL;
+or the first 5-minute close beyond it; each once a day, 9:16-2:30), with the user's rule: did the index go 60 / 200
+points the trade's way before 35 / 100 against it (out at 3:15 otherwise; costs in; a candle reaching both counts as
+the stop). Every breakout counted on its own. At each breakout 14 things were noted: EMA 20 / 50, Supertrend (10, 3),
+RSI 14, volume surge, up / down volume, yesterday's POC, the weekly pivot, the 15-minute range, narrow CPR, today's
+CPR against yesterday's, the gap, where the day opened, the time, yesterday's close against its 20-day average. Every
+one and every pair of them (about 500 per index) was tried on 2023-2025; 2026 was not used to choose. Break-even:
+target first on 41% (Nifty) / 37% (Sensex) of the breakouts.
+
+- All first touches: Nifty 31 / 37 / 37% in 2023-2025 (lost each year), 43% in 2026 (+724 points); Sensex 29 / 37 /
+  36%, 38% in 2026 (+1,000). About 1 a day. The 5-minute close is worse (Nifty lost in all four years).
+- No indicator alone helps much. What helps (first touch; target first %, net points; breakouts a year):
+
+| Filter | 2023 | 2024 | 2025 | 2026 | A year |
+|---|---|---|---|---|---|
+| Sensex, all first touches | 29%, −1,262 | 37%, +734 | 36%, +324 | 38%, +1,000 | 150-275 |
+| Sensex, today's CPR overlaps yesterday's | 42%, +915 | 51%, +2,745 | 50%, +2,227 | 43%, +662 | 26-53 |
+| Sensex, overlap + RSI over 55 (BUY) / under 45 (SELL) | 57%, +1,014 | 65%, +2,049 | 67%, +1,848 | 53%, +720 | 14-23 |
+| Sensex, overlap + Supertrend the trade's way | 56%, +1,202 | 62%, +2,013 | 48%, +1,286 | 50%, +684 | 16-31 |
+| Sensex, RSI strong + the day opened beyond the CPR | 37%, +258 | 43%, +464 | 45%, +795 | 60%, +1,700 | 25-33 |
+| Sensex, 10:00-11:30 | 37%, +720 | 42%, +1,092 | 48%, +1,292 | 41%, +316 | 32-72 |
+| Nifty, all first touches | 31%, −538 | 37%, −566 | 37%, −575 | 43%, +724 | 150-270 |
+| Nifty, today's CPR overlaps yesterday's | 39%, +192 | 43%, +149 | 40%, +80 | 48%, +210 | 23-60 |
+| Nifty, RSI strong + the day opened beyond the CPR | 47%, +97 | 45%, +125 | 47%, +298 | 55%, +291 | 17-32 |
+| Nifty, EMA 20 / 50 the trade's way + before 9:30 | 40%, +102 | 52%, +226 | 47%, +301 | 68%, +526 | 19-36 |
+| Nifty, 10:00-11:30 | 34%, +116 | 44%, +152 | 43%, +190 | 52%, +329 | 27-57 |
+
+- "The day opened beyond the CPR" means the day opened above it (for a BUY), came back into it and then broke the top
+  again: a pullback to the CPR and a fresh break. "Overlaps" means neither CPR is wholly above the other.
+- Found among about 500 tries, so part of it is luck. More to trust: the same filter working on the other index and
+  in 2026. RSI strong + opened beyond, 10:00-11:30 and the overlapping CPR made money in every year on both indices
+  (Nifty only just). Only Sensex with the overlapping CPR met the strict test (target first at least 5 points over
+  break-even and money made in each of 2023-2025): 7 pairs, all with the overlap; 6 of the 7 made money in 2026.
+
 ## How to re-check all of this
 
 - `python research/fair_price_backtest.py` downloads the candles and re-runs the Fair Price test.

@@ -82,6 +82,7 @@ Costs: 4 Nifty points or 12 Sensex points per trade. `pip install pandas scikit-
 | `y2026_reentry.py` | 2026: small stops with one re-entry (or a flip), and reversals from our T2 / T3 levels with a very small stop |
 | `lower_buy.py` | 2023-2026: the order 30 (Nifty) / 100 (Sensex) points lower than the call, same stop price: which calls fill, and what it makes |
 | `user_rule.py` | 2023-2026: every losing family's entries and the daily CPR breakouts, as they are and reversed, with the user's 60 / 35 (Nifty) and 200 / 100 (Sensex) target / stop |
+| `cpr_confluence.py` | 2023-2026: daily CPR breakouts with 14 other indicators (alone and in pairs), the user's 60 / 35 and 200 / 100 rule |
 | `reverse_losers.py` | 2023-2026: every losing version (354 per index) taken the other way, costs paid again |
 | `weekly_cpr.py` | 2023-2026: the weekly CPR as a filter on the calls, reversals at weekly levels (and with daily confluence) after 10:00, weekly CPR breaks |
 | `mae_study.py` | 2023-2026: how far price came back against each call before T1 (by setup, time, range width, year); a capped stop; entering on the pullback |
