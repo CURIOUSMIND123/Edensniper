@@ -1696,6 +1696,27 @@ reversals and weekly CPR breaks 14, rejection candles with volume 4: 354 per ind
 - Reversing a 25% winner gives a 75% winner with small wins and big losses: e.g. Sensex key-level 1-minute
   rejections reversed won 74-77% of the trades every year and lost −29,484 points over the four years.
 
+## The user's rule: 60 / 35 Nifty, 200 / 100 Sensex points, as it is and reversed (`user_rule.py`)
+
+Every entry of the losing families (key-level rejections, 12 A+ setups, weekly levels, weekly CPR breaks, rejection
+candles with volume) and the daily CPR top / bottom breakouts, each taken as it is and reversed, with a target of 60 /
+200 points and a stop of 35 / 100; out at 3:15 otherwise; one trade at a time; costs in. By chance alone the target
+comes first on 37% (Nifty) / 33% (Sensex) of the trades; costs make the break-even 41% / 37%.
+
+- Nothing made money in every year 2023-2026, as it is or reversed. The target came first on 23-42% of the trades
+  (Nifty) and about as often reversed: price that goes 40 points up and then 40 down stops both a BUY and a SELL.
+- The daily CPR breakouts in 2026:
+
+| 2026 | Breakouts | Target first | Stop first | 3:15 | Net points | 2023 / 2024 / 2025 |
+|---|---|---|---|---|---|---|
+| Nifty, 5-minute close beyond the CPR | 116 | 34% | 59% | 7% | −390 | −649 / −1,467 / −966 |
+| Nifty, first touch of the CPR top / bottom | 132 | 42% | 52% | 5% | +401 | −551 / −311 / −929 |
+| Sensex, 5-minute close beyond the CPR | 118 | 40% | 58% | 3% | +1,247 | −2,502 / −1,685 / −2,223 |
+| Sensex, first touch of the CPR top / bottom | 133 | 39% | 58% | 3% | +1,228 | +479 / +1,870 / −148 |
+
+  Reversed, every one of them lost. The best of all in 2026 was the A+ setup on Sensex (5-minute, 2-candle swings:
+  +3,502, 53% won), which lost in each of 2023-2025.
+
 ## How to re-check all of this
 
 - `python research/fair_price_backtest.py` downloads the candles and re-runs the Fair Price test.
