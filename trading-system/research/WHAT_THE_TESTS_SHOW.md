@@ -1803,6 +1803,34 @@ it (a reversal trade with the user's rule; break-even 41% / 37%, pure chance 37%
 - So the chart, the app and an alert say "FALLING / RISING DAY: no sign of a reversal ... don't BUY / SELL against
   it" with the chance for the time of day, and a call against the trend carries a warning.
 
+## The indicator on the option charts: a SELL on one option -> buy the other (`option_flip.py`)
+
+The user's idea (19 October 2026): put the indicator on the call and the put of the same strike; when one shows a
+SELL, buy the other. 20 July - 19 October 2026, the indicator's original rules on each option's own chart (as
+TradingView runs them there: the Nifty settings), the opposite option bought at the close of the signal's candle.
+Exits: when the SELL trade on the other chart closes (mirror), +20% / -10% of the premium, or held to 3:15. Costs 2
+(Nifty) / 5 (Sensex) premium points a trade.
+
+- Data: free 1-minute candles exist only for contracts still trading (expired weeklies need a paid login), so the
+  real test is mostly on the October monthly, 1-3 months to expiry. The nearest weekly (what the user watches) was
+  rebuilt minute by minute from the index (Black-Scholes, each day's implied volatility from the day before's
+  settlement prices; time decay in, the volatility fixed through the day).
+
+| SELL on one -> buy the other | Trades | Won | Mirror exit | +20% / -10% | Held to 3:15 |
+|---|---|---|---|---|---|
+| Nifty, nearest weekly (rebuilt) | 50 | 36% | +782 pts (Rs +50,806 a lot) | +100 | +991 |
+| Sensex, nearest weekly (rebuilt) | 65 | 38% | +2,025 pts (Rs +40,499) | +294 | +2,897 |
+| Nifty, real candles (mostly the monthly) | 24 | 29% | +88 | −103 | +389 |
+
+- July and August lost on both indices; all the profit came in September-October, when the market fell. Three
+  days made 704 of Nifty's 782 points and 1,850 of Sensex's 2,025; the other 32 / 43 days together made +79 / +175.
+- Most of it came from SELLs on the call -> buying the put (the market falling). A plain BUY on an option's own
+  chart did about as well (Sensex weekly +2,874 held to 3:15): a SELL on the call is simply the index starting to
+  fall, and the put is its mirror image. It is the index's direction, traded through options, not a new edge.
+- Won 29-42% of the time: far from the 8 in 10 the user wants. It pays only on strong trend days (19 October: the
+  put bought on the call's SELL was up 140 Nifty points (from 9:15) and 458 Sensex points (from 9:59, rebuilt) by the
+  afternoon).
+
 ## How to re-check all of this
 
 - `python research/fair_price_backtest.py` downloads the candles and re-runs the Fair Price test.
