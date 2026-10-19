@@ -24,6 +24,14 @@ File: [`cpr_breakout.pine`](cpr_breakout.pine). An indicator; reads 1-minute can
 - How each setting did (net points 2026): Nifty with the volume check, POC of 30 / 15 / 1 sessions / none: +2,214 /
   +2,177 / +2,114 / +1,964; without it: +2,274 / +2,284 / **+2,389** / +1,793. Sensex with the volume check: +8,001 /
   +8,700 / +8,537 / **+9,166**; without it: +8,102 / +8,845 / +8,483 / +7,893 (worst fall −1,505).
+- **CPR break calls** (from 19 October 2026, on by default, their own settings group): the first touch of today's
+  CPR top from below -> BUY, of its bottom from above -> SELL (each once a day, 9:16-2:30), at the close of the
+  touching 1-minute candle, when one of four things holds: today's CPR overlaps yesterday's; the touch is between
+  10:00 and 11:30; price is still inside the 15-minute range; the day opened beyond that side of the CPR, came back
+  and broke out again with RSI 14 above 55 (BUY) / below 45 (SELL). Target 60 Nifty / 200 Sensex points, stop 35 /
+  100, out by 3:15. Their own position boxes and trades (one may be open together with another call); the box shows
+  them on their own row. 2023 / 2024 / 2025 / 2026: Nifty +131 / +211 / +111 / +636, Sensex +2,734 / +419 / +2,594 /
+  +1,366 points after costs (`research/quant/cpr_plus.py`).
 - **Liquidity sweeps** of yesterday's high / low (yellow lines) are in their own settings group, off by default:
   more points (Nifty +2,993, Sensex +9,279 without the volume check) but twice the trades.
 - Also tested and not added: the squeeze, Smart Money Concepts, the low-volume areas of the last 2 days' volume

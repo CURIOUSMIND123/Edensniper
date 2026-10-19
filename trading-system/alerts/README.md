@@ -35,6 +35,16 @@ Alerts appear on the screen (with a beep) and, if you set it up, on your phone t
   trade −182 (before −789); Nifty −135 / −505 / −224 / +1,638 (before −275 / −267 / −416 / +2,389), worst −59 (before
   −183). 95% of the calls that reached T1 came back less than 55 / 171 points first (`research/quant/mae_study.py`).
   `STOP_MAX = {'nifty': 0, 'sensex': 0}` goes back to each setup's own stop.
+  **CPR BREAK calls** (from 19 October 2026, `CPR_CALLS = True`): their own trades next to the others (one at a
+  time; one may be open together with another call). The first 1-minute touch of today's CPR top from below -> BUY,
+  of its bottom from above -> SELL (each once a day, 9:16-2:30), at the close of that candle, when one of four things
+  holds: today's CPR overlaps yesterday's; the touch is between 10:00 and 11:30; price is still inside the 15-minute
+  range; the day opened beyond that side of the CPR, came back and broke out again with RSI 14 (5-minute) above 55
+  (BUY) / below 45 (SELL). Target `CPR_TP` 60 / 200 points, stop `CPR_SL` 35 / 100, out by 3:15; the CPR-vs-yesterday,
+  gap, POC and volume rules of the other calls don't apply. The alert says which of the four held. 2023 / 2024 /
+  2025 / 2026 after costs: Nifty +131 / +211 / +111 / +636 points (91 / 145 / 128 / 81 trades), Sensex +2,734 /
+  +419 / +2,594 / +1,366 (103 / 156 / 127 / 90); the target came first on 34-46% (break-even 41% / 37%)
+  (`research/quant/cpr_plus.py`; the program's own trades match that test). `CPR_CALLS = False` turns them off.
   **Set for each index:** `VOLCHECK = {'nifty': False, 'sensex': True}` and `POC_DAYS = {'nifty': 1, 'sensex': 0}`:
   on Nifty the Magnet and the breakout buy only above yesterday's volume POC and sell only below it, with no volume
   check; on Sensex the volume check, with no POC filter (0). Tested on 2026 (`y2026_pocdays.py`): Nifty 93 trades,

@@ -5,7 +5,7 @@ next two price levels beyond it), January 2023 - 9 October 2026: the chances the
 writes ../../alerts/target-probs.json
 
 Reached = touched before the stop loss; after T1 the stop is at the entry (as the calls manage it), so T2 / T3 count
-only when price got there without coming back to the entry first. Per index and setup (breakout, Magnet, volume line),
+only when price got there without coming back to the entry first. Per index and setup (breakout, Magnet, volume line, CPR break),
 with 2023-2025 and 2026 separately to show how steady the numbers are.
 """
 import collections, json, sys
@@ -14,6 +14,7 @@ def run(nm):
     sys.argv = [sys.argv[0], nm]
     import levels_style as LS
     A = LS.A
+    A.CPR_CALLS = True                          # the CPR BREAK calls too
     cnt = collections.defaultdict(lambda: [0, 0, 0, 0])
     for d in LS.DAYS:
         cx, c1 = LS.CX[d], LS.sess[d]
@@ -22,7 +23,8 @@ def run(nm):
                 continue
             T = A.target_levels(cx, c1, t['side'], t['e'], t['known'], A.half_price(t))
             _, _, k = LS.walk(c1, t['side'], t['e'], t['known'], t['stp0'], T, (0, 0, 1), be_at=1)
-            for key in ((t['src'], d[:4] < '2026'), ('ALL', d[:4] < '2026')):
+            keys = ((t['src'], d[:4] < '2026'),) + ((('ALL', d[:4] < '2026'),) if t['src'] != 'CPR BREAK' else ())
+            for key in keys:                                  # ALL: the other calls (a small setup's stand-in)
                 for g in (key, (key[0], None)):
                     c = cnt[g]
                     c[0] += 1

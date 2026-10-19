@@ -5,7 +5,8 @@ Follows the same rules as tradingview/cpr_breakout.pine (its default settings) o
 Upstox's free public candle data. It tells you when to BUY (a call) or SELL (a put), where the stop and the target
 are and when to exit: on this screen, and on your phone through Telegram if you set that up (free).
 Default rules ('classic'): the daily plan (CPR Magnet at 9:16 or the 9:30 breakout) and the 3-day volume lines, one
-trade at a time, set differently for each index (the most profit in the 2026 tests):
+trade at a time, set differently for each index (the most profit in the 2026 tests); and, as their own trades, the
+CPR BREAK calls (the first touch of the CPR top / bottom on a day that suits it; target 60 / 200, stop 35 / 100):
   Nifty:  the Magnet and the breakout only on the volume side of yesterday's POC (buys above it, sells below); no
           volume check.
   Sensex: the volume check on every signal (a BUY only when the last 2 hours' up candles carried more NIFTYBEES volume
@@ -58,6 +59,13 @@ POC_DAYS = {'nifty': 1, 'sensex': 0}    # the volume POC filter (buys only above
                                   # last N sessions' volume (1 = yesterday's); 0 = no POC filter. 2026 tests
                                   # (research/quant/y2026_pocdays.py): Nifty made the most with yesterday's POC and no
                                   # volume check, Sensex with the volume check and no POC filter
+CPR_CALLS = True                  # 'classic' rules: also the CPR BREAK calls: the first touch of the CPR top (BUY) /
+                                  # bottom (SELL), 9:16-2:30, when one of four things holds (cpr_conditions()); a
+                                  # fixed target and stop, out by 3:15; their own trades, one at a time (one may be
+                                  # open together with another call). 2023-2026 they made money in every year on
+                                  # both indices (research/quant/cpr_plus.py)
+CPR_TP = {'nifty': 60, 'sensex': 200}   # the CPR BREAK calls' target and stop, index points
+CPR_SL = {'nifty': 35, 'sensex': 100}
 SWEEP = False                     # 'classic' rules: also trade liquidity sweeps of yesterday's high / low
 SWEEP_MAX = 3                     # at most this many sweep trades a day
 STOP_PCT = 0.21                   # 'rr' rules: the most a stop may be from entry, in % of price (Sensex ~150, Nifty ~47 points)
@@ -355,8 +363,12 @@ def context(spec, sess, vol, today, daily=None):
     return dict(spec, today=today, prev=days[-1], lv=lv, rank=rank, narrow=rank < 1 / 3,
                 rel=1 if lv['bot'] > ylv['top'] else -1 if lv['top'] < ylv['bot'] else 0,
                 yc=D[days[-1]][3], yh=D[days[-1]][1], yl=D[days[-1]][2], poc=poc, vah=vah, val=val, pocn=pn, yday=sess[days[-1]],
-                yvol=vol.get(days[-1], {}),
+                yvol=vol.get(days[-1], {}), c5h=closes5(sess, days[-3:]),
                 lines=vol_lines(*combine([H[d] for d in days[-3:]]), spec['bin']))
+
+def closes5(sess, days):
+    """The closes of these sessions' 5-minute candles, oldest first (the start of the CPR BREAK calls' RSI)."""
+    return [c for d in days for m0, o, h, l, c in candles5(sess[d], CLOSE)]
 
 def vcheck(nm):
     """Is the volume check on for this index ('nifty' / 'NIFTY' / ...)?"""
@@ -660,6 +672,72 @@ def sweep_trades(cx, c1, upto, over):
 
 
 # ---------------- the 'rr' and 'small' rules: capped stops, fixed targets, pullback entry ----------------
+def rsi(closes, k=14):
+    """RSI (Wilder) at the last close."""
+    ag = al = 0.0
+    for i in range(1, len(closes)):
+        ch = closes[i] - closes[i - 1]
+        g, l_ = max(ch, 0), max(-ch, 0)
+        if i <= k:
+            ag, al = ag + g / k, al + l_ / k
+        else:
+            ag, al = (ag * (k - 1) + g) / k, (al * (k - 1) + l_) / k
+    return 100 - 100 / (1 + ag / al) if al > 0 else 100.0
+
+def cpr_conditions(cx, c1, side, m, e):
+    """Which of the four conditions a touch of the CPR at minute m (price e) meets; none = no call. Each made money in
+    every year 2023-2025 on both indices (research/quant/cpr_confluence.py)."""
+    lv, out = cx['lv'], []
+    if cx['rel'] == 0:
+        out.append("today's CPR overlaps yesterday's")
+    if 600 <= m < 690:
+        out.append('the touch is between 10:00 and 11:30')
+    if side * (c1[0][1] - (lv['top'] if side > 0 else lv['bot'])) > 0:
+        s = OPEN + (m - OPEN) // 5 * 5 - 5            # the last 5-minute candle complete before this one began
+        r = rsi(cx.get('c5h', []) + [x[4] for x in candles5(c1, s + 4)])
+        if side * (r - 50) > 5:
+            out.append(f"the day opened {'above' if side > 0 else 'below'} the CPR, came back into it and broke out again "
+                       f"with RSI {r:.0f}")
+    if m >= RANGE_END:
+        first = [x for x in c1 if x[0] < RANGE_END]
+        if first and ((e <= max(x[2] for x in first)) if side > 0 else (e >= min(x[3] for x in first))):
+            out.append('price is still inside the 15-minute range')
+    return out
+
+def cpr_trades(cx, c1, upto, over):
+    """CPR BREAK calls: the first 1-minute touch of the CPR top from below (BUY) / of its bottom from above (SELL), each
+    once a day, 9:16-2:30, when cpr_conditions() finds one; entry at the close of that candle, target CPR_TP / stop
+    CPR_SL points, out by 3:15. One at a time, apart from the other calls. Touches without a condition:
+    cx['cpr_none']."""
+    nm = cx['name'].lower()
+    tp, sl = CPR_TP.get(nm), CPR_SL.get(nm)
+    cx['cpr_none'] = []
+    if not (tp and sl):
+        return []
+    top, bot = cx['lv']['top'], cx['lv']['bot']
+    out, seen, free = [], set(), 0
+    for i in range(1, len(c1)):
+        m, o, h, l, c = c1[i]
+        if m < 556 or m > min(VOL_END, upto):
+            continue
+        pc = c1[i - 1][4]
+        for side, hit in ((1, pc < top <= h), (-1, pc > bot >= l)):
+            if side in seen or not hit:
+                continue
+            seen.add(side)
+            why = cpr_conditions(cx, c1, side, m, c)
+            if not why:
+                cx['cpr_none'].append((m, side, c))
+                continue
+            stp, tgt = c - side * sl, c + side * tp
+            r = run_fixed(c1, side, c, m + 1, stp, tgt, OUT, over, cx['cost'])
+            t = dict(src='CPR BREAK', side=side, m=m, known=m + 1, e=c, stp0=stp, tgt=tgt, why=why, full=False,
+                     taken=m >= free, **r)
+            if t['taken']:
+                free = r['exit']['m'] + 1 if r['exit'] else 10 ** 9
+            out.append(t)
+    return out
+
 def run_fixed(c1, side, e, start, stp, tgt, last_m, over, cost):
     """Stop, target, time limit (close of minute last_m), 3:15. No booking half, no trailing."""
     for m, o, h, l, c in c1:
@@ -828,6 +906,8 @@ def day_trades(cx, c1, upto, over=False, ladder=False, rules=None):
         if t['taken']:
             free = t['exit']['m'] + 1 if t['exit'] else 10 ** 9
             nsw += t['src'] == 'SWEEP'
+    if rules == 'classic' and CPR_CALLS:
+        ts = sorted(ts + cpr_trades(cx, c1, upto, over), key=lambda t: t['m'])
     return ts
 
 
@@ -881,6 +961,15 @@ def plan_text(cx):
     if vcheck(cx['name']):
         out.append("Volume check on every signal: a BUY only if, over the last 2 hours, the up candles carried more volume "
                    "(NIFTYBEES) than the down candles; a SELL only if the down candles did. Otherwise the signal is skipped.")
+    if CPR_CALLS and CPR_TP.get(nm.lower()):
+        out.append(f"CPR BREAK calls, 9:16-2:30 (their own trades; the CPR / gap / POC / volume rules above don't apply): "
+                   f"the first touch of the CPR top {f2(lv['top'])} -> BUY, of its bottom {f2(lv['bot'])} -> SELL, at the "
+                   "close of that 1-minute candle, " +
+                   ("every first touch today (today's CPR overlaps yesterday's)" if cx['rel'] == 0 else
+                    "when the touch is between 10:00 and 11:30, or price is still inside the 15-minute range, or the day "
+                    "opened beyond that side of the CPR, came back and broke out again with RSI 14 (5-minute) above 55 "
+                    "(BUY) / below 45 (SELL)") +
+                   f". Target {CPR_TP[nm.lower()]} points, stop {CPR_SL[nm.lower()]} points, out by 3:15.")
     if SWEEP:
         out.append(f"Liquidity sweeps, 9:30-2:30: a 5-minute candle goes above yesterday's high {f2(cx['yh'])} and closes back "
                    f"below it -> SELL; goes below yesterday's low {f2(cx['yl'])} and closes back above it -> BUY. Stop just "
@@ -941,7 +1030,7 @@ def range_note(cx, c1):
     if gap == 0 or gap == -cx['rel']:
         return f"{cx['name']} 15-minute range {f2(orl)} - {f2(orh)}. No breakout trade today (" + \
                ("flat open" if gap == 0 else "the opening gap is against today's CPR vs yesterday's") + "). Volume-line" + \
-               (" and sweep" if SWEEP else "") + " trades only."
+               (" and sweep" if SWEEP else "") + (" and CPR BREAK" if CPR_CALLS else "") + " trades only."
     lvl, word = (orh, 'BUY') if gap > 0 else (orl, 'SELL')
     other = orl if gap > 0 else orh
     pocok = poc_ok(cx, gap, lvl)
@@ -953,7 +1042,7 @@ def range_note(cx, c1):
 def messages(cx, ts, c1, upto, lots):
     """(id, minute known, text, important) for everything that has happened so far."""
     nm, out = cx['name'], []
-    plan = [t for t in ts if t['src'] not in ('VOLUME LINE', 'SWEEP')]
+    plan = [t for t in ts if t['src'] not in ('VOLUME LINE', 'SWEEP', 'CPR BREAK')]
     if cx.get('rules_used') in ('small', 'rr'):
         return messages_small(cx, ts, c1, upto, lots)
     if c1 and not cx['narrow'] and upto >= 556 and not any(t['src'] == 'MAGNET' for t in plan):
@@ -962,7 +1051,7 @@ def messages(cx, ts, c1, upto, lots):
         out.append(('range', RANGE_END, range_note(cx, c1), True))
         if upto >= CUTOFF and not plan:
             out.append(('nobo', CUTOFF, f"{nm} 10:00: no breakout trade. Volume-line" + (" and sweep" if SWEEP else "") +
-                        " trades only from now (till 2:30).", False))
+                        (" and CPR BREAK" if CPR_CALLS else "") + " trades only from now (till 2:30).", False))
     cap = stop_max(cx)
     for (src, side), m in sorted((cx.get('vlog') or {}).items(), key=lambda kv: kv[1]):
         out.append((('vskip', src, side), m, f"{nm} {hhmm(m)} {src} {'BUY' if side > 0 else 'SELL'} signal skipped: the volume "
@@ -974,9 +1063,15 @@ def messages(cx, ts, c1, upto, lots):
         sn = f"capped at {cap:g} points" if cap and abs(abs(t['e'] - t['stp0']) - cap) < 0.01 else ''
         if not t['taken']:
             out.append((tid + ('skip',), t['known'], f"{nm} {hhmm(t['m'])} {t['src']} {sd} signal at {f2(t['e'])} skipped: " +
-                        (f"{SWEEP_MAX} sweep trades already today." if t.get('full') else "another trade is still open."), False))
+                        (f"{SWEEP_MAX} sweep trades already today." if t.get('full') else "another CPR BREAK call is still open."
+                         if t['src'] == 'CPR BREAK' else "another trade is still open."), False))
             continue
-        if t['src'] == 'SWEEP':
+        if t['src'] == 'CPR BREAK':
+            how = (f"First touch of the CPR {'top' if t['side'] > 0 else 'bottom'} today; " + '; '.join(t['why']) +
+                   f". Stop {f2(t['stp0'])} ({abs(t['e'] - t['stp0']):.0f} points). Target {f2(t['tgt'])} "
+                   f"({abs(t['tgt'] - t['e']):.0f} points), all out there. Out by 15:15 at the latest. Its own trade: it can be "
+                   "open together with another call.")
+        elif t['src'] == 'SWEEP':
             hi = t['side'] < 0
             how = (f"Price went {'above' if hi else 'below'} yesterday's {'high' if hi else 'low'} {f2(t['lvl'])} and closed back "
                    f"{'below' if hi else 'above'} it (liquidity sweep). Stop {f2(t['stp0'])} (just beyond the candle). "
@@ -1013,6 +1108,9 @@ def messages(cx, ts, c1, upto, lots):
             x = t['exit']
             out.append((tid + ('out',), x['m'] + 1, f"{nm} {hhmm(x['m'])} EXIT ({x['why']}) at {f2(x['px'])}: {x['pnl']:+.0f} pts "
                         f"after costs (about Rs {rupees(cx, x['pnl'], lots):+,.0f} at {lots} lots).", True))
+    for m, side, e in cx.get('cpr_none') or []:
+        out.append((('cprnone', side), m + 1, f"{nm} {hhmm(m)} first touch of the CPR {'top' if side > 0 else 'bottom'} at "
+                    f"{f2(e)}: no CPR BREAK call (none of its four conditions today).", False))
     return out
 
 def messages_small(cx, ts, c1, upto, lots):
@@ -1060,12 +1158,10 @@ def messages_small(cx, ts, c1, upto, lots):
     return out
 
 def open_note(cx, ts):
-    for t in ts:
-        if t['taken'] and not t['exit']:
-            half = any(e['kind'] == 'half' for e in t['ev'])
-            return (f"open: {t['src']} {'BUY' if t['side'] > 0 else 'SELL'} from {f2(t['e'])}, stop now {f2(t['stp'])}"
-                    + (", half booked" if half else ""))
-    return "no trade open"
+    out = [f"{t['src']} {'BUY' if t['side'] > 0 else 'SELL'} from {f2(t['e'])}, stop now {f2(t['stp'])}" +
+           (", half booked" if any(e['kind'] == 'half' for e in t['ev']) else "")
+           for t in ts if t['taken'] and not t['exit']]
+    return "open: " + "; ".join(out) if out else "no trade open"
 
 def day_summary(cx, ts, lots):
     done_ = [t for t in ts if t['taken'] and t['exit']]
@@ -1166,12 +1262,13 @@ def mfe_before_stop(c1, side, e, stop, start_m, last_m=CLOSE - 1):
             best = max(best, side * (p - e))
     return best, False
 
-TARGETS_V = 3                     # the saved history's version (2: T1 = where half is booked; 3: stops capped at
-                                  # 55 Nifty / 170 Sensex points): days saved with an older one are worked out again
+TARGETS_V = 4                     # the saved history's version (2: T1 = where half is booked; 3: stops capped at
+                                  # 55 Nifty / 170 Sensex points; 4: the CPR BREAK calls): days saved with an older
+                                  # one are worked out again
 
 def half_price(t):
     """Where the call books half (or, for a single target, its target): T1."""
-    if t.get('small') or t['src'] in ('VOLUME LINE', 'SWEEP'):
+    if t.get('small') or t['src'] in ('VOLUME LINE', 'SWEEP', 'CPR BREAK'):
         return t['tgt']
     if t['src'] == 'MAGNET':
         return t['t1']
@@ -1190,12 +1287,12 @@ def t_probs(name, src):
         except Exception:
             PROBS['-'] = {}
     by = PROBS.get(name, {})
-    v = by.get(src) if by.get(src, {}).get('n', 0) >= 30 else by.get('ALL')
+    v = by.get(src) if by.get(src, {}).get('n', 0) >= 30 else None if src == 'CPR BREAK' else by.get('ALL')
     return v or None
 
 def t1_word(t):
     """What the call does at T1: books half, or (a single target) books all."""
-    return 'target' if t['src'] in ('VOLUME LINE', 'SWEEP') and not t.get('tgt2') else 'book half'
+    return 'target' if t['src'] in ('VOLUME LINE', 'SWEEP', 'CPR BREAK') and not t.get('tgt2') else 'book half'
 
 def target_levels(cx, c1, side, e, start, t1=None):
     """T1 / T2 / T3 for the app, the chart and the alerts. T1 = where the call books half (`t1`; the exits are the
@@ -1235,7 +1332,7 @@ def call_info(cx, t, c1):
     """One taken trade as the app shows it."""
     sd, x = t['side'], t['exit']
     mfe, stopped = mfe_before_stop(c1, sd, t['e'], t['stp0'], t['known'])
-    need = SUCCESS_PTS.get(cx['name'], 0)
+    need = CPR_TP.get(cx['name'].lower(), 0) if t['src'] == 'CPR BREAK' else SUCCESS_PTS.get(cx['name'], 0)   # CPR BREAK: its target
     m0 = 556 if t['src'] == 'MAGNET' else t['m']           # as the alert says it
     tg = target_levels(cx, c1, sd, t['e'], t['known'], half_price(t))
     pr = t_probs(cx['name'], t['src'])
@@ -1258,8 +1355,8 @@ def record_history(cx, ts, c1, day):
                              targets=ci['targets'], hit=ci['hit'], tv=TARGETS_V))
     try:
         old = json.load(open(HISTORY_FILE)) if os.path.exists(HISTORY_FILE) else []
-        have = {(r['d'], r['index'], r['time'], r['side']) for r in old}
-        new = [r for r in rows if (r['d'], r['index'], r['time'], r['side']) not in have]
+        have = {(r['d'], r['index'], r['time'], r['side'], r.get('setup')) for r in old}
+        new = [r for r in rows if (r['d'], r['index'], r['time'], r['side'], r['setup']) not in have]
         if new:
             with open(HISTORY_FILE, 'w') as f:
                 json.dump(old + new, f)
@@ -1271,7 +1368,7 @@ def history_all():
     for path_ in (HISTORY_SEED, HISTORY_FILE):
         try:
             for r in json.load(open(path_)) if os.path.exists(path_) else []:
-                rows[(r['d'], r['index'], r['time'], r['side'])] = r
+                rows[(r['d'], r['index'], r['time'], r['side'], r.get('setup'))] = r
         except Exception as e:
             print(f"  (history file {path_}: {e})")
     calls = sorted(rows.values(), key=lambda r: (r['d'], r['time']), reverse=True)
@@ -1284,10 +1381,12 @@ def history_all():
                     t1=round(100 * sum(h[0] for h in hits) / len(hits)) if hits else None,
                     t2=round(100 * sum(h[1] for h in hits) / len(hits)) if hits else None,
                     t3=round(100 * sum(h[2] for h in hits) / len(hits)) if hits else None)
-    out = dict(rule={k: v for k, v in SUCCESS_PTS.items()}, calls=calls, stats={})
+    out = dict(rule={k: v for k, v in SUCCESS_PTS.items()}, cpr={k.upper(): (CPR_TP[k], CPR_SL[k]) for k in CPR_TP},
+               calls=calls, stats={})
     cut = str(dt.date.fromisoformat(calls[0]['d']) - dt.timedelta(days=30)) if calls else ''
-    for idx in ('ALL', 'NIFTY', 'SENSEX'):
-        rs = [r for r in calls if idx == 'ALL' or r['index'] == idx]
+    for idx in ('ALL', 'NIFTY', 'SENSEX', 'CPR NIFTY', 'CPR SENSEX'):     # ALL / NIFTY / SENSEX: the other calls
+        cpr = idx.startswith('CPR')
+        rs = [r for r in calls if (r.get('setup') == 'cpr break') == cpr and idx in ('ALL', r['index'], 'CPR ' + r['index'])]
         out['stats'][idx] = dict(all=stats(rs), last30=stats([r for r in rs if r['d'] > cut]))
     return out
 
@@ -1345,7 +1444,7 @@ def chart_update(n, cx, c_all, ts, got, day):
     if first and got >= RANGE_END - 1:
         levels += [dict(p=max(x[2] for x in first), c='#4caf50', t='15-min high', s=2, w=1),
                    dict(p=min(x[3] for x in first), c='#f44336', t='15-min low', s=2, w=1)]
-    marks, rows, open_t, boxes = [], [], None, []
+    marks, rows, opens, boxes = [], [], [], []
     for t in ts:
         if not t['taken']:
             continue
@@ -1366,13 +1465,13 @@ def chart_update(n, cx, c_all, ts, got, day):
             marks.append(dict(m=x['m'], pos=('belowBar' if sd > 0 else 'aboveBar') if k in ('SL', 'BE') else ('aboveBar' if sd > 0 else 'belowBar'),
                               c='#9e9e9e' if k == 'BE' else '#26a69a' if x['pnl'] > 0 else '#ef5350', x=k))
         else:
-            open_t = t
+            opens.append(t)
         rows.append([hhmm(m0 + (1 if t['src'] in ('VOLUME LINE', 'SWEEP') else 0)), ('BUY' if sd > 0 else 'SELL') + ' ' + t['src'].lower(), f2(t['e']), f2(t['stp0']),
                      (f"{x['why']} at {f2(x['px'])}: {x['pnl']:+.0f} pts" if x else f"open, stop now {f2(t['stp'])}")])
     pend = cx.get('pending')
     if pend and got < 720 and not any(t['src'] == 'PULLBACK' for t in ts):
         levels.append(dict(p=pend['px'], c='#2962ff', t='LIMIT ' + ('BUY' if pend['side'] > 0 else 'SELL'), s=2, w=2))
-    if open_t:
+    for open_t in opens:
         moved = open_t['side'] * (open_t['stp'] - open_t['e'])
         levels.append(dict(p=open_t['stp'], c='#9e9e9e' if abs(moved) < 0.01 else '#ef5350', s=2, w=1,
                            t='BE' if abs(moved) < 0.01 else 'Trailing SL' if moved > 0 else 'SL'))
@@ -1380,7 +1479,7 @@ def chart_update(n, cx, c_all, ts, got, day):
         levels.append(dict(p=T[0], c='#26a69a', t='T1', s=2, w=1))      # T2 / T3: in the position box
         half = any(e['kind'] == 'half' for e in open_t['ev'])
         sd = open_t['side']
-        if open_t.get('small'):
+        if open_t.get('small') or open_t['src'] == 'CPR BREAK':
             tg = open_t['tgt']
         elif open_t['src'] == 'MAGNET':
             tg = open_t['edge'] if half else open_t['t1']

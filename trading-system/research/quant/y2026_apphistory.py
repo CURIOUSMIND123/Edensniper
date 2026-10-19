@@ -1,5 +1,6 @@
 """The phone app's history: every call of 2026 (default settings, as the alert program takes them) on both indices,
-and whether it succeeded: the index went at least 50 Nifty / 150 Sensex points the call's way before the stop loss.
+and whether it succeeded: the index went at least 50 Nifty / 150 Sensex points the call's way before the stop loss (a
+CPR BREAK call: its target, 60 / 200 points).
 
     python y2026_apphistory.py nifty     (and sensex), then: python y2026_apphistory.py
 writes ../../alerts/history-2026.json (the app server reads it as the history before it started).

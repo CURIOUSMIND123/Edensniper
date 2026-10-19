@@ -31,6 +31,16 @@
 //   Sensex, with the check:    30 +8,001, 15 +8,700, 7 +8,668, 3 +8,587, 2 +8,572, 1 +8,537, none +9,166
 //   Sensex, without the check: 30 +8,102, 15 +8,845, 7 +8,288, 3 +8,549, 2 +8,517, 1 +8,483, none +7,893 (worst fall -1,505)
 //   Settings > Volume zones and Settings > Volume check set them for each index.
+// CPR BREAK CALLS (from 19 October 2026; on by default; their own trades, one at a time, which may be open together
+//   with another call): the FIRST 1-minute touch of today's CPR top from below -> BUY, of its bottom from above -> SELL
+//   (each once a day, 9:16-2:30), at the close of that 1-minute candle, when one of these holds: today's CPR overlaps
+//   yesterday's; the touch is between 10:00 and 11:30; price is still inside the 15-minute range (after 9:30); the day
+//   opened beyond that side of the CPR, came back and broke out again with RSI 14 (5-minute) above 55 (BUY) / below 45
+//   (SELL). Target 60 Nifty / 200 Sensex points, stop 35 / 100, out by 3:15. The CPR-vs-yesterday, gap, POC and volume
+//   filters of the other calls don't apply. 2023 / 2024 / 2025 / 2026 after costs: Nifty 91 / 145 / 128 / 81 trades,
+//   +131 / +211 / +111 / +636 points (target first on 34-46%; break-even 41%); Sensex 103 / 156 / 127 / 90 trades,
+//   +2,734 / +419 / +2,594 / +1,366 (35-42%; break-even 37%). Made money in every year on both indices; small on
+//   Nifty. A later touch (when the first met no condition) did worse. research/quant/cpr_plus.py, cpr_confluence.py.
 // LIQUIDITY SWEEPS of yesterday's high / low (off by default; Settings): a 5-minute candle (9:30-2:30) goes above
 //   yesterday's high and closes back below it -> SELL; below yesterday's low and back above it -> BUY. Stop 0.02%
 //   beyond the candle, target 3x the stop, at most 3 a day. 2026 without the volume check: Nifty +2,993, Sensex
@@ -146,6 +156,12 @@ swMax  = input.int(3, "Sweeps: at most this many a day", minval = 1, maxval = 10
 swMult = input.float(3.0, "Sweeps: target = this x the stop", step = 0.5, group = G6)
 swShow = input.bool(true, "Draw yesterday's high / low", group = G6)
 costIn = input.float(0, "Cost per trade in index points (0 = auto: Nifty 4, Sensex 12)", step = 1, group = G1)
+G8 = "CPR break calls (their own trades; original rules)"
+cbOn   = input.bool(true, "CPR BREAK calls: the first touch of the CPR top (BUY) / bottom (SELL), 9:16-2:30, when one of four things holds", group = G8, tooltip = "The four: today's CPR overlaps yesterday's; the touch is between 10:00 and 11:30; price is still inside the 15-minute range (after 9:30); the day opened beyond that side of the CPR, came back and broke out again with RSI 14 above 55 (BUY) / below 45 (SELL). Entry at the close of the touching 1-minute candle, fixed target and stop, out by 3:15. One at a time; may be open together with another call. 2023 / 2024 / 2025 / 2026: Nifty +131 / +211 / +111 / +636, Sensex +2,734 / +419 / +2,594 / +1,366 points after costs.")
+cbTpN  = input.float(60, "CPR break: target on Nifty, points", step = 5, group = G8)
+cbSlN  = input.float(35, "CPR break: stop on Nifty, points", step = 5, group = G8)
+cbTpS  = input.float(200, "CPR break: target on Sensex, points", step = 10, group = G8)
+cbSlS  = input.float(100, "CPR break: stop on Sensex, points", step = 10, group = G8)
 G2 = "Display"
 cprPink = input.color(color.new(#e91e63, 0), "CPR colour", group = G2)
 cprNar  = input.color(color.new(#f57c00, 0), "CPR colour on narrow days", group = G2)
@@ -272,6 +288,8 @@ relBias = bot > yTop ? 1 : top < yBot ? -1 : 0
 widOk   = widF == "Any" or (widF == "Narrow only") == narrow
 
 ema50  = ta.ema(close, 50)
+rsi14  = ta.rsi(close, 14)
+rsiPrev = rsi14[1]                         // CPR break calls: the RSI of the last complete 5-minute candle
 mins   = minsOf(time)
 newDay = dayofmonth(time, TZ) != dayofmonth(time[1], TZ)
 lc(color col) => newDay ? na : col
@@ -487,6 +505,28 @@ var box   vbR = na
 var line  vbH = na
 var string vbTt = ""
 var string vbRt = ""
+var bool  cbOpenT = false       // CPR break calls (their own book)
+var int   cbSide = 0
+var float cbE = na
+var float cbStp = na
+var float cbTgt = na
+var int   cbStart = 0
+var int   cbLastExit = -1
+var bool  cbDoneUp = false     // the CPR top / bottom touched already today
+var bool  cbDoneDn = false
+var float dOpen = na           // today's 9:15 open
+var float pc1 = na             // the last 1-minute close (for a touch: the candle before)
+var box   cbbT = na
+var box   cbbR = na
+var line  cbbH = na
+var string cbbTt = ""
+var string cbbRt = ""
+var line  cblnS = na
+var line  cblnT = na
+var int   nCb = 0
+var int   nCbWon = 0
+var float cbPts = 0.0
+var string cbMsg = ""
 var float lastG = na            // the plan trade's last result (for a trade that opens and closes inside one candle)
 var float lastEx = na
 var string lastWhy = ""
@@ -526,6 +566,21 @@ passes(int sd, float px, float emaNow) =>
 stopFor(int sd, float px) =>
     stopF == "Other side of the 15-minute range" ? (sd > 0 ? orl : orh) : stopF == "Middle of the 15-minute range" ? (orh + orl) / 2 : px - sd * 0.002 * px
 
+cbTP = close > 50000 ? cbTpS : cbTpN
+cbSL = close > 50000 ? cbSlS : cbSlN
+// which of the four conditions a first touch of the CPR meets ("" = none: no call)
+cbWhy(int sd, int mk, float px) =>
+    string w = ""
+    if relBias == 0
+        w := "CPR overlaps yesterday's"
+    if mk >= 600 and mk < 690
+        w := w + (w == "" ? "" : "; ") + "10:00-11:30"
+    if sd * (dOpen - (sd > 0 ? top : bot)) > 0 and sd * (rsiPrev - 50) > 5
+        w := w + (w == "" ? "" : "; ") + "opened " + (sd > 0 ? "above" : "below") + " the CPR, broke out again, RSI " + str.tostring(rsiPrev, "#")
+    if mk >= 570 and not na(orh) and (sd > 0 ? px <= orh : px >= orl)
+        w := w + (w == "" ? "" : "; ") + "inside the 15-minute range"
+    w
+
 halfMode = exitF == "Scalp: book half at 0.25R, stop to entry, trail the rest"
 tgtFor(int sd, float px, float r) =>
     exitF == "Target 3 x risk" ? px + sd * 3 * r : halfMode ? px + sd * 0.25 * r : na
@@ -546,6 +601,17 @@ if newDay
     if pullArmed and pullState == 1
         line.set_extend(pullLine, extend.none)
         line.set_x2(pullLine, bar_index - 1)
+    if cbOpenT
+        line.set_extend(cblnS, extend.none)
+        line.set_extend(cblnT, extend.none)
+        line.set_x2(cblnS, bar_index - 1)
+        line.set_x2(cblnT, bar_index - 1)
+        posGrow(cbbT, cbbR, cbbH, bar_index - 1)
+    cbOpenT := false
+    cbDoneUp := false
+    cbDoneDn := false
+    cbLastExit := -1
+    cbMsg := cbOn and not shortMode ? "waiting for the first touch of the CPR" : "off"
     pullState := 0
     pullArmed := false
     lastExitMin := -1
@@ -574,6 +640,7 @@ if is5 and n1 > 0
         ck = array.get(xc, k)
         complete = k < n1 - 1 or barstate.isconfirmed
         if mk == 555
+            dOpen := ok
             cb := ok > top ? 1 : ok < bot ? -1 : 0
             gapDir := ok > pC ? 1 : ok < pC ? -1 : 0
             if magOn and not narrow and state == 0 and complete and not volOpen
@@ -740,6 +807,79 @@ if is5 and n1 > 0
                     posEnd(vbT, vbR, vbH, vbTt, vbRt, vg, vNm + vWhy + " " + pts(vg) + " pts", vEx)
                 todayMsg := vNm + vWhy + " at " + fmt(vEx) + ", " + pts(vg) + " pts after costs" + (vHalf ? " (half booked earlier)" : "")
                 alert("CPRB " + syminfo.ticker + (isSw ? " SWEEP " : " VOLUME-LINE ") + vWhy + " at " + fmt(vEx) + " (" + pts(vg) + " pts after costs)", alert.freq_once_per_bar)
+        // CPR break calls: exits, then the first touch of the CPR top / bottom (at the close of the touching candle)
+        if cbOpenT and mk >= cbStart
+            float cb1 = ck >= ok ? lk : hk
+            float cb2 = ck >= ok ? hk : lk
+            float cbEx = na
+            string cbW = ""
+            for j = 0 to 3
+                float q = j == 0 ? ok : j == 1 ? cb1 : j == 2 ? cb2 : ck
+                if na(cbEx)
+                    if cbSide * (q - cbStp) <= 0
+                        cbEx := cbStp
+                        cbW := "STOP"
+                    else if cbSide * (q - cbTgt) >= 0
+                        cbEx := cbTgt
+                        cbW := "TARGET"
+            if na(cbEx) and mk >= TOUT and complete
+                cbEx := ck
+                cbW := "3:15 EXIT"
+            if not na(cbEx)
+                float cg = cbSide * (cbEx - cbE) - cost
+                cbOpenT := false
+                cbLastExit := mk
+                nTr += 1
+                nWon += cg > 0 ? 1 : 0
+                totPts += cg
+                winPts += cg > 0 ? cg : 0
+                lossPts += cg > 0 ? 0 : cg
+                nCb += 1
+                nCbWon += cg > 0 ? 1 : 0
+                cbPts += cg
+                string cm = exitMark(cbW)
+                mark(cm, cm == "SL" ? cbSide < 0 : cbSide > 0, cg > 0 ? GREEN : RED, "CPR break: " + cbW + " at " + fmt(cbEx) + ": " + pts(cg) + " pts after costs")
+                line.set_extend(cblnT, extend.none)
+                line.set_extend(cblnS, extend.none)
+                line.set_x2(cblnT, bar_index)
+                line.set_x2(cblnS, bar_index)
+                if showBoxes
+                    posEnd(cbbT, cbbR, cbbH, cbbTt, cbbRt, cg, "CPR break: " + cbW + " " + pts(cg) + " pts", cbEx)
+                cbMsg := cbW + " at " + fmt(cbEx) + ", " + pts(cg) + " pts after costs"
+                alert("CPRB " + syminfo.ticker + " CPR BREAK " + cbW + " at " + fmt(cbEx) + " (" + pts(cg) + " pts after costs)", alert.freq_once_per_bar)
+        if cbOn and not shortMode and complete and mk >= 556 and mk <= 870 and not na(pc1)
+            for sd in array.from(1, -1)
+                bool hit = sd > 0 ? (not cbDoneUp and pc1 < top and hk >= top) : (not cbDoneDn and pc1 > bot and lk <= bot)
+                if hit
+                    if sd > 0
+                        cbDoneUp := true
+                    else
+                        cbDoneDn := true
+                    string w = cbWhy(sd, mk, ck)
+                    if w == ""
+                        cbMsg := "first touch of the CPR " + (sd > 0 ? "top" : "bottom") + " at " + hhmm(mk) + ": no call (none of the four)"
+                    else if not cbOpenT and mk > cbLastExit
+                        cbOpenT := true
+                        cbSide := sd
+                        cbE := ck
+                        cbStp := ck - sd * cbSL
+                        cbTgt := ck + sd * cbTP
+                        cbStart := mk + 1
+                        string ctx = "CPR BREAK " + (sd > 0 ? "BUY " : "SELL ") + fmt(ck) + " (" + hhmm(mk) + ")\nstop " + fmt(cbStp) + ", target " + fmt(cbTgt) + "\n" + w
+                        mark(sd > 0 ? "B" : "S", sd < 0, sd > 0 ? GREEN : RED, ctx)
+                        cblnS := line.new(bar_index, cbStp, bar_index + 1, cbStp, color = lnRed, style = line.style_dotted, extend = extend.right)
+                        cblnT := line.new(bar_index, cbTgt, bar_index + 1, cbTgt, color = lnGreen, style = line.style_dotted, extend = extend.right)
+                        if showBoxes
+                            cbbTt := "CPR BREAK TARGET " + fmt(cbTgt)
+                            cbbRt := "STOP " + fmt(cbStp)
+                            [cx1, cx2, cx3] = posNew(sd, ck, cbTgt, cbStp, na, cbbTt, cbbRt, ctx)
+                            cbbT := cx1
+                            cbbR := cx2
+                            cbbH := cx3
+                        cbMsg := (sd > 0 ? "BUY " : "SELL ") + fmt(ck) + ", stop " + fmt(cbStp) + ", target " + fmt(cbTgt)
+                        alert("CPRB " + syminfo.ticker + " CPR BREAK " + (sd > 0 ? "BUY at " : "SELL at ") + fmt(ck) + " | STOP " + fmt(cbStp) + " | TARGET " + fmt(cbTgt) + " | " + w, alert.freq_once_per_bar)
+        if complete
+            pc1 := ck
         // touch entries
         if not shortMode and mk >= 570 and not volOpen and entF == "Touch of the range high / low" and mk < CUT and not na(orh) and (state == 0 or (state == 2 and mk >= afterMin))
             int sd = hk >= orh ? 1 : lk <= orl ? -1 : 0
@@ -971,6 +1111,8 @@ if showBoxes and state == 1
     posGrow(pbT, pbR, pbH, bar_index + 1)
 if showBoxes and volOpen
     posGrow(vbT, vbR, vbH, bar_index + 1)
+if showBoxes and cbOpenT
+    posGrow(cbbT, cbbR, cbbH, bar_index + 1)
 
 showPD = timeframe.isintraday and (pdShow or (swOn and swShow and not shortMode))
 plot(showPD ? pH : na, "Yesterday's high", color = lc(color.new(#fdd835, 20)), style = plot.style_linebr)
@@ -1137,7 +1279,7 @@ if barstate.islast and cprOn
                         edgeName(edgeLbl, xb, x, "Next: 3-day volume line " + fmt(x), TEAL, size.small)
 
 // ---------------- status and results box ----------------
-var table tbl = table.new(position.top_right, 2, 11, bgcolor = color.new(chart.bg_color, 5), border_width = 1, border_color = color.new(GREY, 60), frame_width = 1, frame_color = GREY)
+var table tbl = table.new(position.top_right, 2, 13, bgcolor = color.new(chart.bg_color, 5), border_width = 1, border_color = color.new(GREY, 60), frame_width = 1, frame_color = GREY)
 cell(int r, string a, string b, color tc) =>
     table.cell(tbl, 0, r, a, text_color = GREY, text_size = size.small, text_halign = text.align_left)
     table.cell(tbl, 1, r, b, text_color = tc, text_size = size.small, text_halign = text.align_left)
@@ -1154,5 +1296,8 @@ if barstate.islast and showBox
     cell(8, "Of which volume-line trades", str.tostring(nVol) + " trades, " + str.tostring(nVolWon) + " won, " + pts(volPts) + " pts", volPts >= 0 ? GREEN : RED)
     if vcOn and not shortMode
         cell(10, "Volume, last " + str.tostring(vcN) + " candles", vcUp > vcDn ? "up candles heavier: BUYs allowed" : vcDn > vcUp ? "down candles heavier: SELLs allowed" : "even: no trades", vcUp > vcDn ? GREEN : vcDn > vcUp ? RED : GREY)
+    if cbOn and not shortMode
+        cell(11, "Of which CPR break calls", str.tostring(nCb) + " trades, " + str.tostring(nCbWon) + " won, " + pts(cbPts) + " pts", cbPts >= 0 ? GREEN : RED)
+        cell(12, "CPR break today", cbMsg, chart.fg_color)
     if swOn and not shortMode
         cell(9, "Of which sweep trades", str.tostring(nSw) + " trades, " + str.tostring(nSwWon) + " won, " + pts(swPts) + " pts", swPts >= 0 ? GREEN : RED)

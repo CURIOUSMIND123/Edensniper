@@ -42,7 +42,7 @@ vol = collections.defaultdict(dict)
 for f in ('../.cache/niftybees_1m_old.json', '../.cache/niftybees_1m.json'):
     for k, v in json.load(open(f)).items():
         vol[k[:10]][int(k[11:13]) * 60 + int(k[14:16])] = v[4]
-A.RULES, A.SWEEP = 'classic', False
+A.RULES, A.SWEEP, A.CPR_CALLS = 'classic', False, False       # the calls as before (cpr_plus.py: the CPR BREAK calls)
 CACHE = f'../.cache/levels_cx_{NM}.pkl'
 if os.path.exists(CACHE):
     CX = pickle.load(open(CACHE, 'rb'))
@@ -61,6 +61,10 @@ else:
         CX[d] = cx
     pickle.dump(CX, open(CACHE, 'wb'))
 DAYS = sorted(CX)
+_full = [d for d in Y.days if len(sess[d]) >= 300]
+for d in DAYS:                                         # contexts saved before the CPR BREAK calls: their RSI start
+    if 'c5h' not in CX[d]:
+        CX[d]['c5h'] = A.closes5(sess, [x for x in _full if x < d][-3:])
 
 def stats(rows):
     """rows: [(day, pnl)] -> per year and in all."""

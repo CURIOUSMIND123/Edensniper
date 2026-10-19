@@ -2,6 +2,14 @@
  "note": "How often the calls reached T1 / T2 / T3 before the stop (after T1: before the entry), January 2023 - October 2026 (research/quant/target_probs.py).",
  "probs": {
   "NIFTY": {
+   "CPR BREAK": {
+    "n": 445,
+    "t1": 40,
+    "t2": 22,
+    "t3": 12,
+    "t2_after_t1": 57,
+    "t3_after_t2": 53
+   },
    "BREAKOUT": {
     "n": 240,
     "t1": 80,
@@ -44,6 +52,14 @@
    }
   },
   "SENSEX": {
+   "CPR BREAK": {
+    "n": 476,
+    "t1": 39,
+    "t2": 22,
+    "t3": 11,
+    "t2_after_t1": 57,
+    "t3_after_t2": 51
+   },
    "BREAKOUT": {
     "n": 172,
     "t1": 77,
