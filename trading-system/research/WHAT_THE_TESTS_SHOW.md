@@ -1753,7 +1753,7 @@ target first on 41% (Nifty) / 37% (Sensex) of the breakouts.
   (Nifty only just). Only Sensex with the overlapping CPR met the strict test (target first at least 5 points over
   break-even and money made in each of 2023-2025): 7 pairs, all with the overlap; 6 of the 7 made money in 2026.
 
-## The CPR BREAK calls: the filters that made money, together (`cpr_plus.py`; in the alerts from 19 October 2026)
+## The CPR BREAK calls: the filters that made money, together (`cpr_plus.py`; in the alerts, off by default)
 
 The four filters of the last section that made money in each of 2023, 2024 and 2025 on both indices - today's CPR
 overlaps yesterday's; 10:00-11:30; price still inside the 15-minute range; opened beyond the CPR, came back and broke
@@ -1769,6 +1769,8 @@ can do it); at the touch itself it was about the same.
 | Sensex, CPR BREAK calls (any of the four) | 103 tr, 40%, +2,734 | 156 tr, 35%, +419 | 127 tr, 42%, +2,594 | 90 tr, 41%, +1,366 |
 
 - About one call every two days on each index. Worst trade −39 / −118; worst fall −484 / −1,718 points.
+- They win only 34-46% of the time (they make money because the target is 1.7-2x the stop), so they are off by
+  default (`CPR_CALLS`, the indicator's setting): the user wants calls that win about 8 in 10.
 - With the current calls (each on its own book): Sensex +3,416 / +937 / +3,800 / +9,549 a year; Nifty −4 / −294 /
   −113 / +2,274 (the Nifty calls themselves lost in 2023-2025).
 - Letting a later touch count when the first met none of the four (it would have caught 19 October's fall) lost

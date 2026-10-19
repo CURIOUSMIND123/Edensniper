@@ -5,8 +5,8 @@ Follows the same rules as tradingview/cpr_breakout.pine (its default settings) o
 Upstox's free public candle data. It tells you when to BUY (a call) or SELL (a put), where the stop and the target
 are and when to exit: on this screen, and on your phone through Telegram if you set that up (free).
 Default rules ('classic'): the daily plan (CPR Magnet at 9:16 or the 9:30 breakout) and the 3-day volume lines, one
-trade at a time, set differently for each index (the most profit in the 2026 tests); and, as their own trades, the
-CPR BREAK calls (the first touch of the CPR top / bottom on a day that suits it; target 60 / 200, stop 35 / 100):
+trade at a time, set differently for each index (the most profit in the 2026 tests); CPR_CALLS = True adds the CPR
+BREAK calls as their own trades (off: they win only about 4 in 10, though they made money):
   Nifty:  the Magnet and the breakout only on the volume side of yesterday's POC (buys above it, sells below); no
           volume check.
   Sensex: the volume check on every signal (a BUY only when the last 2 hours' up candles carried more NIFTYBEES volume
@@ -59,11 +59,12 @@ POC_DAYS = {'nifty': 1, 'sensex': 0}    # the volume POC filter (buys only above
                                   # last N sessions' volume (1 = yesterday's); 0 = no POC filter. 2026 tests
                                   # (research/quant/y2026_pocdays.py): Nifty made the most with yesterday's POC and no
                                   # volume check, Sensex with the volume check and no POC filter
-CPR_CALLS = True                  # 'classic' rules: also the CPR BREAK calls: the first touch of the CPR top (BUY) /
+CPR_CALLS = False                 # 'classic' rules: also the CPR BREAK calls: the first touch of the CPR top (BUY) /
                                   # bottom (SELL), 9:16-2:30, when one of four things holds (cpr_conditions()); a
                                   # fixed target and stop, out by 3:15; their own trades, one at a time (one may be
                                   # open together with another call). 2023-2026 they made money in every year on
-                                  # both indices (research/quant/cpr_plus.py)
+                                  # both indices but won only 34-46% of the time (research/quant/cpr_plus.py), so
+                                  # they are off: the user wants calls that win about 8 in 10
 CPR_TP = {'nifty': 60, 'sensex': 200}   # the CPR BREAK calls' target and stop, index points
 CPR_SL = {'nifty': 35, 'sensex': 100}
 REV_CHANCE = {'nifty': (34, 29, 22), 'sensex': (31, 28, 20)}   # on a trending day (price below both the day's open
@@ -1425,6 +1426,8 @@ def history_all():
     for idx in ('ALL', 'NIFTY', 'SENSEX', 'CPR NIFTY', 'CPR SENSEX'):     # ALL / NIFTY / SENSEX: the other calls
         cpr = idx.startswith('CPR')
         rs = [r for r in calls if (r.get('setup') == 'cpr break') == cpr and idx in ('ALL', r['index'], 'CPR ' + r['index'])]
+        if cpr and not rs:
+            continue                                  # no CPR BREAK calls (they are off)
         out['stats'][idx] = dict(all=stats(rs), last30=stats([r for r in rs if r['d'] > cut]))
     return out
 

@@ -31,8 +31,8 @@
 //   Sensex, with the check:    30 +8,001, 15 +8,700, 7 +8,668, 3 +8,587, 2 +8,572, 1 +8,537, none +9,166
 //   Sensex, without the check: 30 +8,102, 15 +8,845, 7 +8,288, 3 +8,549, 2 +8,517, 1 +8,483, none +7,893 (worst fall -1,505)
 //   Settings > Volume zones and Settings > Volume check set them for each index.
-// CPR BREAK CALLS (from 19 October 2026; on by default; their own trades, one at a time, which may be open together
-//   with another call): the FIRST 1-minute touch of today's CPR top from below -> BUY, of its bottom from above -> SELL
+// CPR BREAK CALLS (from 19 October 2026; OFF by default: they win only about 4 in 10, though they made money; their
+//   own trades, one at a time, which may be open together with another call): the FIRST 1-minute touch of today's CPR top from below -> BUY, of its bottom from above -> SELL
 //   (each once a day, 9:16-2:30), at the close of that 1-minute candle, when one of these holds: today's CPR overlaps
 //   yesterday's; the touch is between 10:00 and 11:30; price is still inside the 15-minute range (after 9:30); the day
 //   opened beyond that side of the CPR, came back and broke out again with RSI 14 (5-minute) above 55 (BUY) / below 45
@@ -164,7 +164,7 @@ swMult = input.float(3.0, "Sweeps: target = this x the stop", step = 0.5, group 
 swShow = input.bool(true, "Draw yesterday's high / low", group = G6)
 costIn = input.float(0, "Cost per trade in index points (0 = auto: Nifty 4, Sensex 12)", step = 1, group = G1)
 G8 = "CPR break calls (their own trades; original rules)"
-cbOn   = input.bool(true, "CPR BREAK calls: the first touch of the CPR top (BUY) / bottom (SELL), 9:16-2:30, when one of four things holds", group = G8, tooltip = "The four: today's CPR overlaps yesterday's; the touch is between 10:00 and 11:30; price is still inside the 15-minute range (after 9:30); the day opened beyond that side of the CPR, came back and broke out again with RSI 14 above 55 (BUY) / below 45 (SELL). Entry at the close of the touching 1-minute candle, fixed target and stop, out by 3:15. One at a time; may be open together with another call. 2023 / 2024 / 2025 / 2026: Nifty +131 / +211 / +111 / +636, Sensex +2,734 / +419 / +2,594 / +1,366 points after costs.")
+cbOn   = input.bool(false, "CPR BREAK calls (win about 4 in 10): the first touch of the CPR top (BUY) / bottom (SELL), 9:16-2:30, when one of four things holds", group = G8, tooltip = "The four: today's CPR overlaps yesterday's; the touch is between 10:00 and 11:30; price is still inside the 15-minute range (after 9:30); the day opened beyond that side of the CPR, came back and broke out again with RSI 14 above 55 (BUY) / below 45 (SELL). Entry at the close of the touching 1-minute candle, fixed target and stop, out by 3:15. One at a time; may be open together with another call. 2023 / 2024 / 2025 / 2026: Nifty +131 / +211 / +111 / +636, Sensex +2,734 / +419 / +2,594 / +1,366 points after costs.")
 cbTpN  = input.float(60, "CPR break: target on Nifty, points", step = 5, group = G8)
 cbSlN  = input.float(35, "CPR break: stop on Nifty, points", step = 5, group = G8)
 cbTpS  = input.float(200, "CPR break: target on Sensex, points", step = 10, group = G8)
