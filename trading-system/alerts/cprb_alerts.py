@@ -66,6 +66,11 @@ CPR_CALLS = True                  # 'classic' rules: also the CPR BREAK calls: t
                                   # both indices (research/quant/cpr_plus.py)
 CPR_TP = {'nifty': 60, 'sensex': 200}   # the CPR BREAK calls' target and stop, index points
 CPR_SL = {'nifty': 35, 'sensex': 100}
+REV_CHANCE = {'nifty': (34, 29, 22), 'sensex': (31, 28, 20)}   # on a trending day (price below both the day's open
+                                  # and the CPR, or above both) a trade against the move reached CPR_TP before CPR_SL
+                                  # against it on this % of the moments, 2023-2026, before 10:30 / 10:30-12:30 /
+                                  # after 12:30; break-even 41% / 37%; no reversal sign changed that
+                                  # (research/quant/reversal_odds.py). The chart, the app and an alert say so
 SWEEP = False                     # 'classic' rules: also trade liquidity sweeps of yesterday's high / low
 SWEEP_MAX = 3                     # at most this many sweep trades a day
 STOP_PCT = 0.21                   # 'rr' rules: the most a stop may be from entry, in % of price (Sensex ~150, Nifty ~47 points)
@@ -738,6 +743,32 @@ def cpr_trades(cx, c1, upto, over):
             out.append(t)
     return out
 
+def trend_now(cx, c1, upto):
+    """The day's trend at the last 5-minute close (from 9:35): falling = below both the day's open and the CPR, rising =
+    above both, else none; with how often price reversed from moments like it (REV_CHANCE). None before 9:35."""
+    b5 = [b for b in candles5(c1, upto) if b[0] >= RANGE_END] if c1 else []
+    if not b5:
+        return None
+    m, c, o0, lv, nm = b5[-1][0] + 5, b5[-1][4], c1[0][1], cx['lv'], cx['name']
+    d = -1 if c < min(o0, lv['bot']) else 1 if c > max(o0, lv['top']) else 0
+    if not d:
+        return dict(dir=0, m=m, pct=None, short="No clear trend: price is between the day's open and the CPR.",
+                    text=f"{nm} {hhmm(m)}: no clear trend (price {f2(c)} is between the day's open {f2(o0)} and the CPR).")
+    pct = REV_CHANCE.get(nm.lower(), (None,) * 3)[0 if m < 630 else 1 if m < 750 else 2]
+    tp, sl = CPR_TP.get(nm.lower(), 0), CPR_SL.get(nm.lower(), 0)
+    word, lvl = ('FALLING', min(o0, lv['bot'])) if d < 0 else ('RISING', max(o0, lv['top']))
+    when = 'before 10:30' if m < 630 else 'between 10:30 and 12:30' if m < 750 else 'after 12:30'
+    against = 'BUY' if d < 0 else 'SELL'
+    short = (f"{word} DAY: no sign of a reversal. Only {pct}% of such moments turned {tp:g} pts the other way before "
+             f"{sl:g} more {'down' if d < 0 else 'up'}: don't {against} against it (while {'below' if d < 0 else 'above'} {f2(lvl)}).")
+    text = (f"{nm} {hhmm(m)} {word} DAY: price {f2(c)} is {'below' if d < 0 else 'above'} the day's open {f2(o0)} and the CPR "
+            f"{f2(lv['bot'] if d < 0 else lv['top'])}. No sign of a reversal: from moments like this ({when}, 2023-2026) price went "
+            f"{tp:g} points {'up' if d < 0 else 'down'} before {sl:g} more {'down' if d < 0 else 'up'} only {pct}% of the time; "
+            f"trades against the move lost money in every year, and no reversal sign tested (new {'lows' if d < 0 else 'highs'} "
+            f"stopping, RSI, volume, support levels, a {'green' if d < 0 else 'red'} candle) changed that. Don't {against} against "
+            f"it while price stays {'below' if d < 0 else 'above'} {f2(lvl)}.")
+    return dict(dir=d, m=m, pct=pct, short=short, text=text)
+
 def run_fixed(c1, side, e, start, stp, tgt, last_m, over, cost):
     """Stop, target, time limit (close of minute last_m), 3:15. No booking half, no trailing."""
     for m, o, h, l, c in c1:
@@ -1088,6 +1119,10 @@ def messages(cx, ts, c1, upto, lots):
                    f"Stop {f2(t['stp0'])} ({sn or 'other side of the 15-minute range'}). Book half at "
                    f"{f2(t['e'] + t['side'] * 0.25 * t['R'])}, then stop to entry; after {f2(t['e'] + t['side'] * t['R'])} "
                    "trail the stop 1R behind the best price.")
+        tn = trend_now(cx, c1, t['m']) if t['src'] != 'CPR BREAK' else None
+        if tn and tn['dir'] == -t['side']:
+            how += (f" CAREFUL: this is against today's trend (price {'below' if tn['dir'] < 0 else 'above'} the day's open and "
+                    "the CPR); calls like this won only about 3 in 10 in 2023-2026 and lost money overall.")
         tg = target_levels(cx, c1, t['side'], t['e'], t['known'], half_price(t))
         pr = t_probs(cx['name'], t['src'])
         pc = lambda k: f", {pr['t' + str(k + 1)]}% of such calls got there" if pr and k == 0 else (f" {pr['t' + str(k + 1)]}%" if pr else '')
@@ -1108,6 +1143,9 @@ def messages(cx, ts, c1, upto, lots):
             x = t['exit']
             out.append((tid + ('out',), x['m'] + 1, f"{nm} {hhmm(x['m'])} EXIT ({x['why']}) at {f2(x['px'])}: {x['pnl']:+.0f} pts "
                         f"after costs (about Rs {rupees(cx, x['pnl'], lots):+,.0f} at {lots} lots).", True))
+    tn = trend_now(cx, c1, upto)
+    if tn and tn['dir']:
+        out.append((('trend', tn['dir']), tn['m'], tn['text'], True))
     for m, side, e in cx.get('cpr_none') or []:
         out.append((('cprnone', side), m + 1, f"{nm} {hhmm(m)} first touch of the CPR {'top' if side > 0 else 'bottom'} at "
                     f"{f2(e)}: no CPR BREAK call (none of its four conditions today).", False))
@@ -1396,7 +1434,8 @@ def app_state():
         lv = live_now(n) if d.get('day') == str(now_ist().date()) else None
         out['indices'][n] = dict(name=d.get('name'), day=d.get('day'), status=d.get('status'), plan=PLANS.get(n, ''),
                                  last=lv[0] if lv else d['candles'][-1][4] if d.get('candles') else None,
-                                 live=lv[1] if lv else None, calls=d.get('calls', []), updated=d.get('updated'))
+                                 live=lv[1] if lv else None, calls=d.get('calls', []), updated=d.get('updated'),
+                                 trend=d.get('trend'))
     return out
 
 def app_ota():
@@ -1501,6 +1540,8 @@ def chart_update(n, cx, c_all, ts, got, day):
     d = dict(name=cx['name'], day=day, yday_date=cx['prev'], yday=[list(x) for x in cx['yday']],
              candles=[list(x) for x in c_all], levels=levels, marks=sorted(marks, key=lambda k: k['m']),
              rows=rows, boxes=boxes, status=status)
+    tn = trend_now(cx, upto_c, got)
+    d['trend'] = dict(dir=tn['dir'], short=tn['short'], pct=tn['pct']) if tn else None
     d['ver'] = hashlib.sha256(json.dumps(d, sort_keys=True).encode()).hexdigest()[:12]   # changes with what is drawn
     CHART_DATA[n] = dict(d, updated=now_ist().strftime('%H:%M:%S'), calls=calls)
 
@@ -1521,6 +1562,9 @@ button.on{color:#2962ff;background:#1e222d;font-weight:600}
 #legend b{font-weight:600;color:#d1d4dc;margin-right:6px}
 #legend i{font-style:normal;color:#787b86;margin-left:6px}
 .up{color:#26a69a}.dn{color:#ef5350}
+#trend{font-size:12px;line-height:1.4;padding:4px 8px;background:#1e222d;color:#9598a1;border-bottom:1px solid #2a2e39}
+#trend.dn{background:#c62828;color:#fff;font-weight:600}#trend.up{background:#00796b;color:#fff;font-weight:600}
+#trend.hidden{display:none}
 #st{font-size:12px;color:#787b86;padding:5px 8px;border-top:1px solid #2a2e39}
 #st .lv{color:#26a69a;font-weight:600}
 table{width:100%;border-collapse:collapse;font-size:13px}td,th{padding:5px 8px;border-bottom:1px solid #2a2e39;text-align:left}
@@ -1532,12 +1576,17 @@ th{color:#787b86;font-weight:normal}
 #panel h4{margin:8px;font-size:13px;color:#d1d4dc}
 </style></head><body>
 <div id="bar"></div>
+<div id="trend" class="hidden"></div>
 <div id="wrap"><div id="c"></div><div id="legend"></div></div>
 <div id="st">loading...</div>
 <div id="panel" class="hidden"><h4>Today's trades</h4>
 <table><thead><tr><th>Time</th><th>Trade</th><th>Entry</th><th>Stop</th><th>Result</th></tr></thead><tbody id="list"></tbody></table>
 <h4>How to read it</h4>
-<div id="key">The % after T1 / T2 / T3: how often calls of this kind got there (2023-2026; after T1, before price came
+<div id="key"><b>The red / green bar at the top</b>: a FALLING day (price below both the day's open and the CPR) or a
+RISING day (above both). From moments like that (2023-2026) price turned 60 Nifty / 200 Sensex points the other way before
+going 35 / 100 further only about 1 time in 3 before 10:30, 1 in 4 to 12:30 and 1 in 5 after; trades against the move lost
+money in every year and no reversal sign tested changed that. So: don't trade against it. Grey: no clear trend.<br>
+The % after T1 / T2 / T3: how often calls of this kind got there (2023-2026; after T1, before price came
 back to the entry). <b>SL</b>: the stop loss when the trade starts. <b>BE</b> (breakeven): after half is booked at T1 the stop
 moves to the entry price, so the rest can't lose. <b>Trailing SL</b>: once price has gone as far beyond the entry as the
 first stop was (1R), the stop follows 1R behind the best price, locking in profit. Each trade is drawn like TradingView's long / short position tool: green from the entry to T1 (where half is
@@ -1691,6 +1740,7 @@ function buttons() {
 function clear() {                          // another index: nothing of the last one stays on the chart
   plines.forEach((p) => s.removePriceLine(p)); plines = []; linesKey = ''; D = null;
   s.setData([]); s.setMarkers([]); pos.set([]); $('list').innerHTML = ''; $('legend').innerHTML = ''; $('st').textContent = 'loading...';
+  $('trend').className = 'hidden';
 }
 const keyq = () => { const k = new URLSearchParams(location.search).get('key'); return k ? '&key=' + encodeURIComponent(k) : ''; };
 function status() {
@@ -1719,6 +1769,9 @@ function draw() {
   }
   if (!hover) legend(lastBar());
   status();
+  const T = D.trend, tb = $('trend');
+  tb.className = T ? (T.dir < 0 ? 'dn' : T.dir > 0 ? 'up' : '') : 'hidden';
+  tb.textContent = T ? T.short : '';
   $('list').innerHTML = D.rows.map((r) => '<tr>' + r.map((x) => '<td>' + x + '</td>').join('') + '</tr>').join('') ||
     '<tr><td colspan="5">No trades yet today.</td></tr>';
 }

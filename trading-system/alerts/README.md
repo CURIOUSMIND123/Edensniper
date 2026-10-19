@@ -45,6 +45,14 @@ Alerts appear on the screen (with a beep) and, if you set it up, on your phone t
   2025 / 2026 after costs: Nifty +131 / +211 / +111 / +636 points (91 / 145 / 128 / 81 trades), Sensex +2,734 /
   +419 / +2,594 / +1,366 (103 / 156 / 127 / 90); the target came first on 34-46% (break-even 41% / 37%)
   (`research/quant/cpr_plus.py`; the program's own trades match that test). `CPR_CALLS = False` turns them off.
+  **Trend / no reversal** (from 19 October 2026): at each 5-minute close from 9:35, a FALLING day (price below both
+  the day's open and the CPR) or a RISING day (above both). From such moments in 2023-2026 price turned 60 / 200
+  points the other way before 35 / 100 more only about 1 time in 3 before 10:30, 1 in 4 to 12:30, 1 in 5 after
+  (`REV_CHANCE`; break-even 41% / 37%), and no reversal sign changed that (`research/quant/reversal_odds.py`). The
+  chart shows it in a red / green bar at the top, the app on the Calls screen, and an alert says it once a day per
+  direction: "FALLING DAY ... No sign of a reversal ... Don't BUY against it while price stays below X". A call
+  (other than CPR BREAK) against the trend says "CAREFUL: this is against today's trend" (such calls won about 3 in
+  10 and lost money).
   **Set for each index:** `VOLCHECK = {'nifty': False, 'sensex': True}` and `POC_DAYS = {'nifty': 1, 'sensex': 0}`:
   on Nifty the Magnet and the breakout buy only above yesterday's volume POC and sell only below it, with no volume
   check; on Sensex the volume check, with no POC filter (0). Tested on 2026 (`y2026_pocdays.py`): Nifty 93 trades,

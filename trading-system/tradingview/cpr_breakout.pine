@@ -41,6 +41,13 @@
 //   +131 / +211 / +111 / +636 points (target first on 34-46%; break-even 41%); Sensex 103 / 156 / 127 / 90 trades,
 //   +2,734 / +419 / +2,594 / +1,366 (35-42%; break-even 37%). Made money in every year on both indices; small on
 //   Nifty. A later touch (when the first met no condition) did worse. research/quant/cpr_plus.py, cpr_confluence.py.
+// TREND / NO REVERSAL (from 19 October 2026): at each 5-minute close from 9:35, a FALLING day = price below both the
+//   day's open and the CPR, a RISING day = above both. From such moments (2023-2026) price turned 60 Nifty / 200 Sensex
+//   points the other way before going 35 / 100 further only 34 / 29 / 22% of the time on Nifty (before 10:30 /
+//   10:30-12:30 / after), 31 / 28 / 20% on Sensex (break-even 41% / 37%); trades against the move lost money in every
+//   year, and no reversal sign tested (new lows stopping, RSI, volume, support levels, a green candle) changed that.
+//   The box says it ("FALLING DAY: no sign of a reversal ... don't BUY"), a label marks where it started, and an
+//   alert fires once a day per direction. research/quant/reversal_odds.py.
 // LIQUIDITY SWEEPS of yesterday's high / low (off by default; Settings): a 5-minute candle (9:30-2:30) goes above
 //   yesterday's high and closes back below it -> SELL; below yesterday's low and back above it -> BUY. Stop 0.02%
 //   beyond the candle, target 3x the stop, at most 3 a day. 2026 without the volume check: Nifty +2,993, Sensex
@@ -162,6 +169,7 @@ cbTpN  = input.float(60, "CPR break: target on Nifty, points", step = 5, group =
 cbSlN  = input.float(35, "CPR break: stop on Nifty, points", step = 5, group = G8)
 cbTpS  = input.float(200, "CPR break: target on Sensex, points", step = 10, group = G8)
 cbSlS  = input.float(100, "CPR break: stop on Sensex, points", step = 10, group = G8)
+trOn   = input.bool(true, "Say when it is a FALLING / RISING day with no sign of a reversal (box, label, alert)", group = G8, tooltip = "Falling: price below both the day's open and the CPR at a 5-minute close; rising: above both. 2023-2026, a trade against such a move won (60 / 200 before 35 / 100) only 34 / 29 / 22% of the time on Nifty, 31 / 28 / 20% on Sensex (before 10:30 / to 12:30 / after); break-even 41% / 37%.")
 G2 = "Display"
 cprPink = input.color(color.new(#e91e63, 0), "CPR colour", group = G2)
 cprNar  = input.color(color.new(#f57c00, 0), "CPR colour on narrow days", group = G2)
@@ -527,6 +535,8 @@ var int   nCb = 0
 var int   nCbWon = 0
 var float cbPts = 0.0
 var string cbMsg = ""
+var bool  trDnSaid = false     // the falling / rising day note given today
+var bool  trUpSaid = false
 var float lastG = na            // the plan trade's last result (for a trade that opens and closes inside one candle)
 var float lastEx = na
 var string lastWhy = ""
@@ -608,6 +618,8 @@ if newDay
         line.set_x2(cblnT, bar_index - 1)
         posGrow(cbbT, cbbR, cbbH, bar_index - 1)
     cbOpenT := false
+    trDnSaid := false
+    trUpSaid := false
     cbDoneUp := false
     cbDoneDn := false
     cbLastExit := -1
@@ -1114,6 +1126,21 @@ if showBoxes and volOpen
 if showBoxes and cbOpenT
     posGrow(cbbT, cbbR, cbbH, bar_index + 1)
 
+// the day's trend at the last 5-minute close, and how often price reversed from moments like it
+int   trM = barstate.isconfirmed ? mins + 5 : mins
+float trC = barstate.isconfirmed ? close : close[1]
+int   trDir = is5 and trOn and not shortMode and trM >= 575 and trM <= 930 and not na(dOpen) ? (trC < math.min(dOpen, bot) ? -1 : trC > math.max(dOpen, top) ? 1 : 0) : 0
+int   trPct = trM < 630 ? (close > 50000 ? 31 : 34) : trM < 750 ? (close > 50000 ? 28 : 29) : (close > 50000 ? 20 : 22)
+string trTxt = trDir == 0 ? "no clear trend (between the open and the CPR)" : (trDir < 0 ? "FALLING DAY: no sign of a reversal. Only " : "RISING DAY: no sign of a reversal. Only ") + str.tostring(trPct) + "% of such moments turned " + str.tostring(cbTP) + " pts the other way first: don't " + (trDir < 0 ? "BUY" : "SELL") + " against it (while " + (trDir < 0 ? "below " + fmt(math.min(dOpen, bot)) : "above " + fmt(math.max(dOpen, top))) + ")"
+if barstate.isconfirmed and trDir != 0 and (trDir < 0 ? not trDnSaid : not trUpSaid)
+    if trDir < 0
+        trDnSaid := true
+    else
+        trUpSaid := true
+    label.new(bar_index, trDir < 0 ? high : low, (trDir < 0 ? "FALLING DAY" : "RISING DAY") + "\nno sign of a reversal (" + str.tostring(trPct) + "%)", yloc = trDir < 0 ? yloc.abovebar : yloc.belowbar,
+              style = trDir < 0 ? label.style_label_down : label.style_label_up, color = trDir < 0 ? RED : GREEN, textcolor = color.white, size = size.small, tooltip = trTxt)
+    alert("CPRB " + syminfo.ticker + " " + trTxt, alert.freq_once_per_bar_close)
+
 showPD = timeframe.isintraday and (pdShow or (swOn and swShow and not shortMode))
 plot(showPD ? pH : na, "Yesterday's high", color = lc(color.new(#fdd835, 20)), style = plot.style_linebr)
 plot(showPD ? pL : na, "Yesterday's low", color = lc(color.new(#fdd835, 20)), style = plot.style_linebr)
@@ -1279,7 +1306,7 @@ if barstate.islast and cprOn
                         edgeName(edgeLbl, xb, x, "Next: 3-day volume line " + fmt(x), TEAL, size.small)
 
 // ---------------- status and results box ----------------
-var table tbl = table.new(position.top_right, 2, 13, bgcolor = color.new(chart.bg_color, 5), border_width = 1, border_color = color.new(GREY, 60), frame_width = 1, frame_color = GREY)
+var table tbl = table.new(position.top_right, 2, 14, bgcolor = color.new(chart.bg_color, 5), border_width = 1, border_color = color.new(GREY, 60), frame_width = 1, frame_color = GREY)
 cell(int r, string a, string b, color tc) =>
     table.cell(tbl, 0, r, a, text_color = GREY, text_size = size.small, text_halign = text.align_left)
     table.cell(tbl, 1, r, b, text_color = tc, text_size = size.small, text_halign = text.align_left)
@@ -1296,6 +1323,8 @@ if barstate.islast and showBox
     cell(8, "Of which volume-line trades", str.tostring(nVol) + " trades, " + str.tostring(nVolWon) + " won, " + pts(volPts) + " pts", volPts >= 0 ? GREEN : RED)
     if vcOn and not shortMode
         cell(10, "Volume, last " + str.tostring(vcN) + " candles", vcUp > vcDn ? "up candles heavier: BUYs allowed" : vcDn > vcUp ? "down candles heavier: SELLs allowed" : "even: no trades", vcUp > vcDn ? GREEN : vcDn > vcUp ? RED : GREY)
+    if trOn and not shortMode and is5
+        cell(13, "Trend now", trTxt, trDir < 0 ? RED : trDir > 0 ? GREEN : GREY)
     if cbOn and not shortMode
         cell(11, "Of which CPR break calls", str.tostring(nCb) + " trades, " + str.tostring(nCbWon) + " won, " + pts(cbPts) + " pts", cbPts >= 0 ? GREEN : RED)
         cell(12, "CPR break today", cbMsg, chart.fg_color)

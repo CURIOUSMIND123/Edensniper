@@ -1779,6 +1779,28 @@ can do it); at the touch itself it was about the same.
   with none of the four, so no SELL; the 9:35 touch of the CPR top was a BUY (inside the 15-minute range) and hit
   its stop at 9:55: Nifty −39, Sensex −112.
 
+## Is a reversal likely? (`reversal_odds.py`; on the chart from 19 October 2026)
+
+Every 5-minute close 9:30-2:30 on a trending day: FALLING = price below both the day's open and the CPR bottom,
+RISING = above both. From there, did price go 60 Nifty / 200 Sensex points AGAINST the move before 35 / 100 more with
+it (a reversal trade with the user's rule; break-even 41% / 37%, pure chance 37% / 33%)?
+
+| Reversal first | 2023 | 2024 | 2025 | 2026 |
+|---|---|---|---|---|
+| Nifty, every trending moment | 22% | 29% | 26% | 29% |
+| Sensex, every trending moment | 23% | 27% | 24% | 26% |
+
+- By time: Nifty 34% before 10:30, 29% 10:30-12:30, 22% after 12:30; Sensex 31% / 28% / 20%.
+- No sign of a reversal helped enough: new lows (highs) stopping, a bounce off the low, RSI oversold, the volume
+  turning, a daily level near, a green (red) candle, the size of the move. The best pairs still stayed below
+  break-even in most years (Nifty 31-42%, Sensex 27-39%, all early in the day).
+- A trade WITH the move did no better from those moments (26-32%): once the trend is there, 60 more before a 35
+  bounce is not likely either.
+- The calls taken against the day's trend (other than CPR BREAK): Nifty 45, 31% won, −244 points; Sensex 7, −216.
+  CPR BREAK calls against it were few (25 / 23) and made money.
+- So the chart, the app and an alert say "FALLING / RISING DAY: no sign of a reversal ... don't BUY / SELL against
+  it" with the chance for the time of day, and a call against the trend carries a warning.
+
 ## How to re-check all of this
 
 - `python research/fair_price_backtest.py` downloads the candles and re-runs the Fair Price test.

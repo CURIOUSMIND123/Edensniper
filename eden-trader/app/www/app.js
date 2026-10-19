@@ -112,6 +112,7 @@ async function callsView() {
       parts.push(`<div class="card">
         <div class="row"><div class="idx">${esc(d.name)}</div><div class="price">${num(d.last)}${d.live ? `<span class="livepx">● live ${esc(d.live)}</span>` : ''}</div></div>
         <div class="status">${esc(d.day || '')} · ${calls.length ? calls.length + ' call' + (calls.length > 1 ? 's' : '') + ' today' : 'no call yet today'} · updated ${esc(d.updated || '')}</div>
+        ${d.trend ? `<div class="trend ${d.trend.dir < 0 ? 'dn' : d.trend.dir > 0 ? 'up' : ''}">${esc(d.trend.short)}</div>` : ''}
         ${calls.slice().reverse().map(callCard).join('')}
         ${d.plan ? `<details><summary>Today's plan</summary><pre>${esc(d.plan)}</pre></details>` : ''}
       </div>`);

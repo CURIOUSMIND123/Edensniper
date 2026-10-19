@@ -13,6 +13,9 @@ Nifty / Sensex CPR Breakout calls on your phone: an Android app with **notificat
   pivots R1-R3 / S1-S3, yesterday's high / low, the 15-minute range, the volume lines, the POC). In every call, on the
   chart and in the history, with how far each call went its way and against it. The trades themselves (entries,
   stop, book half, trail) are exactly the strategy's.
+- **Trend / no reversal**: on the Calls screen and at the top of the chart, a red bar on a FALLING day (price below
+  both the day's open and the CPR), green on a RISING day: "no sign of a reversal ... don't BUY / SELL against it",
+  with how often such moments reversed in 2023-2026 (about 1 in 3 before 10:30, 1 in 4 to 12:30, 1 in 5 after).
 - **History**: a call is a **success** when the index went at least **50 points (Nifty) / 150 points (Sensex)** its
   way before the stop loss. With the largest stop Nifty 55 / Sensex 170 points (from 17 October 2026), the 2026 calls
   to 9 October: Nifty 62 of 97 (64%), Sensex 60 of 85 (71%); 70% / 78% of them made money. 2023-2026: T1 (book half)

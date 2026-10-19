@@ -32,6 +32,12 @@ File: [`cpr_breakout.pine`](cpr_breakout.pine). An indicator; reads 1-minute can
   100, out by 3:15. Their own position boxes and trades (one may be open together with another call); the box shows
   them on their own row. 2023 / 2024 / 2025 / 2026: Nifty +131 / +211 / +111 / +636, Sensex +2,734 / +419 / +2,594 /
   +1,366 points after costs (`research/quant/cpr_plus.py`).
+- **Trend / no reversal** (from 19 October 2026, on by default): at each 5-minute close from 9:35, a FALLING day
+  (price below both the day's open and the CPR) or a RISING day (above both). A red / green label marks where it
+  starts ("FALLING DAY, no sign of a reversal (22%)"), the box says it on the "Trend now" row, and an alert fires once
+  a day per direction. From such moments (2023-2026) price turned 60 / 200 points the other way before 35 / 100 more
+  only 34 / 29 / 22% of the time on Nifty (before 10:30 / to 12:30 / after), 31 / 28 / 20% on Sensex; no reversal
+  sign tested changed that (`research/quant/reversal_odds.py`).
 - **Liquidity sweeps** of yesterday's high / low (yellow lines) are in their own settings group, off by default:
   more points (Nifty +2,993, Sensex +9,279 without the volume check) but twice the trades.
 - Also tested and not added: the squeeze, Smart Money Concepts, the low-volume areas of the last 2 days' volume
