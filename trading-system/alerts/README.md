@@ -69,6 +69,13 @@ Alerts appear on the screen (with a beep) and, if you set it up, on your phone t
 
 The chart shows a waiting limit order as a blue "LIMIT" line.
 
+## The option chain and option charts
+
+`/options` (with the key; also the app's Options screen): the current expiry's chain for both indices from Groww's public
+data (`option_chain()`, refreshed at most every 3 seconds while someone looks), and a chart of any contract
+(`option_chart()`: today's 1-minute candles from Upstox, the minutes after them from the live prices, the option's CPR
+from its previous day). Data: `/api/options?i=nifty|sensex`, `/api/optchart?ex=NSE|BSE&t=<token>`.
+
 ## The phone app (Eden Trader)
 
 The same program also serves the **Eden Trader** Android app (repository `CURIOUSMIND123/eden-trader`, which carries a

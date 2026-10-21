@@ -221,6 +221,110 @@ def live_prices(names):
     LIVE_THREAD.append(threading.Thread(target=run, daemon=True))
     LIVE_THREAD[0].start()
 
+# ---------------- the option chain (current expiry) and option charts, for the Options screen ----------------
+OPT_IDS = {'nifty': 'nifty', 'sensex': 'sp-bse-sensex'}     # Groww's names for the indices
+OPT_URL = 'https://groww.in/v1/api/option_chain_service/v1/option_chain/derivatives/{}'
+OPT_STRIKES = 12                  # strikes shown each side of the at-the-money one
+OPT = {}                          # index -> (time.time(), the chain as the screen shows it)
+OPT_BARS = {}                     # (exchange, token) -> {'day', 'bars': {minute: [o, h, l, c]}} from the live prices
+OPT_CANDLES = {}                  # (exchange, token) -> (time.time(), day, [[minute, o, h, l, c]]) from Upstox
+OPT_CPR = {}                      # (exchange, token, day) -> the option's CPR from its previous day
+OPT_LOCK = threading.Lock()
+
+def groww_json(url):
+    req = urllib.request.Request(url, headers={'Accept': 'application/json', 'User-Agent': 'Mozilla/5.0'})
+    with urllib.request.urlopen(req, timeout=8) as r:
+        return json.load(r)
+
+def option_chain(n, fresh=3.0):
+    """The current expiry's calls and puts around the at-the-money strike, live (Groww's public data, at most `fresh`
+    seconds old). Each price also builds that contract's minute still forming, for its chart."""
+    with OPT_LOCK:
+        c = OPT.get(n)
+        if c and time.time() - c[0] < fresh:
+            return c[1]
+    d = groww_json(OPT_URL.format(OPT_IDS[n]))
+    lp, oc = d.get('livePrice') or {}, d['optionChain']
+    spot = float(lp.get('value') or 0)
+    ts = float(lp.get('tsInMillis') or 0)
+    ts = ts / 1000 if ts > 1e11 else ts
+    ex = SPEC[n]['live'][0]
+    rows = sorted(((r['callOption']['strikePrice'] / 100, r.get('callOption') or {}, r.get('putOption') or {})
+                   for r in oc['optionChains'] if r.get('callOption')), key=lambda x: x[0])
+    if not rows:
+        raise ValueError('no option chain')
+    atm = min(range(len(rows)), key=lambda i: abs(rows[i][0] - spot))
+    now = now_ist()
+    day, m = str(now.date()), now.hour * 60 + now.minute
+    live = bool(ts) and abs(time.time() - ts) < 120 and OPEN <= m < CLOSE and now.weekday() < 5
+    def side(o):
+        if not o:
+            return None
+        t, ltp = str(o.get('token') or ''), float(o.get('ltp') or 0)
+        if live and t and ltp > 0:
+            with OPT_LOCK:
+                B = OPT_BARS.get((ex, t))
+                if not B or B['day'] != day:
+                    B = OPT_BARS[(ex, t)] = dict(day=day, bars={})
+                b = B['bars'].get(m)
+                if b:
+                    b[1], b[2], b[3] = max(b[1], ltp), min(b[2], ltp), ltp
+                else:
+                    B['bars'][m] = [ltp, ltp, ltp, ltp]
+                for k in [k for k in B['bars'] if k < m - 15]:
+                    del B['bars'][k]
+        oi = o.get('openInterest') or 0
+        return dict(t=t, name=o.get('longDisplayName', ''), ltp=ltp, chg=round(float(o.get('dayChange') or 0), 2),
+                    pct=round(float(o.get('dayChangePerc') or 0), 1), oi=oi, doi=oi - (o.get('prevOpenInterest') or 0),
+                    vol=o.get('volume') or 0)
+    out = dict(name=SPEC[n]['name'], ex=ex, spot=spot, live=live, lot=SPEC[n]['lot'],
+               at=dt.datetime.fromtimestamp(ts, IST).strftime('%H:%M:%S') if ts else '',
+               expiry=(oc.get('expiryDetailsDto') or {}).get('currentExpiry'),
+               rows=[dict(k=k, atm=i == atm, ce=side(ce), pe=side(pe)) for i, (k, ce, pe) in enumerate(rows)
+                     if abs(i - atm) <= OPT_STRIKES])
+    with OPT_LOCK:
+        OPT[n] = (time.time(), out)
+    return out
+
+def option_chart(ex, t, fresh=20.0):
+    """One option contract: today's 1-minute candles (Upstox, complete minutes; the last session's before the open),
+    the minutes after them from the live prices, and the option's CPR from its previous day."""
+    key, now = (ex, t), time.time()
+    with OPT_LOCK:
+        c = OPT_CANDLES.get(key)
+    if not c or now - c[0] > fresh:
+        ik = f"{ex}_FO|{t}"
+        rows = fetch_today(ik)
+        if not rows:
+            d0 = now_ist().date()
+            rows = fetch_range(ik, d0 - dt.timedelta(days=7), d0 - dt.timedelta(days=1))
+        day = max(rows) if rows else str(now_ist().date())
+        mm = rows.get(day, {})
+        c = (now, day, [[m] + list(mm[m][:4]) for m in sorted(mm)])
+        with OPT_LOCK:
+            OPT_CANDLES[key] = c
+            for k in [k for k in OPT_CANDLES if now - OPT_CANDLES[k][0] > 3600]:
+                del OPT_CANDLES[k]
+    _, day, cs = c
+    with OPT_LOCK:
+        B = OPT_BARS.get(key)
+        last = cs[-1][0] if cs else OPEN - 1
+        live = [[m] + list(b) for m, b in sorted(B['bars'].items()) if m > last] if B and B['day'] == day else []
+    ck = (ex, t, day)
+    if ck not in OPT_CPR:
+        try:
+            d0 = dt.date.fromisoformat(day)
+            daily = fetch_daily(f"{ex}_FO|{t}", d0 - dt.timedelta(days=10), d0 - dt.timedelta(days=1))
+            if daily:
+                h, l, cl = daily[max(daily)][1:]
+                lv = levels(h, l, cl)
+                OPT_CPR[ck] = dict(top=round(lv['top'], 2), p=round(lv['p'], 2), bot=round(lv['bot'], 2), yh=h, yl=l)
+            else:
+                OPT_CPR[ck] = None
+        except Exception:
+            pass                                      # no CPR this time; asked again with the next chart
+    return dict(day=day, candles=cs + live, cpr=OPT_CPR.get(ck))
+
 def live_now(n, fresh=20):
     """(price, 'hh:mm:ss') if the live price is recent, else None."""
     with LIVE_LOCK:
@@ -1813,6 +1917,160 @@ setInterval(tick, 1000);
 setInterval(() => { if (!loading) full(); }, 60000);
 </script></body></html>"""
 
+OPTIONS_HTML = """<!doctype html><html><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#131722"><title>Options</title>
+<style>
+html,body{height:100%}
+body{margin:0;background:#131722;color:#d1d4dc;font:13px -apple-system,BlinkMacSystemFont,Roboto,Ubuntu,sans-serif;display:flex;flex-direction:column;overflow:hidden}
+#bar{display:flex;flex-wrap:wrap;gap:2px;align-items:center;padding:4px 6px;border-bottom:1px solid #2a2e39}
+button{background:transparent;color:#d1d4dc;border:0;border-radius:4px;padding:7px 9px;font:inherit}
+button.on{color:#2962ff;background:#1e222d;font-weight:600}
+.sep{width:1px;height:20px;background:#2a2e39;margin:0 4px}
+#info{margin-left:auto;font-size:11px;color:#787b86;text-align:right;line-height:1.3;padding-right:2px}
+#info b{color:#d1d4dc;font-size:13px}
+#head{display:flex;flex-wrap:wrap;gap:4px 10px;align-items:baseline;padding:5px 8px;border-bottom:1px solid #2a2e39;min-height:18px}
+#head .nm{font-weight:600}
+#cw{position:relative;height:42%;min-height:170px;border-bottom:1px solid #2a2e39}
+#c{position:absolute;inset:0}
+#chain{flex:1;overflow:auto;-webkit-overflow-scrolling:touch}
+table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+th{position:sticky;top:0;background:#1e222d;color:#787b86;font-weight:normal;font-size:11px;padding:5px 3px;z-index:1}
+td{padding:7px 3px;text-align:right;border-bottom:1px solid #1e222d;font-size:12px;white-space:nowrap}
+td.k{text-align:center;font-weight:600;background:#1e222d;color:#d1d4dc}
+tr.atm td.k{background:#2962ff;color:#fff}
+td.itm{background:rgba(245,166,35,0.07)}
+td.px{cursor:pointer;font-weight:600;color:#d1d4dc}
+td.px small{display:block;font-weight:normal;font-size:10px}
+td.sel{box-shadow:inset 0 0 0 2px #2962ff}
+tr.spot td{padding:0;height:0;border-bottom:2px solid #f5a623}
+.up{color:#26a69a!important}.dn{color:#ef5350!important}.mut{color:#787b86}
+#msg{padding:10px;color:#787b86}
+</style></head><body>
+<div id="bar"><button data-i="nifty" class="on">NIFTY</button><button data-i="sensex">SENSEX</button><span class="sep"></span>
+<button data-tf="1" class="on">1m</button><button data-tf="3">3m</button><button data-tf="5">5m</button><div id="info"></div></div>
+<div id="head"><span class="mut">Tap a call or put price below to see its chart.</span></div>
+<div id="cw"><div id="c"></div></div>
+<div id="chain"><table><thead><tr><th>OI chg</th><th>OI</th><th>CALL</th><th>STRIKE</th><th>PUT</th><th>OI</th><th>OI chg</th></tr></thead>
+<tbody id="rows"></tbody></table><div id="msg">loading...</div></div>
+<script src="/lwc.js"></script>
+<script>
+const $ = (id) => document.getElementById(id);
+const keyq = () => { const k = new URLSearchParams(location.search).get('key'); return k ? '&key=' + encodeURIComponent(k) : ''; };
+const fmt = (x) => x == null ? '-' : Number(x).toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+const big = (x) => { const a = Math.abs(x), s = x < 0 ? '-' : ''; return a >= 1e7 ? s + (a / 1e7).toFixed(2) + 'Cr' : a >= 1e5 ? s + (a / 1e5).toFixed(1) + 'L' : a >= 1e3 ? s + (a / 1e3).toFixed(1) + 'K' : s + a; };
+let idx = 'nifty', tf = 1, C = null, sel = null, chainBusy = false, chartBusy = false, fitted = '', lines = [], centred = '';
+const box = $('c');
+const chart = LightweightCharts.createChart(box, {
+  layout: {background: {type: 'solid', color: '#131722'}, textColor: '#d1d4dc', fontSize: 12},
+  grid: {vertLines: {color: 'rgba(42,46,57,0.5)'}, horzLines: {color: 'rgba(42,46,57,0.5)'}},
+  rightPriceScale: {borderColor: '#2a2e39', scaleMargins: {top: 0.12, bottom: 0.08}},
+  timeScale: {timeVisible: true, secondsVisible: false, borderColor: '#2a2e39', rightOffset: 6},
+  crosshair: {mode: 0}, localization: {locale: 'en-IN', priceFormatter: fmt}});
+const s = chart.addCandlestickSeries({upColor: '#26a69a', downColor: '#ef5350', borderVisible: false,
+  wickUpColor: '#26a69a', wickDownColor: '#ef5350', priceLineStyle: 1});
+new ResizeObserver(() => chart.applyOptions({width: box.clientWidth, height: box.clientHeight})).observe(box);
+const ts = (day, m) => { const [y, mo, d] = day.split('-').map(Number); return Date.UTC(y, mo - 1, d) / 1000 + m * 60; };
+const bucket = (m) => 555 + Math.floor((m - 555) / tf) * tf;
+function agg(day, rows) {
+  const out = [];
+  for (const [m, o, h, l, c] of rows) {
+    const t = ts(day, bucket(m)), x = out[out.length - 1];
+    if (x && x.time === t) { x.high = Math.max(x.high, h); x.low = Math.min(x.low, l); x.close = c; }
+    else out.push({time: t, open: o, high: h, low: l, close: c});
+  }
+  return out;
+}
+function cell(o, typ, itm) {
+  if (!o) return '<td></td><td></td><td></td>';
+  const chg = o.chg > 0 ? 'up' : o.chg < 0 ? 'dn' : 'mut', on = sel && sel.t === o.t ? ' sel' : '', it = itm ? ' itm' : '';
+  const px = `<td class="px${it}${on}" data-t="${o.t}" data-typ="${typ}">${fmt(o.ltp)}<small class="${chg}">${o.pct > 0 ? '+' : ''}${o.pct}%</small></td>`;
+  const oi = `<td class="${it}">${big(o.oi)}</td>`, doi = `<td class="${it} ${o.doi > 0 ? 'up' : o.doi < 0 ? 'dn' : 'mut'}">${big(o.doi)}</td>`;
+  return typ === 'CE' ? doi + oi + px : px + oi + doi;
+}
+function render() {
+  if (!C) return;
+  if (C.error) { $('msg').textContent = C.error; return; }
+  $('msg').textContent = C.live ? '' : 'Market closed: last prices.';
+  $('info').innerHTML = `<b>${C.name} ${fmt(C.spot)}</b><br>expiry ${C.expiry || '-'} &middot; ${C.live ? 'live ' : ''}${C.at}`;
+  let html = '', spotDone = false;
+  for (const r of C.rows) {
+    if (!spotDone && r.k > C.spot) { html += '<tr class="spot"><td colspan="7"></td></tr>'; spotDone = true; }
+    html += `<tr class="${r.atm ? 'atm' : ''}">${cell(r.ce, 'CE', r.k < C.spot)}<td class="k">${r.k.toLocaleString('en-IN')}</td>${cell(r.pe, 'PE', r.k > C.spot)}</tr>`;
+  }
+  $('rows').innerHTML = html;
+  for (const td of document.querySelectorAll('td.px')) td.onclick = () => pick(td.dataset.t, td.dataset.typ);
+  const a = document.querySelector('tr.atm');
+  if (a && centred !== idx) { centred = idx; const ch = $('chain'); ch.scrollTop = Math.max(0, a.offsetTop - ch.clientHeight / 2); }
+  if (sel) {
+    const r = C.rows.find((r) => (r.ce && r.ce.t === sel.t) || (r.pe && r.pe.t === sel.t));
+    const o = r && (r.ce && r.ce.t === sel.t ? r.ce : r.pe);
+    if (o) $('head').innerHTML = `<span class="nm">${o.name}</span><b>${fmt(o.ltp)}</b><span class="${o.chg >= 0 ? 'up' : 'dn'}">${o.chg >= 0 ? '+' : ''}${fmt(o.chg)} (${o.pct}%)</span>` +
+      `<span class="mut">OI ${big(o.oi)} (${o.doi >= 0 ? '+' : ''}${big(o.doi)}) &middot; lot ${C.lot}</span>`;
+  }
+}
+function pick(t, typ, quiet) {
+  sel = {t, typ, ex: C.ex}; fitted = '';
+  if (!quiet) { const u = new URL(location.href); u.searchParams.set('t', t); u.searchParams.set('i', idx); history.replaceState(null, '', u); }
+  render(); loadChart();
+}
+async function loadChain() {
+  if (chainBusy) return;
+  chainBusy = true;
+  const want = idx;
+  try {
+    const d = await (await fetch('/api/options?i=' + want + keyq(), {cache: 'no-store'})).json();
+    if (want !== idx) return;
+    C = d;
+    if (!sel && !d.error) {
+      const t0 = new URLSearchParams(location.search).get('t'), atm = d.rows.find((r) => r.atm);
+      const has = t0 && d.rows.some((r) => (r.ce && r.ce.t === t0) || (r.pe && r.pe.t === t0));
+      if (has) pick(t0, d.rows.some((r) => r.ce && r.ce.t === t0) ? 'CE' : 'PE', true);
+      else if (atm && atm.ce) pick(atm.ce.t, 'CE', true);
+    }
+    render();
+  } catch (e) { $('msg').textContent = 'No data: is the program running?'; }
+  finally { chainBusy = false; }
+}
+async function loadChart() {
+  if (!sel || chartBusy) return;
+  chartBusy = true;
+  const my = sel.t;
+  try {
+    const d = await (await fetch(`/api/optchart?ex=${sel.ex}&t=${sel.t}` + keyq(), {cache: 'no-store'})).json();
+    if (!sel || sel.t !== my || d.error) return;
+    s.setData(agg(d.day, d.candles));
+    lines.forEach((l) => s.removePriceLine(l)); lines = [];
+    if (d.cpr) {
+      for (const [p, t, w] of [[d.cpr.top, 'CPR top', 2], [d.cpr.p, 'Pivot', 1], [d.cpr.bot, 'CPR bottom', 2]])
+        lines.push(s.createPriceLine({price: p, color: '#e91e63', lineWidth: w, lineStyle: 0, axisLabelVisible: true, title: t}));
+      lines.push(s.createPriceLine({price: d.cpr.yh, color: '#fdd835', lineWidth: 1, lineStyle: 2, axisLabelVisible: false, title: 'Yesterday high'}));
+      lines.push(s.createPriceLine({price: d.cpr.yl, color: '#fdd835', lineWidth: 1, lineStyle: 2, axisLabelVisible: false, title: 'Yesterday low'}));
+    }
+    if (fitted !== my + tf) { fitted = my + tf; chart.timeScale().fitContent(); }
+  } catch (e) {}
+  finally { chartBusy = false; }
+}
+for (const b of document.querySelectorAll('#bar button')) b.onclick = () => {
+  if (b.dataset.i) {
+    if (b.dataset.i === idx) return;
+    idx = b.dataset.i; sel = null; C = null; s.setData([]); lines.forEach((l) => s.removePriceLine(l)); lines = [];
+    $('rows').innerHTML = ''; $('msg').textContent = 'loading...'; $('head').innerHTML = '';
+    for (const x of document.querySelectorAll('#bar button[data-i]')) x.classList.toggle('on', x === b);
+    const u = new URL(location.href); u.searchParams.delete('t'); u.searchParams.set('i', idx); history.replaceState(null, '', u);
+    loadChain();
+  } else {
+    tf = +b.dataset.tf; fitted = '';
+    for (const x of document.querySelectorAll('#bar button[data-tf]')) x.classList.toggle('on', x === b);
+    loadChart();
+  }
+};
+const i0 = new URLSearchParams(location.search).get('i');
+if (i0 === 'sensex') { idx = 'sensex'; for (const x of document.querySelectorAll('#bar button[data-i]')) x.classList.toggle('on', x.dataset.i === idx); }
+loadChain();
+setInterval(loadChain, 3000);
+setInterval(loadChart, 3000);
+</script></body></html>"""
+
 LWC_URL = 'https://cdn.jsdelivr.net/npm/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js'
 LWC_FILE = os.path.join(DATA_DIR, 'lightweight-charts-4.1.3.js')
 
@@ -1857,22 +2115,23 @@ def key_ok(handler):
 
 CHART_PAGE = {}
 
-def chart_page():
-    """CHART_HTML, read again from this file whenever the file changes (on a server, a change to the chart page
-    shows without restarting the program)."""
+def chart_page(var='CHART_HTML'):
+    """CHART_HTML (or OPTIONS_HTML), read again from this file whenever the file changes (on a server, a change to
+    the page shows without restarting the program)."""
     src = os.path.abspath(__file__)
+    P = CHART_PAGE.setdefault(var, {})
     try:
         mt = os.path.getmtime(src)
-        if CHART_PAGE.get('mt') != mt:
+        if P.get('mt') != mt:
             import ast
             with open(src, encoding='utf-8') as f:
                 tree = ast.parse(f.read())
             html = next(n.value.value for n in tree.body if isinstance(n, ast.Assign)
-                        and getattr(n.targets[0], 'id', '') == 'CHART_HTML')
-            CHART_PAGE.update(mt=mt, html=html)
+                        and getattr(n.targets[0], 'id', '') == var)
+            P.update(mt=mt, html=html)
     except Exception:
         pass
-    return CHART_PAGE.get('html', CHART_HTML)
+    return P.get('html', globals()[var])
 
 def serve_chart(names):
     """Serve the chart page: on this phone / computer only (127.0.0.1), or as set by CPRB_CHART_HOST on a server."""
@@ -1954,6 +2213,26 @@ def serve_chart(names):
                                               events=[e for e in EVENTS if e['id'] > since][-50:])).encode(), 'application/json'
             elif self.path.startswith('/api/history'):
                 body, ctype = json.dumps(history_all()).encode(), 'application/json'
+            elif self.path.startswith('/api/options'):
+                q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+                n = q.get('i', ['nifty'])[0]
+                try:
+                    body = json.dumps(option_chain(n if n in OPT_IDS else 'nifty')).encode()
+                except Exception as e:
+                    body = json.dumps(dict(error=f"option chain not available ({e})")).encode()
+                ctype = 'application/json'
+            elif self.path.startswith('/api/optchart'):
+                q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+                ex, t = q.get('ex', ['NSE'])[0], q.get('t', [''])[0]
+                try:
+                    if ex not in ('NSE', 'BSE') or not t.isdigit():
+                        raise ValueError('which contract?')
+                    body = json.dumps(option_chart(ex, t)).encode()
+                except Exception as e:
+                    body = json.dumps(dict(error=f"chart not available ({e})")).encode()
+                ctype = 'application/json'
+            elif self.path.split('?')[0] == '/options':
+                body, ctype = chart_page('OPTIONS_HTML').encode(), 'text/html; charset=utf-8'
             else:
                 body, ctype = chart_page().replace('%INDICES%', idx).encode(), 'text/html; charset=utf-8'
             self.send_response(200)

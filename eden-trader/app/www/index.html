@@ -21,6 +21,11 @@
     <iframe id="chart-frame" title="Live chart"></iframe>
   </section>
 
+  <section id="v-options" class="view hidden">
+    <div id="opt-empty" class="empty hidden">Set the server and key in Settings (⚙) first.</div>
+    <iframe id="opt-frame" title="Options"></iframe>
+  </section>
+
   <section id="v-calls" class="view hidden">
     <div id="calls"></div>
     <h3>Latest alerts</h3>
@@ -55,6 +60,7 @@
 
 <nav>
   <button data-v="chart" class="on">📈<span>Chart</span></button>
+  <button data-v="options">📊<span>Options</span></button>
   <button data-v="calls">🔔<span>Calls</span></button>
   <button data-v="history">🏆<span>History</span></button>
 </nav>

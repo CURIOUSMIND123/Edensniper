@@ -74,6 +74,15 @@ function chartView() {
   if (f.dataset.src !== src) { f.src = src; f.dataset.src = src; }
 }
 
+function optionsView() {
+  const f = $('opt-frame');
+  $('opt-empty').classList.toggle('hidden', !!ready());
+  f.classList.toggle('hidden', !ready());
+  if (!ready()) return;
+  const src = cfg.server.replace(/\/+$/, '') + '/options?key=' + encodeURIComponent(cfg.key);
+  if (f.dataset.src !== src) { f.src = src; f.dataset.src = src; }
+}
+
 function tgts(c) {
   // T1 = where the call books half (or its one target); T2 / T3 = the next price levels after it, for reference;
   // the % = how often calls of this kind got there (2023-2026)
@@ -178,6 +187,7 @@ function settingsView() {
 
 async function refresh() {
   if (view === 'chart') chartView();
+  else if (view === 'options') optionsView();
   else if (view === 'calls') await callsView();
   else if (view === 'history') await historyView();
   else if (view === 'settings') settingsView();

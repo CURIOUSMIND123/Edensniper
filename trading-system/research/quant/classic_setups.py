@@ -81,6 +81,10 @@ def capstop(side, e, stp):
 def walk(c1, side, e, start, stp, tgt=None, trail=None):
     if side * (e - stp) <= 0:
         return None
+    if tgt == 'calls':                        # the calls' exit: book half at 0.25x the risk, stop to entry, trail 1R
+        R = side * (e - stp)
+        r = LS.walk(c1, side, e, start, stp, (e + side * 0.25 * R,), (0.5,), be_at=1, trail=R)
+        return r
     t = (tgt,) if tgt is not None else ()
     return LS.walk(c1, side, e, start, stp, t, (1,) if t else (), trail=trail)
 
@@ -105,8 +109,8 @@ def camarilla_rev(conf, tgt):
                     used.add(side)
                     stp = capstop(side, c, far + side * -0.0002 * far)
                     R = side * (c - stp)
-                    T = k['C'] if tgt == 'C' else c + side * (R if tgt == '1R' else 0.5 * R)
-                    if side * (T - c) <= 0:
+                    T = 'calls' if tgt == 'calls' else k['C'] if tgt == 'C' else c + side * (R if tgt == '1R' else 0.5 * R)
+                    if T != 'calls' and side * (T - c) <= 0:
                         continue
                     r = walk(c1, side, c, m + 1, stp, T)
                     if r:
@@ -163,7 +167,7 @@ def gap_fill(gmin, when, tgt, stopk):
             continue
         stp = ext - side * 0.0005 * ext if stopk == 'ext' else e - side * 0.003 * e
         stp = capstop(side, e, stp)
-        T = yc if tgt == 'fill' else e + side * 0.5 * abs(yc - e)
+        T = 'calls' if tgt == 'calls' else yc if tgt == 'fill' else e + side * 0.5 * abs(yc - e)
         r = walk(c1, side, e, m0 + 1, stp, T)
         if r:
             out.append((d, r[0]))
@@ -184,7 +188,7 @@ def open_hl(mins, tgt):
             stp = e - side * 0.001 * e
         stp = capstop(side, e, stp)
         R = side * (e - stp)
-        T = None if tgt == '3:15' else e + side * (R if tgt == '1R' else 2 * R)
+        T = None if tgt == '3:15' else 'calls' if tgt == 'calls' else e + side * (R if tgt == '1R' else 2 * R)
         r = walk(c1, side, e, 555 + mins, stp, T)
         if r:
             out.append((d, r[0]))
