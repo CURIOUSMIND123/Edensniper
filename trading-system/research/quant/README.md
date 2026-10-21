@@ -84,8 +84,8 @@ Costs: 4 Nifty points or 12 Sensex points per trade. `pip install pandas scikit-
 | `user_rule.py` | 2023-2026: every losing family's entries and the daily CPR breakouts, as they are and reversed, with the user's 60 / 35 (Nifty) and 200 / 100 (Sensex) target / stop |
 | `reentry.py` | 2023-2026: a second trade after a stopped call (same price, trend confirmation, pullback to the CPR edge, a zone) |
 | `pivot_breaks.py` | 2023-2026: 5-minute closes through the pivot levels (S3-R3, BC / P / TC) as calls, the 2026 pick and 31 neighbours (stops, targets, filters) |
-| `oi_test.py` | 2023-2026: option OI from the evening before (PCR, call / put OI walls): as a filter on the calls, room to the wall, wall breaks and wall fades as calls, PCR and the day's direction |
-| `extras_check.py` | the alert program's OPEN HIGH LOW / GAP FILL / SECOND CHANCE calls, minute by minute, against their tests |
+| `oi_test.py` | 2023-2026: option OI from the evening before (PCR, call / put OI walls): as a filter on the calls, room to the wall, wall breaks and wall fades as calls (the Sensex fade is the OI WALL call), PCR and the day's direction |
+| `extras_check.py` | the alert program's OPEN HIGH LOW / GAP FILL / SECOND CHANCE / OI WALL calls, minute by minute, against their tests |
 | `classic_setups.py` | 2023-2026: Camarilla reversals / breakouts, gap fill, open = high / low, RSI-2, Bollinger reversals, VWAP pullbacks (37 versions) |
 | `missed_moves.py` | 2023-2026: the big days (0.8%+ open to close), what the calls did on them, and add-ons to catch them (late / conflict-day breakouts, entering when the day turns falling / rising) |
 | `option_flip.py` | Jul-Oct 2026: the indicator on the call and the put charts; a SELL on one -> buy the other (real 1-minute option candles of contracts still trading, and the nearest weekly rebuilt from the index: `python option_flip.py nifty synthetic`) |

@@ -31,7 +31,7 @@ Nifty / Sensex CPR Breakout calls on your phone: an Android app with **notificat
   way before the stop loss. With the largest stop Nifty 55 / Sensex 170 points (from 17 October 2026), the 2026 calls
   to 9 October: Nifty 62 of 97 (64%), Sensex 60 of 85 (71%); 70% / 78% of them made money. 2023-2026: T1 (book half)
   reached on 80% of the Nifty and 77% of the Sensex breakouts, 82-83% of the Magnet calls.
-  **Extra calls** (CPR break, open high low, gap fill, second chance) have their own cards and filter: one is a success when it reached its
+  **Extra calls** (CPR break, open high low, gap fill, second chance, OI wall) have their own cards and filter: one is a success when it reached its
   target (60 Nifty / 200 Sensex points) before its stop (35 / 100); above about 41% / 37% they make money. 2026 to 9
   October: Nifty 38 of 81 (47%), +636 points; Sensex 37 of 90 (41%), +1,366.
 

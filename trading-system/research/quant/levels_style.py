@@ -42,10 +42,11 @@ vol = collections.defaultdict(dict)
 for f in ('../.cache/niftybees_1m_old.json', '../.cache/niftybees_1m.json'):
     for k, v in json.load(open(f)).items():
         vol[k[:10]][int(k[11:13]) * 60 + int(k[14:16])] = v[4]
-EXTRAS = (A.CPR_CALLS, A.OHL_CALLS, A.GAPFILL_CALLS, A.REENTRY_CALLS)    # the alert program's extra calls, as set there
+EXTRAS = (A.CPR_CALLS, A.OHL_CALLS, A.GAPFILL_CALLS, A.REENTRY_CALLS, A.OIWALL_CALLS)   # the alert program's extra calls
 def extras(on):
-    """The extra calls (CPR BREAK, OPEN HIGH LOW, GAP FILL, SECOND CHANCE) as the alert program has them, or none."""
-    A.CPR_CALLS, A.OHL_CALLS, A.GAPFILL_CALLS, A.REENTRY_CALLS = EXTRAS if on else (False, {}, {}, {})
+    """The extra calls (CPR BREAK, OPEN HIGH LOW, GAP FILL, SECOND CHANCE, OI WALL) as the alert program has them, or
+    none."""
+    A.CPR_CALLS, A.OHL_CALLS, A.GAPFILL_CALLS, A.REENTRY_CALLS, A.OIWALL_CALLS = EXTRAS if on else (False, {}, {}, {}, {})
 A.RULES, A.SWEEP = 'classic', False
 extras(False)                                                   # the calls as before (cpr_plus.py etc.: the extra ones)
 CACHE = f'../.cache/levels_cx_{NM}.pkl'
@@ -70,6 +71,10 @@ _full = [d for d in Y.days if len(sess[d]) >= 300]
 for d in DAYS:                                         # contexts saved before the CPR BREAK calls: their RSI start
     if 'c5h' not in CX[d]:
         CX[d]['c5h'] = A.closes5(sess, [x for x in _full if x < d][-3:])
+_OI = json.load(open(f'../.cache/pcr_{NM}.json')) if os.path.exists(f'../.cache/pcr_{NM}.json') else {}
+for d in DAYS:                                         # the OI WALL calls: yesterday's call / put OI walls (fetch_pcr.py)
+    _x = _OI.get(CX[d]['prev'])
+    CX[d]['walls'] = (_x['ce_max'], _x['pe_max']) if _x and _x.get('ce_max') and _x.get('pe_max') else None
 
 def stats(rows):
     """rows: [(day, pnl)] -> per year and in all."""

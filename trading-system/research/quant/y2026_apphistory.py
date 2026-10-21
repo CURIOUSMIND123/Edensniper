@@ -17,9 +17,12 @@ def dump(nm):
     for k, v in Y.bees.items(): vol[k[:10]][int(k[11:13]) * 60 + int(k[14:16])] = v[4]
     daily = {d: Y.DAY[d] for d in Y.days}
     A.RULES, A.SWEEP = 'classic', False
+    oi = json.load(open(f'../.cache/pcr_{nm}.json'))          # the OI WALL calls: yesterday's call / put OI walls
     out = []
     for d in Y.D26:
         cx = A.context(spec, sess, vol, d, daily); cx['tvol'] = vol.get(d, {})
+        x = oi.get(cx['prev'])
+        cx['walls'] = (x['ce_max'], x['pe_max']) if x and x.get('ce_max') and x.get('pe_max') else None
         for t in A.day_trades(cx, Y.one[d], 929, True, False, 'classic'):
             if t['taken'] and t['exit']:
                 ci = A.call_info(cx, t, Y.one[d])

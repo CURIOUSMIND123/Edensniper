@@ -49,8 +49,12 @@ Alerts appear on the screen (with a beep) and, if you set it up, on your phone t
   15 minutes never above the open -> SELL, never below -> BUY; target 1x the stop), `GAPFILL_CALLS` GAP FILL on Sensex
   (9:20: a 0.5-1.5% gap and a first 5 minutes back against it -> toward the fill, half way), `REENTRY_CALLS` SECOND
   CHANCE on Sensex (a call stopped, then the day turns its way -> a limit order back at the CPR edge, stop 170, held
-  to 3:15). They made money in 2024-2026 (SECOND CHANCE: every year 2023-2026) and win about 4-6 in 10
-  (`research/quant/classic_setups.py`, `reentry.py`, `extras_check.py`).
+  to 3:15), `OIWALL_CALLS` OI WALL on Sensex (a 5-minute candle reaches yesterday's call OI wall - the strike with
+  the most call open interest, from BSE's F&O file of the evening before, `oi_walls()` - and closes back under it ->
+  SELL; the put wall and back over it -> BUY; not against today's CPR vs yesterday's; stop at that candle's high / low,
+  at most 170; target 2x the stop). They made money in 2024-2026 (SECOND CHANCE: every year 2023-2026; OI WALL +464 /
+  +401 / +406, Sensex OI exists from 2024) and win about 4-6 in 10 (`research/quant/classic_setups.py`, `reentry.py`,
+  `oi_test.py`, `extras_check.py`).
   **Trend / no reversal** (from 19 October 2026): at each 5-minute close from 9:35, a FALLING day (price below both
   the day's open and the CPR) or a RISING day (above both). From such moments in 2023-2026 price turned 60 / 200
   points the other way before 35 / 100 more only about 1 time in 3 before 10:30, 1 in 4 to 12:30, 1 in 5 after

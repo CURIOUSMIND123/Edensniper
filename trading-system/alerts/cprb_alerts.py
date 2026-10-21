@@ -6,7 +6,7 @@ Upstox's free public candle data. It tells you when to BUY (a call) or SELL (a p
 are and when to exit: on this screen, and on your phone through Telegram if you set that up (free).
 Default rules ('classic'): the daily plan (CPR Magnet at 9:16 or the 9:30 breakout) and the 3-day volume lines, one
 trade at a time, set differently for each index (the most profit in the 2026 tests); and, as their own trades, the
-extra calls that made money (CPR BREAK on both; OPEN HIGH LOW on Nifty; GAP FILL and SECOND CHANCE on Sensex):
+extra calls that made money (CPR BREAK on both; OPEN HIGH LOW on Nifty; GAP FILL, SECOND CHANCE and OI WALL on Sensex):
   Nifty:  the Magnet and the breakout only on the volume side of yesterday's POC (buys above it, sells below); no
           volume check.
   Sensex: the volume check on every signal (a BUY only when the last 2 hours' up candles carried more NIFTYBEES volume
@@ -26,7 +26,10 @@ Needs Python 3.8 or newer and nothing else. The settings are just below.
 Times are the 1-minute candle in which something happened; the alert comes when that candle closes.
 """
 import bisect
+import collections
+import csv
 import datetime as dt
+import io
 import json
 import math
 import os
@@ -35,6 +38,7 @@ import threading
 import time
 import urllib.parse
 import urllib.request
+import zipfile
 
 # ---------------- settings ----------------
 INDICES = ['nifty', 'sensex']     # or ['nifty'] / ['sensex']
@@ -78,7 +82,16 @@ REENTRY_CALLS = {'nifty': False, 'sensex': True}   # SECOND CHANCE calls (reentr
                                   # to 3:15. Sensex 2023-2026 +865 / +298 / +1,725 / +371 (won 36-56%); on Nifty no
                                   # version made money every year (research/quant/reentry.py)
 REENTRY_STOP = 170
-EXTRA_SRC = ('CPR BREAK', 'OPEN HIGH LOW', 'GAP FILL', 'SECOND CHANCE')   # their own trades, next to the others
+OIWALL_CALLS = {'nifty': False, 'sensex': True}   # OI WALL calls (oiwall_trades()): yesterday's strike with the most call
+                                  # open interest (the call wall) and with the most put OI (the put wall), nearest
+                                  # expiry (the exchange's F&O bhavcopy, oi_walls()); a 5-minute candle reaches the call
+                                  # wall from below and closes back under it -> SELL at its close (the put wall from
+                                  # above and back over it -> BUY), 9:20-2:30, not against today's CPR vs yesterday's;
+                                  # stop at that candle's high (low), at most OIWALL_STOP; target 2x the stop; out by
+                                  # 3:15; each wall once a day. Sensex 2024 / 2025 / 2026 +464 / +401 / +406 (won 46%;
+                                  # no Sensex OI before 2024); on Nifty it lost (research/quant/oi_test.py)
+OIWALL_STOP = 170
+EXTRA_SRC = ('CPR BREAK', 'OPEN HIGH LOW', 'GAP FILL', 'SECOND CHANCE', 'OI WALL')   # their own trades, next to the others
 CPR_TP = {'nifty': 60, 'sensex': 200}   # the CPR BREAK calls' target and stop, index points
 CPR_SL = {'nifty': 35, 'sensex': 100}
 REV_CHANCE = {'nifty': (34, 29, 22), 'sensex': (31, 28, 20)}   # on a trending day (price below both the day's open
@@ -1141,6 +1154,63 @@ def gapfill_trades(cx, c1, upto, over):
     return [dict(src='GAP FILL', side=side, m=OPEN + 4, known=OPEN + 5, e=e, stp0=stp, tgt=tgt, gap=g, full=False,
                  taken=True, **r)]
 
+def oi_walls(n, prev):
+    """(call wall, put wall) from the exchange's F&O bhavcopy of session `prev` (published that evening): the strikes
+    with the most call / put open interest in the nearest expiry after it (as research/quant/fetch_pcr.py), or None."""
+    ymd = prev.replace('-', '')
+    if n == 'nifty':
+        url, ref = f"https://nsearchives.nseindia.com/content/fo/BhavCopy_NSE_FO_0_0_0_{ymd}_F_0000.csv.zip", 'https://www.nseindia.com/'
+    else:
+        url, ref = f"https://www.bseindia.com/download/Bhavcopy/Derivative/BhavCopy_BSE_FO_0_0_0_{ymd}_F_0000.CSV", 'https://www.bseindia.com/'
+    req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
+                                               '(KHTML, like Gecko) Chrome/124.0 Safari/537.36', 'Referer': ref, 'Accept': '*/*'})
+    with urllib.request.urlopen(req, timeout=60) as r:
+        raw = r.read()
+    if n == 'nifty':
+        z = zipfile.ZipFile(io.BytesIO(raw))
+        raw = z.read(z.namelist()[0])
+    text = raw.decode('utf-8', 'replace')
+    if not text.lstrip().startswith('TradDt'):
+        return None
+    oi = collections.defaultdict(lambda: collections.defaultdict(float))     # (expiry, CE / PE) -> strike -> OI
+    for r in csv.DictReader(io.StringIO(text)):
+        if r.get('TckrSymb') == SPEC[n]['name'] and r.get('FinInstrmTp') == 'IDO' and r.get('OptnTp') in ('CE', 'PE'):
+            oi[(r['XpryDt'], r['OptnTp'])][float(r['StrkPric'] or 0)] += float(r['OpnIntrst'] or 0)
+    tot = {k: sum(v.values()) for k, v in oi.items()}
+    exps = sorted({x for x, _ in tot if tot.get((x, 'CE'), 0) > 0 and tot.get((x, 'PE'), 0) > 0})
+    if not exps:
+        return None
+    near = min([x for x in exps if x > prev] or [exps[-1]])
+    return tuple(max(oi[(near, k)].items(), key=lambda kv: kv[1])[0] for k in ('CE', 'PE'))
+
+def oiwall_trades(cx, c1, upto, over):
+    """OI WALL: a 5-minute candle reaches yesterday's call wall from below and closes back under it -> SELL at its close
+    (the put wall from above and back over it -> BUY), 9:20-2:30, not against today's CPR vs yesterday's; stop at that
+    candle's high (low), at most OIWALL_STOP; target 2x the stop; out by 3:15. Each wall once a day; one at a time."""
+    if not OIWALL_CALLS.get(cx['name'].lower()) or not cx.get('walls') or not c1:
+        return []
+    out, used, free = [], set(), 0
+    b5 = candles5(c1, upto)
+    for j in range(1, len(b5)):
+        m0, o, h, l, c = b5[j]
+        pc = b5[j - 1][4]
+        if m0 < OPEN + 5 or m0 + 5 > VOL_END or m0 < free:
+            continue
+        for w, side in zip(cx['walls'], (-1, 1)):
+            if not w or side in used or not ((side < 0 and pc < w <= h and c < w) or (side > 0 and pc > w >= l and c > w)):
+                continue
+            used.add(side)
+            risk = min(OIWALL_STOP, c - l if side > 0 else h - c)
+            if side == -cx['rel'] or risk <= 0:
+                continue
+            stp, tgt = c - side * risk, c + side * 2 * risk
+            r = run_fixed(c1, side, c, m0 + 5, stp, tgt, OUT, over, cx['cost'])
+            out.append(dict(src='OI WALL', side=side, m=m0 + 5, known=m0 + 5, e=c, stp0=stp, tgt=tgt, wall=w, full=False,
+                            taken=True, **r))
+            free = r['exit']['m'] + 1 if r['exit'] else 10 ** 9
+            break
+    return out
+
 def reentry_trades(cx, c1, upto, over, ts):
     """SECOND CHANCE: after a call (not an extra one but CPR BREAK) loses at its stop (before 2:20), the first 5-minute
     close that makes it a trend day that call's way (beyond both the day's open and the CPR, until 2:30) arms a limit
@@ -1371,7 +1441,8 @@ def day_trades(cx, c1, upto, over=False, ladder=False, rules=None):
     if rules == 'classic':
         ts = ts + (cpr_trades(cx, c1, upto, over) if CPR_CALLS else [])
         re, cx['re_arm'] = reentry_trades(cx, c1, upto, over, ts)
-        ts = sorted(ts + ohl_trades(cx, c1, upto, over) + gapfill_trades(cx, c1, upto, over) + re, key=lambda t: t['m'])
+        ts = sorted(ts + ohl_trades(cx, c1, upto, over) + gapfill_trades(cx, c1, upto, over) + re +
+                    oiwall_trades(cx, c1, upto, over), key=lambda t: t['m'])
     return ts
 
 
@@ -1432,6 +1503,13 @@ def plan_text(cx):
         out.append(f"GAP FILL call at 9:20 (its own trade): if the open is 0.5-1.5% away from yesterday's close {f2(cx['yc'])} "
                    "and the first 5 minutes close back against the gap -> toward the fill; stop beyond the first 5 minutes, "
                    "target half way to yesterday's close, out by 3:15.")
+    if OIWALL_CALLS.get(nm.lower()):
+        w = cx.get('walls')
+        out.append(f"OI WALL calls, 9:20-2:30 (their own trades): " + (
+            f"yesterday's call OI wall {w[0]:,.0f}, put OI wall {w[1]:,.0f}. A 5-minute candle reaching the call wall and "
+            "closing back under it -> SELL (the put wall and back over it -> BUY), not against today's CPR vs yesterday's; "
+            f"stop at that candle's high / low (at most {OIWALL_STOP} points), target 2x the stop, out by 3:15."
+            if w else "not today (yesterday's option OI could not be had)."))
     if REENTRY_CALLS.get(nm.lower()):
         out.append(f"SECOND CHANCE (its own trade): if a call is stopped out and the day then turns its way (beyond both the "
                    f"open and the CPR), a limit order back at the CPR edge, stop {REENTRY_STOP} points, held to 3:15.")
@@ -1554,6 +1632,11 @@ def messages(cx, ts, c1, upto, lots):
                    f"first 5 minutes closed back {'down' if t['side'] < 0 else 'up'}: toward filling the gap. Stop {f2(t['stp0'])} "
                    f"(beyond the first 5 minutes' {'high' if t['side'] < 0 else 'low'}). Target {f2(t['tgt'])} (half way to "
                    "yesterday's close), all out there. Out by 15:15 at the latest." + own)
+        elif t['src'] == 'OI WALL':
+            how = (f"The 5-minute candle reached yesterday's {'call' if t['side'] < 0 else 'put'} OI wall {t['wall']:,.0f} (the strike "
+                   f"with the most {'call' if t['side'] < 0 else 'put'} open interest) and closed back {'under' if t['side'] < 0 else 'over'} "
+                   f"it. Stop {f2(t['stp0'])} (the candle's {'high' if t['side'] < 0 else 'low'}, {abs(t['e'] - t['stp0']):.0f} points). "
+                   f"Target {f2(t['tgt'])} (2x the stop), all out there. Out by 15:15 at the latest." + own)
         elif t['src'] == 'SECOND CHANCE':
             c0 = t['call']
             how = (f"Limit order filled back at the CPR {'bottom' if t['side'] < 0 else 'top'} {f2(t['lvl'])}: the {c0['src'].lower()} "
@@ -1992,7 +2075,7 @@ def chart_update(n, cx, c_all, ts, got, day):
         if not t['taken']:
             continue
         sd = t['side']
-        m0 = 555 if t['src'] == 'MAGNET' else t['m'] - 1 if t['src'] in ('VOLUME LINE', 'SWEEP') else t['m']
+        m0 = 555 if t['src'] == 'MAGNET' else t['m'] - 1 if t['src'] in ('VOLUME LINE', 'SWEEP', 'OI WALL') else t['m']
         # the position, drawn like TradingView's long / short position tool: green to the targets, red to the stop
         boxes.append(dict(m0=m0, m1=t['exit']['m'] if t['exit'] else None, side=sd, e=round(t['e'], 2), sl=round(t['stp0'], 2),
                           sl_now=round(t['stp'], 2), t=target_levels(cx, c_all, sd, t['e'], t['known'], half_price(t)),
@@ -2009,7 +2092,7 @@ def chart_update(n, cx, c_all, ts, got, day):
                               c='#9e9e9e' if k == 'BE' else '#26a69a' if x['pnl'] > 0 else '#ef5350', x=k))
         else:
             opens.append(t)
-        rows.append([hhmm(m0 + (1 if t['src'] in ('VOLUME LINE', 'SWEEP') else 0)), ('BUY' if sd > 0 else 'SELL') + ' ' + t['src'].lower(), f2(t['e']), f2(t['stp0']),
+        rows.append([hhmm(m0 + (1 if t['src'] in ('VOLUME LINE', 'SWEEP', 'OI WALL') else 0)), ('BUY' if sd > 0 else 'SELL') + ' ' + t['src'].lower(), f2(t['e']), f2(t['stp0']),
                      (f"{x['why']} at {f2(x['px'])}: {x['pnl']:+.0f} pts" if x else f"open, stop now {f2(t['stp'])}")])
     pend = cx.get('pending')
     if pend and got < 720 and not any(t['src'] == 'PULLBACK' for t in ts):
@@ -2764,6 +2847,11 @@ def load(names, today):
         sess = {d: [(m,) + tuple(mm[m][:4]) for m in sorted(mm)] for d, mm in data[SPEC[n]['key']].items()}
         daily = fetch_daily(SPEC[n]['key'], t0 - dt.timedelta(days=80), t0 - dt.timedelta(days=1))
         out[n] = context(SPEC[n], sess, vol, today, daily)
+        if OIWALL_CALLS.get(n):
+            try:
+                out[n]['walls'] = oi_walls(n, out[n]['prev'])
+            except Exception as e:
+                print(f"  {SPEC[n]['name']}: yesterday's option OI not available ({e}); no OI WALL calls today")
     return out
 
 def replay(names, day, lots, ladder, hold=True):

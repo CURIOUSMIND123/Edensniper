@@ -1911,6 +1911,35 @@ version that looked best on 2026 alone (`y2026_pivots.py`) made money in 2023 an
 halfway back or capped at 55 / 170, target the next level, no direction filter, more room) made money in each of
 2023-2025 on either index. Not added.
 
+## Option open interest (`oi_test.py`); the OI WALL calls on Sensex (21 October 2026)
+
+The exchanges' end-of-day F&O files (`fetch_pcr.py --all`: Nifty January 2023 on, Sensex 2024 on - BSE has no such
+file before), used the next morning: the nearest expiry's put / call OI ratio (PCR), the strike with the most call OI
+(the call wall: resistance) and with the most put OI (the put wall: support). Intraday OI history isn't free; the alert
+program records the chain every minute from 21 October 2026 on.
+
+- PCR as a filter on the calls: on Nifty, skipping BUYs when yesterday's PCR was under 0.7 dropped losing calls in
+  2023, 2024 and 2025 (−357 / −245 / −801) but those calls made +322 in 2026, the year it hadn't seen; every PCR filter
+  that looked good on 2023-2025 failed 2026 the same way. Sensex: none. Not added.
+- Room to the wall (BUYs with the call wall close above, SELLs with the put wall close below): no filter dropped only
+  losing calls. Calls taken after price was already through the wall won more often (Nifty ~8 in 10) but are few.
+- PCR and the day's direction: no steady link on either index.
+- Wall breaks (a 5-minute close through the wall -> that way): none made money in each year.
+- Wall fades (a 5-minute candle reaches the call wall and closes back under it -> SELL; the put wall and back over it ->
+  BUY): Nifty lost; on Sensex, with the CPR direction filter (not against today's CPR vs yesterday's), 6 of the 10
+  versions made money in each of 2024, 2025 and 2026. Added as **OI WALL** (Sensex): stop at the fading candle's high
+  (low), at most 170 points, target 2x the stop, out by 3:15, each wall once a day: +464 / +401 / +406 in 2024 / 2025 /
+  2026, 82 trades, 46% won, largest fall −401. (The version best on 2024-2025 alone - stop 100, held to 3:15 - made
+  +1,211 / +246 and then +778 in 2026, but won only 33%.) The alert program's calls match the test trade for trade
+  (`extras_check.py sensex`). TradingView has no option OI, so the indicator can't draw them; the app and the alerts do.
+
+## The indicator on the option charts in the app (21 October 2026)
+
+Each option chart in the app shows the indicator's calls on that option (as TradingView runs it there), and optional
+BUY CALL / BUY PUT alerts follow the user's idea above (a SELL on the put -> buy the call). What the July - October 2026
+test found still holds: about 4 in 10 won and most of the profit came on a few big trend days, so they are off until the
+user turns them on.
+
 ## How to re-check all of this
 
 - `python research/fair_price_backtest.py` downloads the candles and re-runs the Fair Price test.
