@@ -399,7 +399,7 @@ def option_chart(ex, t, fresh=20.0):
     cp = OPT_CPR.get(ck)
     lines = [] if not cp else [dict(p=cp['top'], c='#e91e63', t='CPR top', w=2, s=0), dict(p=cp['p'], c='#e91e63', t='Pivot', w=1, s=0),
                                dict(p=cp['bot'], c='#e91e63', t='CPR bottom', w=2, s=0),
-                               dict(p=cp['yh'], c='#fdd835', t='Yesterday high', w=1, s=2), dict(p=cp['yl'], c='#fdd835', t='Yesterday low', w=1, s=2)]
+                               dict(p=cp['yh'], c='#f9a825', t='Yesterday high', w=1, s=2), dict(p=cp['yl'], c='#f9a825', t='Yesterday low', w=1, s=2)]
     n = 'nifty' if ex == 'NSE' else 'sensex'
     today = now_ist()
     comp = [r for r in cs if day != str(today.date()) or r[0] < today.hour * 60 + today.minute]   # complete minutes
@@ -419,8 +419,15 @@ def option_chart(ex, t, fresh=20.0):
         last = dict(side='BUY' if sd > 0 else 'SELL', time=hhmm(x['m']), e=round(x['e'], 2), src=x['src'].lower(),
                     stop=round(x['stp'], 2), why=out['why'] if out else None, px=round(out['px'], 2) if out else None,
                     pnl=round(out['pnl'], 1) if out else None)
+    ocx = OPT_CX.get((ex, t, day))
+    if ocx:                                       # its POC and the volume lines nearest the price (3 above, 3 below)
+        px = (cs + live)[-1][4] if cs or live else ocx['yc']
+        near = sorted(x for x in ocx['lines'] if x > px)[:3] + sorted(x for x in ocx['lines'] if x <= px)[-3:]
+        lines = lines + ([dict(p=ocx['poc'], c='#9c6ade', t='POC yesterday', w=1, s=0)] if ocx['poc'] is not None else []) + \
+            [dict(p=x, c='#26a69a', t='Vol line', w=1, s=1) for x in near]
     if last and last['why'] is None:
-        lines = lines + [dict(p=last['e'], c='#2962ff', t=last['side'], w=1, s=0), dict(p=last['stop'], c='#ef5350', t='SL', w=1, s=2)]
+        lines = lines + [dict(p=last['e'], c='#2962ff', t=last['side'], w=1, s=0), dict(p=last['stop'], c='#f23645', t='SL', w=1, s=2),
+                         dict(p=round(half_price(ts[-1]), 2), c='#089981', t='T1', w=1, s=2)]
     return dict(day=day, candles=cs + live, cpr=cp, lines=lines, marks=sorted(marks, key=lambda k: k['m']), last=last)
 
 def option_cx(n, ex, t, day):
@@ -570,7 +577,7 @@ def index_chart(n):
     lp = live_part(n, d)
     last = d['candles'][-1][0]
     cs = d['candles'] + ([b for b in lp['bars'] if b[0] > last] if lp else [])
-    keep = ('CPR top', 'Pivot', 'CPR bottom', 'Yesterday high', 'Yesterday low', '15-min high', '15-min low')
+    keep = ('CPR top', 'Pivot', 'CPR bottom', 'Yesterday high', 'Yesterday low', '15-min high', '15-min low', 'Vol line')
     lines = [dict(p=l['p'], c=l['c'], t=l['t'], w=l['w'], s=l['s']) for l in d.get('levels', []) if l['t'] in keep or l['t'].startswith('POC')]
     by = {l['t']: l['p'] for l in lines}
     if all(k in by for k in ('Pivot', 'Yesterday high', 'Yesterday low')):
@@ -2065,7 +2072,7 @@ def chart_update(n, cx, c_all, ts, got, day):
     if cx['poc'] is not None:
         levels.append(dict(p=cx['poc'], c='#9c6ade', t='POC yesterday' if cx['pocn'] == 1 else f"POC {cx['pocn']} days", s=0, w=1))
     levels += [dict(p=x, c='#26a69a', t='Vol line', s=1, w=1) for x in cx['lines']]
-    levels += [dict(p=cx['yh'], c='#fdd835', t='Yesterday high', s=2, w=1), dict(p=cx['yl'], c='#fdd835', t='Yesterday low', s=2, w=1)]
+    levels += [dict(p=cx['yh'], c='#f9a825', t='Yesterday high', s=2, w=1), dict(p=cx['yl'], c='#f9a825', t='Yesterday low', s=2, w=1)]
     first = [x for x in c_all if x[0] < RANGE_END]
     if first and got >= RANGE_END - 1:
         levels += [dict(p=max(x[2] for x in first), c='#4caf50', t='15-min high', s=2, w=1),
@@ -2123,48 +2130,64 @@ def chart_update(n, cx, c_all, ts, got, day):
               f" | {open_note(cx, ts)} | today {len(done_)} trade{'' if len(done_) == 1 else 's'}, {net:+.0f} pts")
     upto_c = [x for x in c_all if x[0] <= got]
     calls = [call_info(cx, t, upto_c) for t in ts if t['taken']]
+    won = [t['exit']['pnl'] for t in done_ if t['exit']['pnl'] > 0]
+    lost = [t['exit']['pnl'] for t in done_ if t['exit']['pnl'] <= 0]
+    w = lv['top'] - lv['bot']
+    info = [["Today's CPR", f"{f2(lv['bot'])} - {f2(lv['top'])}, {w:.0f} pts ({100 * w / lv['p']:.2f}%) " + ('NARROW' if cx['narrow'] else 'wide')],
+            ['Bias', 'up: no breakout SELLs' if cx['rel'] > 0 else 'down: no breakout BUYs' if cx['rel'] < 0 else 'both ways'],
+            ['15-minute range', f"{f2(min(x[3] for x in first))} - {f2(max(x[2] for x in first))}" if first and got >= RANGE_END - 1 else 'forming'],
+            ['Volume POC / value area' if cx['pocn'] == 1 else f"{cx['pocn']}-day volume POC / value area",
+             f"{f2(cx['poc'])} / {f2(cx['val'])} - {f2(cx['vah'])}" if cx['poc'] is not None else 'no POC filter'],
+            ['Today', open_note(cx, ts)],
+            ['On this chart', f"{len(done_)} trade{'' if len(done_) == 1 else 's'}, {len(won)} won, {len(lost)} lost"],
+            ['Points won / lost / net', f"+{sum(won):.0f} / {sum(lost):.0f} / {net:+.0f}"]]
     import hashlib
     d = dict(name=cx['name'], day=day, yday_date=cx['prev'], yday=[list(x) for x in cx['yday']],
              candles=[list(x) for x in c_all], levels=levels, marks=sorted(marks, key=lambda k: k['m']),
-             rows=rows, boxes=boxes, status=status)
+             rows=rows, boxes=boxes, status=status, info=info)
     tn = trend_now(cx, upto_c, got)
     d['trend'] = dict(dir=tn['dir'], short=tn['short'], pct=tn['pct']) if tn else None
     d['ver'] = hashlib.sha256(json.dumps(d, sort_keys=True).encode()).hexdigest()[:12]   # changes with what is drawn
     CHART_DATA[n] = dict(d, updated=now_ist().strftime('%H:%M:%S'), calls=calls)
 
 CHART_HTML = """<!doctype html><html><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#131722">
+<meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#ffffff">
 <meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><title>CPRB live chart</title>
 <style>
 html,body{height:100%}
-body{margin:0;background:#131722;color:#d1d4dc;font:14px -apple-system,BlinkMacSystemFont,Roboto,Ubuntu,'Trebuchet MS',sans-serif;
+body{margin:0;background:#ffffff;color:#131722;font:14px -apple-system,BlinkMacSystemFont,Roboto,Ubuntu,'Trebuchet MS',sans-serif;
   display:flex;flex-direction:column;overflow:hidden}
-#bar{display:flex;flex-wrap:wrap;gap:2px;align-items:center;padding:4px 6px;border-bottom:1px solid #2a2e39}
-button{background:transparent;color:#d1d4dc;border:0;border-radius:4px;padding:7px 9px;font:inherit}
-button.on{color:#2962ff;background:#1e222d;font-weight:600}
-.sep{width:1px;height:20px;background:#2a2e39;margin:0 4px}
+#bar{display:flex;flex-wrap:wrap;gap:2px;align-items:center;padding:4px 6px;border-bottom:1px solid #e0e3eb}
+button{background:transparent;color:#131722;border:0;border-radius:4px;padding:7px 9px;font:inherit}
+button.on{color:#2962ff;background:#f0f3fa;font-weight:600}
+.sep{width:1px;height:20px;background:#e0e3eb;margin:0 4px}
 #wrap{position:relative;flex:1;min-height:200px}
 #c{position:absolute;inset:0}
-#legend{position:absolute;left:6px;top:4px;z-index:3;font-size:12px;line-height:1.6;pointer-events:none;background:rgba(19,23,34,0.75);padding:0 4px;border-radius:3px}
-#legend b{font-weight:600;color:#d1d4dc;margin-right:6px}
+#legend{position:absolute;left:6px;top:4px;z-index:3;font-size:12px;line-height:1.6;pointer-events:none;background:rgba(255,255,255,0.85);padding:0 4px;border-radius:3px}
+#legend b{font-weight:600;color:#131722;margin-right:6px}
 #legend i{font-style:normal;color:#787b86;margin-left:6px}
-.up{color:#26a69a}.dn{color:#ef5350}
-#trend{font-size:12px;line-height:1.4;padding:4px 8px;background:#1e222d;color:#9598a1;border-bottom:1px solid #2a2e39}
+.up{color:#089981}.dn{color:#f23645}
+#trend{font-size:12px;line-height:1.4;padding:4px 8px;background:#f0f3fa;color:#50535e;border-bottom:1px solid #e0e3eb}
 #trend.dn{background:#c62828;color:#fff;font-weight:600}#trend.up{background:#00796b;color:#fff;font-weight:600}
 #trend.hidden{display:none}
-#st{font-size:12px;color:#787b86;padding:5px 8px;border-top:1px solid #2a2e39}
-#st .lv{color:#26a69a;font-weight:600}
-table{width:100%;border-collapse:collapse;font-size:13px}td,th{padding:5px 8px;border-bottom:1px solid #2a2e39;text-align:left}
+#st{font-size:12px;color:#787b86;padding:5px 8px;border-top:1px solid #e0e3eb}
+#st .lv{color:#089981;font-weight:600}
+table{width:100%;border-collapse:collapse;font-size:13px}td,th{padding:5px 8px;border-bottom:1px solid #e0e3eb;text-align:left}
 th{color:#787b86;font-weight:normal}
 #key{font-size:12px;color:#787b86;padding:6px 8px}
-#panel{position:fixed;left:0;right:0;bottom:0;max-height:55%;overflow:auto;background:#1e222d;border-top:1px solid #2a2e39;z-index:5;
-  box-shadow:0 -4px 16px rgba(0,0,0,0.4)}
+#panel{position:fixed;left:0;right:0;bottom:0;max-height:55%;overflow:auto;background:#ffffff;border-top:1px solid #e0e3eb;z-index:5;
+  box-shadow:0 -4px 16px rgba(0,0,0,0.12)}
 #panel.hidden{display:none}
-#panel h4{margin:8px;font-size:13px;color:#d1d4dc}
+#panel h4{margin:8px;font-size:13px;color:#131722}
+#tbl{position:absolute;right:72px;top:4px;z-index:3;background:rgba(255,255,255,0.94);border:1px solid #d1d4dc;font-size:11px;max-width:min(430px,calc(100% - 84px))}
+#tbl td{padding:3px 7px;border-bottom:1px solid #e0e3eb;border-right:1px solid #e0e3eb;vertical-align:top}
+#tbl td:first-child{color:#50535e;white-space:nowrap}#tbl td:last-child{color:#f23645;border-right:0}
+#tbl tr:first-child td{font-weight:600;color:#131722}
+#tbl.hidden{display:none}
 </style></head><body>
 <div id="bar"></div>
 <div id="trend" class="hidden"></div>
-<div id="wrap"><div id="c"></div><div id="legend"></div></div>
+<div id="wrap"><div id="c"></div><div id="legend"></div><table id="tbl" class="hidden"></table></div>
 <div id="st">loading...</div>
 <div id="panel" class="hidden"><h4>Today's trades</h4>
 <table><thead><tr><th>Time</th><th>Trade</th><th>Entry</th><th>Stop</th><th>Result</th></tr></thead><tbody id="list"></tbody></table>
@@ -2196,14 +2219,14 @@ const fmt0 = (n) => Number(n).toLocaleString('en-IN', {maximumFractionDigits: 0}
 const sgn = (n) => (n > 0 ? '+' : n < 0 ? '-' : '') + Math.abs(Math.round(n));
 if (!window.LightweightCharts) $('bar').textContent = 'The chart library did not load: check the internet connection and reload.';
 const chart = LightweightCharts.createChart(box, {
-  layout: {background: {type: 'solid', color: '#131722'}, textColor: '#d1d4dc', fontSize: 12},
-  grid: {vertLines: {color: 'rgba(42,46,57,0.5)'}, horzLines: {color: 'rgba(42,46,57,0.5)'}},
-  rightPriceScale: {borderColor: '#2a2e39', scaleMargins: {top: 0.12, bottom: 0.08}},
-  timeScale: {timeVisible: true, secondsVisible: false, borderColor: '#2a2e39', rightOffset: 8},
-  crosshair: {mode: 0, vertLine: {color: '#758696', labelBackgroundColor: '#363a45'}, horzLine: {color: '#758696', labelBackgroundColor: '#363a45'}},
+  layout: {background: {type: 'solid', color: '#ffffff'}, textColor: '#131722', fontSize: 12},
+  grid: {vertLines: {color: '#f0f3fa'}, horzLines: {color: '#f0f3fa'}},
+  rightPriceScale: {borderColor: '#e0e3eb', scaleMargins: {top: 0.12, bottom: 0.08}},
+  timeScale: {timeVisible: true, secondsVisible: false, borderColor: '#e0e3eb', rightOffset: 8},
+  crosshair: {mode: 0, vertLine: {color: '#758696', labelBackgroundColor: '#131722'}, horzLine: {color: '#758696', labelBackgroundColor: '#131722'}},
   localization: {locale: 'en-IN', priceFormatter: fmt}});
-const s = chart.addCandlestickSeries({upColor: '#26a69a', downColor: '#ef5350', borderVisible: false,
-  wickUpColor: '#26a69a', wickDownColor: '#ef5350', priceLineVisible: true, priceLineStyle: 1, lastValueVisible: true});
+const s = chart.addCandlestickSeries({upColor: '#089981', downColor: '#f23645', borderVisible: false,
+  wickUpColor: '#089981', wickDownColor: '#f23645', priceLineVisible: true, priceLineStyle: 1, lastValueVisible: true});
 new ResizeObserver(() => chart.applyOptions({width: box.clientWidth, height: box.clientHeight})).observe(box);
 const ts = (day, m) => { const [y, mo, d] = day.split('-').map(Number); return Date.UTC(y, mo - 1, d) / 1000 + m * 60; };
 const bucket = (m) => 555 + Math.floor((m - 555) / tf) * tf;
@@ -2263,8 +2286,8 @@ class Positions {
           fill(ye, y1, 'rgba(8,153,129,0.30)');
           if (y3 != null) fill(y1, y3, 'rgba(8,153,129,0.10)');
           hline(g, x1, x2, ye, '#9598a1', []);
-          hline(g, x1, x2, y2, 'rgba(38,166,154,0.8)', [4, 3]);
-          hline(g, x1, x2, y3, 'rgba(38,166,154,0.8)', [4, 3]);
+          hline(g, x1, x2, y2, 'rgba(8,153,129,0.8)', [4, 3]);
+          hline(g, x1, x2, y3, 'rgba(8,153,129,0.8)', [4, 3]);
           if (moved) hline(g, x1, x2, yn, '#f23645', [4, 3]);
           continue;
         }
@@ -2322,6 +2345,8 @@ function buttons() {
   for (const f of [1, 3, 5, 15]) add(f + 'm', f === tf, () => { tf = f; fitted = ''; buttons(); draw(); });
   sep();
   add('Fit', false, () => { fitted = ''; draw(); });
+  add('Info', !$('tbl').classList.contains('hidden'), () => {
+    $('tbl').classList.toggle('hidden'); try { localStorage.setItem('tbl', $('tbl').classList.contains('hidden') ? 'off' : 'on'); } catch (e) {} buttons(); });
   add('☰', !$('panel').classList.contains('hidden'), () => { $('panel').classList.toggle('hidden'); buttons(); });
 }
 function clear() {                          // another index: nothing of the last one stays on the chart
@@ -2359,6 +2384,8 @@ function draw() {
   const T = D.trend, tb = $('trend');
   tb.className = T ? (T.dir < 0 ? 'dn' : T.dir > 0 ? 'up' : '') : 'hidden';
   tb.textContent = T ? T.short : '';
+  $('tbl').innerHTML = '<tr><td>CPR Breakout</td><td>' + D.name + '</td></tr>' +
+    (D.info || []).map((r) => '<tr><td>' + r[0] + '</td><td>' + r[1] + '</td></tr>').join('');
   $('list').innerHTML = D.rows.map((r) => '<tr>' + r.map((x) => '<td>' + x + '</td>').join('') + '</tr>').join('') ||
     '<tr><td colspan="5">No trades yet today.</td></tr>';
 }
@@ -2392,52 +2419,55 @@ async function tick() {                       // every second: the live price on
   }
   status();
 }
+let tblOn = innerWidth >= 700;              // the table: shown on a wide screen, behind the Info button on a phone
+try { const v = localStorage.getItem('tbl'); if (v) tblOn = v === 'on'; } catch (e) {}
+$('tbl').classList.toggle('hidden', !tblOn);
 buttons(); full();
 setInterval(tick, 1000);
 setInterval(() => { if (!loading) full(); }, 60000);
 </script></body></html>"""
 
 OPTIONS_HTML = """<!doctype html><html><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#131722"><title>Options</title>
+<meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#ffffff"><title>Options</title>
 <style>
 html,body{height:100%}
-body{margin:0;background:#131722;color:#d1d4dc;font:13px -apple-system,BlinkMacSystemFont,Roboto,Ubuntu,sans-serif;display:flex;flex-direction:column;overflow:hidden}
-#bar{display:flex;flex-wrap:wrap;gap:2px;align-items:center;padding:3px 6px;border-bottom:1px solid #2a2e39}
-button{background:transparent;color:#d1d4dc;border:0;border-radius:4px;padding:7px 8px;font:inherit}
-button.on{color:#2962ff;background:#1e222d;font-weight:600}
-.sep{width:1px;height:20px;background:#2a2e39;margin:0 3px}
+body{margin:0;background:#ffffff;color:#131722;font:13px -apple-system,BlinkMacSystemFont,Roboto,Ubuntu,sans-serif;display:flex;flex-direction:column;overflow:hidden}
+#bar{display:flex;flex-wrap:wrap;gap:2px;align-items:center;padding:3px 6px;border-bottom:1px solid #e0e3eb}
+button{background:transparent;color:#131722;border:0;border-radius:4px;padding:7px 8px;font:inherit}
+button.on{color:#2962ff;background:#f0f3fa;font-weight:600}
+.sep{width:1px;height:20px;background:#e0e3eb;margin:0 3px}
 #info{margin-left:auto;font-size:11px;color:#787b86;text-align:right;line-height:1.3;padding-right:2px}
 #main{flex:1;display:flex;min-height:0}
 #left{flex:1;display:flex;flex-direction:column;min-width:0}
-#head{display:flex;flex-wrap:wrap;gap:2px 8px;align-items:baseline;padding:4px 8px;border-bottom:1px solid #2a2e39;min-height:18px;font-size:12px}
+#head{display:flex;flex-wrap:wrap;gap:2px 8px;align-items:baseline;padding:4px 8px;border-bottom:1px solid #e0e3eb;min-height:18px;font-size:12px}
 #head .nm{font-weight:600;font-size:13px}
 #head button{padding:2px 7px;color:#2962ff}
 #cw{position:relative;flex:1;min-height:150px}
 #c{position:absolute;inset:0}
-#side{width:min(48vw,380px);border-left:1px solid #2a2e39;display:flex;flex-direction:column;min-height:0}
-#sidehead{display:flex;flex-wrap:wrap;gap:2px 8px;padding:5px 6px;font-size:11px;color:#787b86;border-bottom:1px solid #2a2e39}
+#side{width:min(48vw,380px);border-left:1px solid #e0e3eb;display:flex;flex-direction:column;min-height:0}
+#sidehead{display:flex;flex-wrap:wrap;gap:2px 8px;padding:5px 6px;font-size:11px;color:#787b86;border-bottom:1px solid #e0e3eb}
 #chain{flex:1;overflow:auto;-webkit-overflow-scrolling:touch}
 table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
-th{position:sticky;top:0;background:#1e222d;color:#787b86;font-weight:normal;font-size:11px;padding:5px 3px;z-index:1}
-td{padding:7px 4px;text-align:right;border-bottom:1px solid #1e222d;font-size:12px;white-space:nowrap}
-td.k{text-align:center;font-weight:600;color:#d1d4dc}
+th{position:sticky;top:0;background:#f0f3fa;color:#787b86;font-weight:normal;font-size:11px;padding:5px 3px;z-index:1}
+td{padding:7px 4px;text-align:right;border-bottom:1px solid #f0f3fa;font-size:12px;white-space:nowrap}
+td.k{text-align:center;font-weight:600;color:#131722}
 tr.atm td.k{color:#2962ff}
-td.itm{background:rgba(245,166,35,0.07)}
-td.px{cursor:pointer;font-weight:600;color:#d1d4dc}
+td.itm{background:#fff8e6}
+td.px{cursor:pointer;font-weight:600;color:#131722}
 td.px.pe{text-align:left}
 td.px small{display:block;font-weight:normal;font-size:10px}
 td.sel{box-shadow:inset 0 0 0 2px #2962ff}
 .bars{display:flex;height:3px;margin-top:4px;gap:2px}
 .bars span{flex:1;display:flex}.bars span:first-child{justify-content:flex-end}
-.bars i{display:block;height:3px;border-radius:2px}.bars .cb{background:#ef5350}.bars .pb{background:#26a69a}
+.bars i{display:block;height:3px;border-radius:2px}.bars .cb{background:#f23645}.bars .pb{background:#089981}
 tr.spot td{padding:2px 0;text-align:center;border:0}
-tr.spot span{display:inline-block;background:#2a2e39;color:#d1d4dc;border-radius:10px;padding:2px 8px;font-size:11px}
-.up{color:#26a69a!important}.dn{color:#ef5350!important}.mut{color:#787b86}
+tr.spot span{display:inline-block;background:#e3effd;color:#131722;border-radius:10px;padding:2px 8px;font-size:11px}
+.up{color:#089981!important}.dn{color:#f23645!important}.mut{color:#787b86}
 #msg{padding:10px;color:#787b86;font-size:12px}
 #head .sig{font-weight:600}
 #bell.on{color:#f5a623}
 body.table #main{flex-direction:column}
-body.table #side{width:auto;border-left:0;border-top:1px solid #2a2e39;flex:1.3}
+body.table #side{width:auto;border-left:0;border-top:1px solid #e0e3eb;flex:1.3}
 body.table #left{flex:1}
 body.table td.px.pe{text-align:right}
 </style></head><body>
@@ -2460,13 +2490,13 @@ let table = false, L = null, alertsOn = null;
 try { table = localStorage.getItem('optmode') === 'table'; } catch (e) {}
 const box = $('c');
 const chart = LightweightCharts.createChart(box, {
-  layout: {background: {type: 'solid', color: '#131722'}, textColor: '#d1d4dc', fontSize: 11},
-  grid: {vertLines: {color: 'rgba(42,46,57,0.5)'}, horzLines: {color: 'rgba(42,46,57,0.5)'}},
-  rightPriceScale: {borderColor: '#2a2e39', scaleMargins: {top: 0.1, bottom: 0.08}},
-  timeScale: {timeVisible: true, secondsVisible: false, borderColor: '#2a2e39', rightOffset: 4},
+  layout: {background: {type: 'solid', color: '#ffffff'}, textColor: '#131722', fontSize: 11},
+  grid: {vertLines: {color: '#f0f3fa'}, horzLines: {color: '#f0f3fa'}},
+  rightPriceScale: {borderColor: '#e0e3eb', scaleMargins: {top: 0.1, bottom: 0.08}},
+  timeScale: {timeVisible: true, secondsVisible: false, borderColor: '#e0e3eb', rightOffset: 4},
   crosshair: {mode: 0}, localization: {locale: 'en-IN', priceFormatter: fmt}});
-const s = chart.addCandlestickSeries({upColor: '#26a69a', downColor: '#ef5350', borderVisible: false,
-  wickUpColor: '#26a69a', wickDownColor: '#ef5350', priceLineStyle: 1});
+const s = chart.addCandlestickSeries({upColor: '#089981', downColor: '#f23645', borderVisible: false,
+  wickUpColor: '#089981', wickDownColor: '#f23645', priceLineStyle: 1});
 new ResizeObserver(() => chart.applyOptions({width: box.clientWidth, height: box.clientHeight})).observe(box);
 const ts = (day, m) => { const [y, mo, d] = day.split('-').map(Number); return Date.UTC(y, mo - 1, d) / 1000 + m * 60; };
 const bucket = (m) => 555 + Math.floor((m - 555) / tf) * tf;
