@@ -81,6 +81,16 @@ data (`option_chain()`, refreshed at most every 3 seconds while someone looks), 
 (`option_chart()`: today's 1-minute candles from Upstox, the minutes after them from the live prices, the option's CPR
 from its previous day). Data: `/api/options?i=nifty|sensex`, `/api/optchart?ex=NSE|BSE&t=<token>`.
 
+Laid out like Groww's option chain: on a wide screen the chart on the left and the chain beside it; on a phone a short
+chart above the chain. Above the chain: the PCR (put OI / call OI around the money), the call OI wall (the strike with
+the most call OI: resistance) and the put OI wall (support); each strike shows its OI as a bar and its OI change, and
+"OI table" switches to OI-only columns. Tap the index price for the index chart (`/api/optchart?t=index&i=`): today's
+candles with the CPR, R1 / S1 / R2 / S2, yesterday's high / low, the 15-minute range, the POC and the OI walls.
+
+OI recorder: in market hours the program writes each index's chain around the money once a minute to
+`DATA_DIR/oi/<day>-<index>.jsonl` (minute, spot, PCR, walls, and per strike call OI / price, put OI / price) - free
+intraday OI history doesn't exist for past days, so this builds it for later tests (about 1 MB a day).
+
 ## The phone app (Eden Trader)
 
 The same program also serves the **Eden Trader** Android app (repository `CURIOUSMIND123/eden-trader`, which carries a

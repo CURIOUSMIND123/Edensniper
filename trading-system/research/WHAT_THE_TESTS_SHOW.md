@@ -1901,6 +1901,16 @@ program against its test (`extras_check.py`, `cpr_plus.py`): CPR BREAK (both ind
 +188 / +445 in 2024-2026, −74 in 2023), GAP FILL (Sensex: +190 / +1,278 / +611, −514 in 2023), SECOND CHANCE (Sensex).
 They win about 4-6 in 10; the History screen shows them on their own cards.
 
+## The pivots along with the CPR (`pivot_breaks.py`)
+
+The CPR is itself the pivot (P) with BC / TC around it, and the calls already use the pivot levels: R1-R3 / S1-S3 are
+the T2 / T3 targets and the levels the app shows. As entries of their own, a 5-minute close through any pivot level
+(S3, S2, S1, BC, P, TC, R1, R2, R3) -> that way, stop at the level behind, only with room to the next level: the
+version that looked best on 2026 alone (`y2026_pivots.py`) made money in 2023 and 2026 but lost in 2024 and 2025
+(Nifty +457 / −2,044 / −732 / +1,132; Sensex +44 / −254 / −3,213 / +3,321), and none of its 31 neighbours (stop
+halfway back or capped at 55 / 170, target the next level, no direction filter, more room) made money in each of
+2023-2025 on either index. Not added.
+
 ## How to re-check all of this
 
 - `python research/fair_price_backtest.py` downloads the candles and re-runs the Fair Price test.

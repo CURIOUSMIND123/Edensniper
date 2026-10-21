@@ -18,6 +18,9 @@ Nifty / Sensex CPR Breakout calls on your phone: an Android app with **notificat
   sides shaded), and a live chart of any call or put you tap (1 / 3 / 5 minutes) with that option's own CPR and
   yesterday's high / low. Prices from Groww's public data every few seconds; the 1-minute candles from Upstox, the
   minute still forming from the live prices. Also at /options on the server (with the key).
+  Laid out like Groww: chart and chain side by side on a wide screen, a short chart above the chain on a phone; the
+  PCR, the call OI wall (resistance) and the put OI wall (support) above the chain, OI bars per strike, an "OI
+  table" mode; tap the index price for the index chart with the CPR, pivots (R1 / S1 / R2 / S2) and the OI walls.
 - **Trend / no reversal**: on the Calls screen and at the top of the chart, a red bar on a FALLING day (price below
   both the day's open and the CPR), green on a RISING day: "no sign of a reversal ... don't BUY / SELL against it",
   with how often such moments reversed in 2023-2026 (about 1 in 3 before 10:30, 1 in 4 to 12:30, 1 in 5 after).

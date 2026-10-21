@@ -74,7 +74,7 @@ def one_day(name, sym, d):
         z = zipfile.ZipFile(io.BytesIO(raw)); text = z.read(z.namelist()[0]).decode()
     else:
         raw = get(f"https://www.bseindia.com/download/Bhavcopy/Derivative/BhavCopy_BSE_FO_0_0_0_{ymd}_F_0000.CSV", 'https://www.bseindia.com/')
-        if not raw: return d, None
+        if not raw or not raw.lstrip().startswith(b'TradDt'): return d, None    # before 2024: a web page, no file
         text = raw.decode()
     return d, summarise(csv.DictReader(io.StringIO(text)), sym, d)
 

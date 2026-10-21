@@ -58,7 +58,7 @@ Costs: 4 Nifty points or 12 Sensex points per trade. `pip install pandas scikit-
 | `alerts_check.py` | Checks that `alerts/cprb_alerts.py` (live alerts) takes exactly the backtest's 2026 trades (original rules with the volume check, with and without sweeps and the ladder, 1:4, small-stop rules), also minute by minute as it runs live |
 | `y2026_pivots.py` | 2026 only: why the indicator skipped big days (its filters switched off one by one) and 864 versions of pivot-level trades (S3-R3, BC / P / TC, with or without the volume lines), alone and added to the indicator |
 | `fetch_daily.py` | Downloads the official daily high / low / close (November 2025 on) that `cpr_backtest.py` uses for the CPR and pivots; `CPR_CLOSE=last1m` uses the last 1-minute candle instead |
-| `fetch_pcr.py` | Daily put-call ratio and the strikes with the most call / put open interest, from the NSE and BSE F&O bhavcopy files (Nifty and Sensex) |
+| `fetch_pcr.py` | Daily put-call ratio and the strikes with the most call / put open interest, from the NSE and BSE F&O bhavcopy files (Nifty and Sensex; `--all`: every day with 1-minute candles, NSE's older format before 2024) |
 | `y2026_tci_pcr.py` | 2026 only: the TCI zone breakout (`tci/rules.py`) alone and added to the indicator, and the put-call ratio as a direction (does it call the next day, as a filter, as the breakout direction, as its own trade) |
 | `y2026_money.py` | 2026 only: what Rs 30,000 becomes with the indicator on both indices at 2 lots, 5 lots, or 2 growing to 5, with a random-order risk check |
 | `y2026_short.py` | 2026 only: the indicator with stops capped at 100 / 150 Sensex (30 / 45 Nifty) points, no trailing, out within 15 / 30 / 60 minutes, plain targets, and taking the breakout again after a stop |
@@ -83,6 +83,8 @@ Costs: 4 Nifty points or 12 Sensex points per trade. `pip install pandas scikit-
 | `lower_buy.py` | 2023-2026: the order 30 (Nifty) / 100 (Sensex) points lower than the call, same stop price: which calls fill, and what it makes |
 | `user_rule.py` | 2023-2026: every losing family's entries and the daily CPR breakouts, as they are and reversed, with the user's 60 / 35 (Nifty) and 200 / 100 (Sensex) target / stop |
 | `reentry.py` | 2023-2026: a second trade after a stopped call (same price, trend confirmation, pullback to the CPR edge, a zone) |
+| `pivot_breaks.py` | 2023-2026: 5-minute closes through the pivot levels (S3-R3, BC / P / TC) as calls, the 2026 pick and 31 neighbours (stops, targets, filters) |
+| `oi_test.py` | 2023-2026: option OI from the evening before (PCR, call / put OI walls): as a filter on the calls, room to the wall, wall breaks and wall fades as calls, PCR and the day's direction |
 | `extras_check.py` | the alert program's OPEN HIGH LOW / GAP FILL / SECOND CHANCE calls, minute by minute, against their tests |
 | `classic_setups.py` | 2023-2026: Camarilla reversals / breakouts, gap fill, open = high / low, RSI-2, Bollinger reversals, VWAP pullbacks (37 versions) |
 | `missed_moves.py` | 2023-2026: the big days (0.8%+ open to close), what the calls did on them, and add-ons to catch them (late / conflict-day breakouts, entering when the day turns falling / rising) |
