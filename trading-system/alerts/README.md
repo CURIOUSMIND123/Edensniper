@@ -91,6 +91,21 @@ OI recorder: in market hours the program writes each index's chain around the mo
 `DATA_DIR/oi/<day>-<index>.jsonl` (minute, spot, PCR, walls, and per strike call OI / price, put OI / price) - free
 intraday OI history doesn't exist for past days, so this builds it for later tests (about 1 MB a day).
 
+The indicator on the option charts (from 21 October 2026): each option chart shows the indicator's own BUY / SELL calls
+on that option's candles (`option_trades()`), worked out as TradingView runs the indicator there: an option's price is
+under 50,000, so the Nifty settings (yesterday's POC, no volume check, stops at most 55 points), the CPR from the
+option's previous daily candle, the 3-day volume lines from its 1-minute candles with NIFTYBEES volume; the original
+calls only (CPR Magnet, the 15-minute breakout, the volume lines), as `research/quant/option_flip.py` tested them. A SELL
+mark on a put reads "SELL -> CE" (buy the call), on a call "SELL -> PE"; the latest call and its stop are above the chart.
+
+Option alerts (`option_alerts()`, off until the user turns them on): once a minute the program runs the same on each
+index's at-the-money and one-strike-out call and put; a new SELL on one -> "BUY CALL" / "BUY PUT" naming the
+at-the-money and one-strike-out contract with their prices (a new BUY -> buy that side), and an EXIT alert when that
+call's trade ends. One alert at a time for each side of an index. Their kind is `option`: `/api/events` leaves them
+out until "Option alerts" is on (`/api/settings?opt_alerts=1|0`, kept in `DATA_DIR/settings.json`, so the phone's
+notification service follows it without a new APK); turned on, only alerts from then on arrive. Tested on July - October
+2026: they won about 4 in 10, and most of the profit came on a few big trend days (`WHAT_THE_TESTS_SHOW.md`).
+
 ## The phone app (Eden Trader)
 
 The same program also serves the **Eden Trader** Android app (repository `CURIOUSMIND123/eden-trader`, which carries a

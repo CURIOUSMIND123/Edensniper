@@ -244,6 +244,11 @@ OPT_BARS = {}                     # (exchange, token) -> {'day', 'bars': {minute
 OPT_CANDLES = {}                  # (exchange, token) -> (time.time(), day, [[minute, o, h, l, c]]) from Upstox
 OPT_CPR = {}                      # (exchange, token, day) -> the option's CPR from its previous day
 OPT_LOCK = threading.Lock()
+OPT_COST = {'nifty': 2.0, 'sensex': 5.0}   # the indicator's calls on option charts: costs in premium points
+OPT_CX = {}                       # (exchange, token, day) -> the indicator's context on that option's chart (None: too new)
+OPT_SIG = {}                      # (exchange, token) -> (day, data to minute, the indicator's calls on it that day)
+OPT_VOL = {}                      # day -> NIFTYBEES volume of the sessions before it
+OPT_SIG_LOCK = threading.Lock()   # day_trades() writes into the context: one at a time
 
 def groww_json(url):
     req = urllib.request.Request(url, headers={'Accept': 'application/json', 'User-Agent': 'Mozilla/5.0'})
@@ -382,7 +387,165 @@ def option_chart(ex, t, fresh=20.0):
     lines = [] if not cp else [dict(p=cp['top'], c='#e91e63', t='CPR top', w=2, s=0), dict(p=cp['p'], c='#e91e63', t='Pivot', w=1, s=0),
                                dict(p=cp['bot'], c='#e91e63', t='CPR bottom', w=2, s=0),
                                dict(p=cp['yh'], c='#fdd835', t='Yesterday high', w=1, s=2), dict(p=cp['yl'], c='#fdd835', t='Yesterday low', w=1, s=2)]
-    return dict(day=day, candles=cs + live, cpr=cp, lines=lines)
+    n = 'nifty' if ex == 'NSE' else 'sensex'
+    today = now_ist()
+    comp = [r for r in cs if day != str(today.date()) or r[0] < today.hour * 60 + today.minute]   # complete minutes
+    try:
+        ts = option_trades(n, ex, t, day, comp)
+    except Exception:
+        ts = (OPT_SIG.get(key) or (None, None, []))[2]
+    marks, last = [], None
+    for x in ts:
+        sd, out = x['side'], x['exit']
+        marks.append(dict(m=x['m'] - 1 if x['src'] == 'VOLUME LINE' else 555 if x['src'] == 'MAGNET' else x['m'],
+                          pos='belowBar' if sd > 0 else 'aboveBar', c='#26a69a' if sd > 0 else '#ef5350', x='BUY' if sd > 0 else 'SELL'))
+        if out:
+            k = mark_of(out['why'])
+            marks.append(dict(m=out['m'], pos=('belowBar' if sd > 0 else 'aboveBar') if k in ('SL', 'BE') else ('aboveBar' if sd > 0 else 'belowBar'),
+                              c='#9e9e9e' if k == 'BE' else '#26a69a' if out['pnl'] > 0 else '#ef5350', x=k))
+        last = dict(side='BUY' if sd > 0 else 'SELL', time=hhmm(x['m']), e=round(x['e'], 2), src=x['src'].lower(),
+                    stop=round(x['stp'], 2), why=out['why'] if out else None, px=round(out['px'], 2) if out else None,
+                    pnl=round(out['pnl'], 1) if out else None)
+    if last and last['why'] is None:
+        lines = lines + [dict(p=last['e'], c='#2962ff', t=last['side'], w=1, s=0), dict(p=last['stop'], c='#ef5350', t='SL', w=1, s=2)]
+    return dict(day=day, candles=cs + live, cpr=cp, lines=lines, marks=sorted(marks, key=lambda k: k['m']), last=last)
+
+def option_cx(n, ex, t, day):
+    """The indicator's context on one option's chart for `day`, as TradingView runs it there (an option's price is under
+    50,000, so the Nifty settings: yesterday's POC, no volume check, stops at most 55 points): the CPR from the option's
+    previous daily candle, the POC and the 3-day volume lines from its 1-minute candles with NIFTYBEES volume (as
+    research/quant/option_flip.py tests it). None when the contract has fewer than 3 earlier sessions."""
+    ck = (ex, t, day)
+    if ck in OPT_CX:
+        return OPT_CX[ck]
+    ik, d0 = f"{ex}_FO|{t}", dt.date.fromisoformat(day)
+    raw = fetch_range(ik, d0 - dt.timedelta(days=12), d0 - dt.timedelta(days=1))
+    sess = {d: [(m,) + tuple(mm[m][:4]) for m in sorted(mm)] for d, mm in raw.items()}
+    days = sorted(d for d in sess if d < day and len(sess[d]) >= 100)
+    if len(days) < 3:
+        OPT_CX[ck] = None
+        return None
+    if day not in OPT_VOL:
+        bees = fetch_range(BEES, d0 - dt.timedelta(days=12), d0 - dt.timedelta(days=1))
+        OPT_VOL[day] = {d: {m: v[4] for m, v in mm.items()} for d, mm in bees.items()}
+    vol = OPT_VOL[day]
+    D = {d: (sess[d][0][1], max(x[2] for x in sess[d]), min(x[3] for x in sess[d]), sess[d][-1][4]) for d in days}
+    D.update({d: r for d, r in fetch_daily(ik, d0 - dt.timedelta(days=45), d0 - dt.timedelta(days=1)).items() if d < day})
+    dd = sorted(D)
+    prev = dd[-1]
+    lv = levels(*D[prev][1:])
+    past = [levels(*D[d][1:])['w'] for d in dd[-21:-1]]
+    ylv = levels(*D[dd[-2]][1:])
+    spec = SPEC['nifty']
+    H = {d: day_hist(sess[d], vol.get(d, {}), spec['bin']) for d in days[-3:]}
+    poc, vah, val = poc_va(*combine([H[days[-1]]]), spec['bin'])
+    rank = sum(w < lv['w'] for w in past) / len(past) if len(past) >= 5 else 0.5
+    cx = dict(spec, key=ik, cost=OPT_COST[n], lot=SPEC[n]['lot'], option=True, today=day, prev=prev, lv=lv, rank=rank,
+              narrow=rank < 1 / 3, rel=1 if lv['bot'] > ylv['top'] else -1 if lv['top'] < ylv['bot'] else 0,
+              yc=D[prev][3], yh=D[prev][1], yl=D[prev][2], poc=poc, vah=vah, val=val, pocn=1,
+              yday=sess.get(prev) or sess[days[-1]], yvol=vol.get(prev, {}), c5h=closes5(sess, days[-3:]),
+              lines=vol_lines(*combine([H[d] for d in days[-3:]]), spec['bin']), tvol={})
+    OPT_CX[ck] = cx
+    for k in [k for k in OPT_CX if k[2] != day]:
+        del OPT_CX[k]
+    return cx
+
+def option_trades(n, ex, t, day, c1):
+    """The indicator's calls on one option's chart (the original calls: CPR Magnet, the 15-minute breakout, the volume
+    lines; one at a time) from its complete 1-minute candles c1, worked out once a minute."""
+    if not c1:
+        return []
+    key, upto = (ex, t), c1[-1][0]
+    c = OPT_SIG.get(key)
+    if c and c[0] == day and c[1] == upto:
+        return c[2]
+    cx = option_cx(n, ex, t, day)
+    if not cx:
+        return []
+    with OPT_SIG_LOCK:
+        ts = [x for x in day_trades(cx, [tuple(r) for r in c1], upto, upto >= CLOSE - 1)
+              if x['taken'] and x['src'] not in EXTRA_SRC]
+    OPT_SIG[key] = (day, upto, ts)
+    return ts
+
+OPTSIG_THREAD = []
+def option_alerts(names):
+    """In market hours, once a minute: the indicator's calls on each index's at-the-money and one-strike-out call and
+    put. A new SELL on one -> an alert to buy the other side (a new BUY -> to buy that side), naming the at-the-money
+    and the one-strike-out contract with their prices; when that call's trade ends, an EXIT alert. Kind 'option': the
+    app shows them only while 'Option alerts' is on (app_settings()). One alert at a time for each side of an index."""
+    if OPTSIG_THREAD:
+        return
+    def run():
+        day0 = str(now_ist().date())
+        sent = {e['oid'] for e in EVENTS if e.get('oid') and str(e.get('at', '')).startswith(day0)}
+        ended = {e['oid'] for e in EVENTS if e.get('oid') and e.get('exit')}
+        open_ = {e['oid']: e['opt'] for e in EVENTS if e.get('opt') and e['oid'] not in ended and
+                 str(e.get('at', '')).startswith(day0)}       # alerted calls still open (after a restart too)
+        while True:
+            now = now_ist()
+            m, day = now.hour * 60 + now.minute, str(now.date())
+            if now.weekday() < 5 and OPEN + 1 <= m <= CLOSE:
+                for n in names:
+                    try:
+                        option_alert_pass(n, day, m, sent, open_)
+                    except Exception as e:
+                        print(f"  (option alerts, {n}: {e})")
+            time.sleep(((80 - now_ist().second) % 60) or 60)    # 20 seconds into each minute: its candle is in
+    OPTSIG_THREAD.append(threading.Thread(target=run, daemon=True))
+    OPTSIG_THREAD[0].start()
+
+def option_alert_pass(n, day, m, sent, open_):
+    ch = option_chain(n, fresh=20)
+    if not ch.get('live'):
+        return
+    ex, step, nm = ch['ex'], SPEC[n]['step'], SPEC[n]['name']
+    k0 = round(ch['spot'] / step) * step
+    rows = {r['k']: r for r in ch['rows']}
+    def contract(k, typ):
+        o = (rows.get(k) or {}).get(typ.lower())
+        return o if o and o.get('t') else None
+    now4 = [(k0, 'CE'), (k0 + step, 'CE'), (k0, 'PE'), (k0 - step, 'PE')]
+    watch = {kt: (contract(*kt) or {}).get('t') for kt in now4}
+    for a in open_.values():
+        if a['n'] == n:
+            watch[(a['k'], a['typ'])] = a['t']
+    for (k, typ), t in watch.items():
+        if not t:
+            continue
+        mm = fetch_today(f"{ex}_FO|{t}").get(day, {})
+        c1 = [(x,) + tuple(mm[x][:4]) for x in sorted(mm) if x < m]
+        if not c1:
+            continue
+        for tr in option_trades(n, ex, t, day, c1):
+            oid = f"{day}|{ex}|{t}|{tr['src']}|{tr['m']}"
+            sd, out = tr['side'], tr['exit']
+            sig = 'BUY' if sd > 0 else 'SELL'
+            if oid in open_ and out:
+                a = open_.pop(oid)
+                word = 'CALL' if a['buy'] == 'CE' else 'PUT'
+                record_event(f"{nm} EXIT {word}: {hhmm(out['m'])} the {k:,.0f} {typ} {sig} trade ended ({out['why']} at "
+                             f"{out['px']:,.2f}) -> sell the {word.lower()} bought on the {hhmm(a['m'])} alert.",
+                             'option', nm, title=f"{nm} EXIT {word} ({out['why']})", oid=oid, exit=True)
+                continue
+            if oid in sent:
+                continue
+            sent.add(oid)
+            if out or tr['known'] < m - 3 or (k, typ) not in now4:
+                continue                              # an earlier call (before this strike was watched) or not ATM now
+            buy = typ if sd > 0 else 'PE' if typ == 'CE' else 'CE'
+            if any(a['n'] == n and a['buy'] == buy for a in open_.values()):
+                continue                              # already told to buy this side; that call is still open
+            word, ko = ('CALL', k0 + step) if buy == 'CE' else ('PUT', k0 - step)
+            px = lambda k_: f"{contract(k_, buy)['ltp']:,.2f}" if contract(k_, buy) else '-'
+            why = 'the other side' if sd < 0 else 'this side'
+            record_event(f"{nm} BUY {word}: {k0:,.0f} {buy} at the money ({px(k0)}) or {ko:,.0f} {buy} one strike out "
+                         f"({px(ko)}). {hhmm(tr['m'])} {sig} on the {k:,.0f} {typ} chart at {tr['e']:,.2f} "
+                         f"({tr['src'].lower()}, its stop {tr['stp0']:,.2f}) -> buy {why}. Out when that trade ends: an "
+                         f"EXIT alert follows. These win about 4 in 10; most of the profit came on a few trend days.",
+                         'option', nm, title=f"{nm} BUY {word} {k0:,.0f} / {ko:,.0f} {buy}", oid=oid,
+                         opt=dict(n=n, k=k, typ=typ, t=t, buy=buy, m=tr['m']))
+            open_[oid] = dict(n=n, k=k, typ=typ, t=t, buy=buy, m=tr['m'])
 
 def index_chart(n):
     """The index for the Options screen: today's candles and live minutes (as the chart page), its CPR, pivots
@@ -406,7 +569,7 @@ def index_chart(n):
         lines += [dict(p=ch['res'], c='#ef5350', t='Call OI wall', w=1, s=1), dict(p=ch['sup'], c='#26a69a', t='Put OI wall', w=1, s=1)]
     except Exception:
         pass
-    return dict(day=d.get('day'), candles=cs, lines=lines)
+    return dict(day=d.get('day'), candles=cs, lines=lines, marks=d.get('marks', []))
 
 def live_now(n, fresh=20):
     """(price, 'hh:mm:ss') if the live price is recent, else None."""
@@ -1570,9 +1733,10 @@ def said_today(text):
     day = now_ist().strftime('%Y-%m-%d')
     return any(e.get('text') == text and str(e.get('at', '')).startswith(day) for e in EVENTS)
 
-def record_event(text, kind, index):
+def record_event(text, kind, index, title=None, **extra):
     eid = max(int(time.time() * 1000), (EVENTS[-1]['id'] + 1) if EVENTS else 0)
-    e = dict(id=eid, at=now_ist().strftime('%Y-%m-%d %H:%M:%S'), index=index, kind=kind, title=event_title(text, kind, index), text=text)
+    e = dict(id=eid, at=now_ist().strftime('%Y-%m-%d %H:%M:%S'), index=index, kind=kind,
+             title=title or event_title(text, kind, index), text=text, **extra)
     EVENTS.append(e)
     del EVENTS[:-300]
     try:
@@ -1580,6 +1744,36 @@ def record_event(text, kind, index):
             f.write(json.dumps(e) + '\n')
     except Exception:
         pass
+
+SETTINGS_FILE = os.path.join(DATA_DIR, 'settings.json')
+SETTINGS = {}
+
+def app_settings(**change):
+    """The app's settings, kept here so the phone's notification service follows them too: opt_alerts = the option
+    alerts on / off (off until the user turns them on); opt_from = they show from this event on (not the ones from
+    before they were turned on)."""
+    if not SETTINGS:
+        try:
+            with open(SETTINGS_FILE, encoding='utf-8') as f:
+                SETTINGS.update(json.load(f))
+        except (OSError, ValueError):
+            pass
+        SETTINGS.setdefault('opt_alerts', False)
+        SETTINGS.setdefault('opt_from', 0)
+    if change:
+        if change.get('opt_alerts') and not SETTINGS['opt_alerts']:
+            SETTINGS['opt_from'] = EVENTS[-1]['id'] if EVENTS else 0
+        SETTINGS.update(change)
+        try:
+            with open(SETTINGS_FILE, 'w', encoding='utf-8') as f:
+                json.dump(SETTINGS, f)
+        except OSError:
+            pass
+    return dict(SETTINGS)
+
+def shown_event(e, st):
+    """Does the app get this alert? The option alerts only while they are on."""
+    return e.get('kind') != 'option' or (st['opt_alerts'] and e['id'] > st['opt_from'])
 
 def kind_of(mid):
     if isinstance(mid, tuple):
@@ -2157,6 +2351,8 @@ tr.spot td{padding:2px 0;text-align:center;border:0}
 tr.spot span{display:inline-block;background:#2a2e39;color:#d1d4dc;border-radius:10px;padding:2px 8px;font-size:11px}
 .up{color:#26a69a!important}.dn{color:#ef5350!important}.mut{color:#787b86}
 #msg{padding:10px;color:#787b86;font-size:12px}
+#head .sig{font-weight:600}
+#bell.on{color:#f5a623}
 body.table #main{flex-direction:column}
 body.table #side{width:auto;border-left:0;border-top:1px solid #2a2e39;flex:1.3}
 body.table #left{flex:1}
@@ -2164,7 +2360,7 @@ body.table td.px.pe{text-align:right}
 </style></head><body>
 <div id="bar"><button data-i="nifty" class="on">NIFTY</button><button data-i="sensex">SENSEX</button><span class="sep"></span>
 <button data-tf="1">1m</button><button data-tf="3">3m</button><button data-tf="5" class="on">5m</button><span class="sep"></span>
-<button id="mode">OI table</button><div id="info"></div></div>
+<button id="mode">OI table</button><button id="bell" title="BUY CALL / BUY PUT alerts from the option charts">&#128277; alerts off</button><div id="info"></div></div>
 <div id="main">
 <div id="left"><div id="head"></div><div id="cw"><div id="c"></div></div></div>
 <div id="side"><div id="sidehead"></div><div id="chain"><table><thead id="th"></thead><tbody id="rows"></tbody></table><div id="msg">loading...</div></div></div>
@@ -2177,7 +2373,7 @@ const fmt = (x) => x == null ? '-' : Number(x).toLocaleString('en-IN', {minimumF
 const big = (x) => { const a = Math.abs(x), s = x < 0 ? '-' : ''; return a >= 1e7 ? s + (a / 1e7).toFixed(2) + 'Cr' : a >= 1e5 ? s + (a / 1e5).toFixed(1) + 'L' : a >= 1e3 ? s + (a / 1e3).toFixed(1) + 'K' : s + a; };
 const sg = (x) => (x > 0 ? '+' : '') + fmt(x);
 let idx = 'nifty', tf = 5, C = null, sel = null, chainBusy = false, chartBusy = false, fitted = '', lines = [], centred = '';
-let table = false;
+let table = false, L = null, alertsOn = null;
 try { table = localStorage.getItem('optmode') === 'table'; } catch (e) {}
 const box = $('c');
 const chart = LightweightCharts.createChart(box, {
@@ -2252,12 +2448,33 @@ function head() {
   const r = C.rows.find((r) => (r.ce && r.ce.t === sel.t) || (r.pe && r.pe.t === sel.t));
   const o = r && (r.ce && r.ce.t === sel.t ? r.ce : r.pe);
   if (!o) return;
+  sel.typ = r.ce && r.ce.t === sel.t ? 'CE' : 'PE';
   $('head').innerHTML = `<span class="nm">${o.name}</span><b>${fmt(o.ltp)}</b><span class="${o.chg >= 0 ? 'up' : 'dn'}">${sg(o.chg)} (${o.pct}%)</span>` +
-    `<span class="mut">OI ${big(o.oi)} (${o.doi >= 0 ? '+' : ''}${big(o.doi)}) &middot; lot ${C.lot}</span><button id="back">&#10005; ${C.name} chart</button>`;
-  $('back').onclick = () => { sel = null; fitted = ''; const u = new URL(location.href); u.searchParams.delete('t'); history.replaceState(null, '', u); render(); loadChart(); };
+    `<span class="mut">OI ${big(o.oi)} (${o.doi >= 0 ? '+' : ''}${big(o.doi)}) &middot; lot ${C.lot}</span>${sigText()}<button id="back">&#10005; ${C.name} chart</button>`;
+  $('back').onclick = () => { sel = null; fitted = ''; L = null; const u = new URL(location.href); u.searchParams.delete('t'); history.replaceState(null, '', u); render(); loadChart(); };
+}
+function sigText() {
+  // the indicator's latest call on this option's chart; a SELL on one side -> buy the other side
+  if (!L) return '<span class="mut">indicator: no call on this chart today</span>';
+  const other = sel.typ === 'CE' ? 'PE (put)' : 'CE (call)', me = sel.typ === 'CE' ? 'CE (call)' : 'PE (put)';
+  const st = L.why ? `${L.why} at ${fmt(L.px)}` : `open, stop ${fmt(L.stop)} &rarr; ${L.side === 'SELL' ? 'buy the ' + other : 'buy this ' + me}`;
+  return `<span class="sig ${L.side === 'BUY' ? 'up' : 'dn'}">${L.side} ${L.time} at ${fmt(L.e)} (${L.src}) &middot; ${st}</span>`;
+}
+function markText(x) {
+  if (x === 'B' || x === 'S') return x === 'B' ? 'BUY' : 'SELL';
+  if (x === 'SELL' && sel && sel.typ) return 'SELL \u2192 ' + (sel.typ === 'CE' ? 'PE' : 'CE');
+  return x;
+}
+async function bell(change) {
+  try {
+    const d = await (await fetch('/api/settings?' + (change == null ? '' : 'opt_alerts=' + (change ? 1 : 0)) + keyq(), {cache: 'no-store'})).json();
+    alertsOn = !!d.opt_alerts;
+  } catch (e) {}
+  $('bell').innerHTML = alertsOn ? '&#128276; alerts on' : '&#128277; alerts off';
+  $('bell').classList.toggle('on', !!alertsOn);
 }
 function pick(t, typ) {
-  sel = {t, typ, ex: C.ex}; fitted = '';
+  sel = {t, typ, ex: C.ex}; fitted = ''; L = null;
   const u = new URL(location.href); u.searchParams.set('t', t); u.searchParams.set('i', idx); history.replaceState(null, '', u);
   render(); loadChart();
 }
@@ -2288,6 +2505,10 @@ async function loadChart() {
     const d = await (await fetch(url + keyq(), {cache: 'no-store'})).json();
     if ((sel ? sel.t : 'index:' + idx) !== my || d.error) return;
     s.setData(agg(d.day, d.candles));
+    L = sel ? d.last || null : null;
+    head();
+    s.setMarkers((d.marks || []).map((k) => ({time: ts(d.day, bucket(k.m)), position: k.pos, color: k.c, text: markText(k.x),
+      shape: k.x === 'B' || k.x === 'BUY' ? 'arrowUp' : k.x === 'S' || k.x === 'SELL' ? 'arrowDown' : 'circle'})));
     const key = JSON.stringify(d.lines || []);
     if (key !== s._lk) {
       lines.forEach((l) => s.removePriceLine(l)); lines = []; s._lk = key;
@@ -2298,6 +2519,7 @@ async function loadChart() {
   finally { chartBusy = false; }
 }
 for (const b of document.querySelectorAll('#bar button')) b.onclick = () => {
+  if (b.id === 'bell') { if (alertsOn !== null) bell(!alertsOn); return; }
   if (b.id === 'mode') { table = !table; try { localStorage.setItem('optmode', table ? 'table' : 'chain'); } catch (e) {} setMode(); return; }
   if (b.dataset.i) {
     if (b.dataset.i === idx) return;
@@ -2315,6 +2537,7 @@ for (const b of document.querySelectorAll('#bar button')) b.onclick = () => {
 const i0 = new URLSearchParams(location.search).get('i');
 if (i0 === 'sensex') { idx = 'sensex'; for (const x of document.querySelectorAll('#bar button[data-i]')) x.classList.toggle('on', x.dataset.i === idx); }
 setMode();
+bell();
 loadChain();
 setInterval(loadChain, 3000);
 setInterval(loadChart, 3000);
@@ -2458,8 +2681,13 @@ def serve_chart(names):
             elif self.path.startswith('/api/events'):
                 q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
                 since = int((q.get('since') or ['0'])[0] or 0)
+                st = app_settings()
                 body, ctype = json.dumps(dict(last=EVENTS[-1]['id'] if EVENTS else 0,
-                                              events=[e for e in EVENTS if e['id'] > since][-50:])).encode(), 'application/json'
+                                              events=[e for e in EVENTS if e['id'] > since and shown_event(e, st)][-50:])).encode(), 'application/json'
+            elif self.path.startswith('/api/settings'):
+                q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+                ch = {k: q[k][0] == '1' for k in ('opt_alerts',) if k in q}
+                body, ctype = json.dumps(app_settings(**ch)).encode(), 'application/json'
             elif self.path.startswith('/api/history'):
                 body, ctype = json.dumps(history_all()).encode(), 'application/json'
             elif self.path.startswith('/api/options'):
@@ -2587,6 +2815,7 @@ def live(names, lots, ladder, plan_only=False, forever=False):
         serve_chart(names)
         live_prices(names)
         oi_recorder(names)
+        option_alerts(names)
         for n in names:
             chart_update(n, cxs[n], [], [], OPEN - 1, today)
     seen, first, last_ts, waited, shown, last_c = set(), True, {}, False, {}, {}

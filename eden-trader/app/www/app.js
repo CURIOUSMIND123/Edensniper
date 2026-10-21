@@ -184,6 +184,22 @@ async function historyView() {
 function settingsView() {
   $('s-server').value = cfg.server || DEFAULT_SERVER;
   $('s-key').value = cfg.key || '';
+  optAlerts();
+}
+
+// the option alerts switch is kept on the server, so the notification service (and every phone) follows it
+let optOn = null;
+async function optAlerts(change) {
+  const b = $('s-opt');
+  if (!ready()) { b.textContent = 'Option alerts: set the server and key first'; return; }
+  try {
+    const d = await getJSON('/api/settings' + (change == null ? '' : '?opt_alerts=' + (change ? 1 : 0)));
+    optOn = !!d.opt_alerts;
+    b.textContent = optOn ? 'Option alerts: ON (tap to turn off)' : 'Option alerts: OFF (tap to turn on)';
+    b.classList.toggle('primary', optOn);
+  } catch (e) {
+    b.textContent = 'Option alerts: ' + (e.message || 'cannot reach the server');
+  }
 }
 
 async function refresh() {
@@ -247,6 +263,7 @@ async function main() {
   $('more').onclick = () => { histShown += 60; renderHistory(); };
   $('s-perm').onclick = askPermission;
   $('s-test').onclick = testNotification;
+  $('s-opt').onclick = () => { if (optOn !== null) optAlerts(!optOn); };
   $('s-save').onclick = async () => {
     cfg.server = ($('s-server').value || DEFAULT_SERVER).trim().replace(/\/+$/, '');
     if (!/^https?:\/\//.test(cfg.server)) cfg.server = 'https://' + cfg.server;
