@@ -87,8 +87,8 @@ from its previous day). Data: `/api/options?i=nifty|sensex`, `/api/optchart?ex=N
 
 Light, like TradingView and Groww (the chart page, the options page and the app; from 21 October 2026). The chart
 page also has the indicator's table top right as on TradingView (Info: today's CPR, bias, the 15-minute range, the POC
-/ value area, today's trades and points). Laid out like Groww's option chain: on a wide screen the chart on the left and the chain beside it; on a phone a short
-chart above the chain. Above the chain: the PCR (put OI / call OI around the money), the call OI wall (the strike with
+/ value area, today's trades and points). Laid out like Groww's option chain on a wide screen (a computer): the chart on the left and the chain beside it; on a
+phone (the app) the chart on top at full width and the chain under it. Above the chain: the PCR (put OI / call OI around the money), the call OI wall (the strike with
 the most call OI: resistance) and the put OI wall (support); each strike shows its OI as a bar and its OI change, and
 "OI table" switches to OI-only columns. Tap the index price for the index chart (`/api/optchart?t=index&i=`): today's
 candles with the CPR, R1 / S1 / R2 / S2, yesterday's high / low, the 15-minute range, the POC and the OI walls.

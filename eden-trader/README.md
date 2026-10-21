@@ -18,7 +18,8 @@ Nifty / Sensex CPR Breakout calls on your phone: an Android app with **notificat
   sides shaded), and a live chart of any call or put you tap (1 / 3 / 5 minutes) with that option's own CPR and
   yesterday's high / low. Prices from Groww's public data every few seconds; the 1-minute candles from Upstox, the
   minute still forming from the live prices. Also at /options on the server (with the key).
-  Laid out like Groww: chart and chain side by side on a wide screen, a short chart above the chain on a phone; the
+  Laid out like Groww on a computer (chart and chain side by side); on a phone the chart on top at full width and the
+  chain under it; the
   PCR, the call OI wall (resistance) and the put OI wall (support) above the chain, OI bars per strike, an "OI
   table" mode; tap the index price for the index chart with the CPR, pivots (R1 / S1 / R2 / S2) and the OI walls.
   Each option chart shows the indicator's BUY / SELL calls on that option (a SELL on a put reads "SELL -> CE": buy the

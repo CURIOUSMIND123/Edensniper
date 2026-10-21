@@ -2470,6 +2470,13 @@ body.table #main{flex-direction:column}
 body.table #side{width:auto;border-left:0;border-top:1px solid #e0e3eb;flex:1.3}
 body.table #left{flex:1}
 body.table td.px.pe{text-align:right}
+@media (max-width:699px){                 /* a phone (the app): the chart on top, full width, the chain under it */
+#main{flex-direction:column}
+#left{flex:none;height:50vh;min-height:250px}
+#side{width:auto;border-left:0;border-top:1px solid #e0e3eb;flex:1;min-height:0}
+body.table #left{flex:none}
+#info{font-size:10px}
+}
 </style></head><body>
 <div id="bar"><button data-i="nifty" class="on">NIFTY</button><button data-i="sensex">SENSEX</button><span class="sep"></span>
 <button data-tf="1">1m</button><button data-tf="3">3m</button><button data-tf="5" class="on">5m</button><span class="sep"></span>
