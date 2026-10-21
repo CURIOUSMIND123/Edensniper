@@ -1866,17 +1866,17 @@ each of 2023, 2024 and 2025. None did, on either index.
 
 | Strategy (best version) | Won | Nifty 2023 / 2024 / 2025 / 2026 | Sensex 2023 / 2024 / 2025 / 2026 |
 |---|---|---|---|
-| Camarilla reversal at H3 / L3, target half the stop | 65-72% | −123 / −260 / −521 / −848 | −177 / −1,384 / −1,758 / −2,290 |
-| Camarilla reversal, target yesterday's close | 52-59% | −343 / +5 / −548 / −108 | −1,916 / +107 / −2,001 / −59 |
+| Camarilla reversal at H3 / L3, target half the stop | 57-72% | −123 / −260 / −521 / −848 | −177 / −1,384 / −1,758 / −2,290 |
+| Camarilla reversal, target yesterday's close | 50-59% | −343 / +5 / −548 / −108 | −1,916 / +107 / −2,001 / −59 |
 | Camarilla breakout of H4 / L4, trailing | 34-58% | +38 / −78 / −338 / −105 | −1,697 / −1,776 / −1,151 / +1,205 |
 | Gap fill after a first 5 minutes against the gap, target half the gap | 56-69% | −58 / +130 / +341 / −59 | −402 / +686 / +1,817 / +72 |
 | Open = high / open = low (first 15 minutes), target 1x the stop | 48-64% | −74 / +138 / +188 / +445 | −572 / −367 / −801 / +115 |
-| RSI-2 pullbacks (Connors), 5-minute | 52-64% | −1,036 / −575 / −1,434 / −1,517 | −2,460 / −340 / −3,094 / −5,751 |
+| RSI-2 pullbacks (Connors), 5-minute | 54-64% | −1,036 / −575 / −1,434 / −1,517 | −2,460 / −340 / −3,094 / −5,751 |
 | Bollinger (20, 2) reversals, with the EMA 200 | 35-48% | −201 / −1,367 / −1,052 / −1,755 | +322 / −3,461 / −4,967 / −5,357 |
-| VWAP pullback in a one-sided morning | 29-43% | −572 / −133 / −184 / −838 | −2,187 / −1,482 / −218 / −1,800 |
+| VWAP pullback in a one-sided morning | 29-40% | −572 / −133 / −184 / −838 | −2,577 / −971 / −72 / −1,781 |
 
 - The closest: the gap fill (made money in three of four years on both indices, lost in 2023) and open = high /
-  low on Nifty (lost in 2023). The reversal setups with a small target win 65-72% of the time and still lose: the
+  low on Nifty (lost in 2023). The reversal setups with a small target win 57-72% of the time and still lose: the
   losses are bigger than the wins.
 - A high win rate comes from the exit, not the entry: the calls win about 8 in 10 because they book half at a
   quarter of the risk. The same exit on the trend entries of `missed_moves.py` won 76-88% and lost money; it can't
