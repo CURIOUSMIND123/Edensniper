@@ -1833,6 +1833,32 @@ Exits: when the SELL trade on the other chart closes (mirror), +20% / -10% of th
   put bought on the call's SELL was up 140 Nifty points (from 9:15) and 458 Sensex points (from 9:59, rebuilt) by the
   afternoon).
 
+## The big days the calls miss (`missed_moves.py`)
+
+Big day: the index closed at least 0.8% from its open. 2023-2026, the calls with today's defaults.
+
+| Big days | 2023 | 2024 | 2025 | 2026 |
+|---|---|---|---|---|
+| Nifty: big days / no call at all | 20 / 10 | 53 / 24 | 36 / 19 | 38 / 16 |
+| Nifty: the calls' net on big days | +375 | +663 | +695 | +1,153 |
+| Sensex: big days / no call at all | 20 / 12 | 50 / 27 | 37 / 24 | 42 / 20 |
+| Sensex: the calls' net on big days | +1,068 | +2,631 | +2,320 | +6,409 |
+
+The calls had no trade on about half the big days (typically the opening gap against today's CPR vs yesterday's,
+or the break after 10:00). Add-ons tried on the days with no CPR Magnet / breakout call:
+
+- The first break of the 15-minute high / low until 10:00 / 11:00 / 11:30 / 12:30, with the gap, not against the
+  CPR, or either way (POC side, volume check, stop at most 55 / 170, managed as the calls): every version lost over
+  2023-2026 (Nifty −719 to −1,883, Sensex −1,690 to −4,494). They made a lot on the big days (Nifty up to +2,815,
+  Sensex up to +9,055) and lost more on the ordinary days (−4,421 / −12,098).
+- Entering when the day turns falling / rising (the first 5-minute close below both the open and the CPR, or above
+  both; from 9:35 / 10:00 / 10:30; stop 35 / 55 or 100 / 170; out at 2x the stop, trailing, the calls' management,
+  or 3:15): no Nifty version made money in each of 2023-2025; on Sensex two did (from 10:00 / 10:30, stop 170,
+  trailing 1x behind the best price after +1x: +1,058 / +58 / +1,489 and +1,712 / +140 / +5,214), and both lost in
+  2026 (−1,368 / −259), the year not used to choose them.
+- On the morning a big day looks like any other day's break; whatever enters the big days also enters the many
+  ordinary days whose break fails. Nothing tested catches them at a profit.
+
 ## How to re-check all of this
 
 - `python research/fair_price_backtest.py` downloads the candles and re-runs the Fair Price test.
