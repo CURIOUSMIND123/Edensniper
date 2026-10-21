@@ -291,14 +291,55 @@ def option_chain(n, fresh=3.0):
         return dict(t=t, name=o.get('longDisplayName', ''), ltp=ltp, chg=round(float(o.get('dayChange') or 0), 2),
                     pct=round(float(o.get('dayChangePerc') or 0), 1), oi=oi, doi=oi - (o.get('prevOpenInterest') or 0),
                     vol=o.get('volume') or 0)
+    coi = sum(ce.get('openInterest') or 0 for k, ce, pe in rows)
+    poi = sum(pe.get('openInterest') or 0 for k, ce, pe in rows)
     out = dict(name=SPEC[n]['name'], ex=ex, spot=spot, live=live, lot=SPEC[n]['lot'],
+               chg=round(float(lp.get('dayChange') or 0), 2), pct=round(float(lp.get('dayChangePerc') or 0), 2),
                at=dt.datetime.fromtimestamp(ts, IST).strftime('%H:%M:%S') if ts else '',
                expiry=(oc.get('expiryDetailsDto') or {}).get('currentExpiry'),
+               pcr=round(poi / coi, 2) if coi else None,
+               res=max(rows, key=lambda r: r[1].get('openInterest') or 0)[0],     # the most call OI: resistance
+               sup=max(rows, key=lambda r: r[2].get('openInterest') or 0)[0],     # the most put OI: support
                rows=[dict(k=k, atm=i == atm, ce=side(ce), pe=side(pe)) for i, (k, ce, pe) in enumerate(rows)
                      if abs(i - atm) <= OPT_STRIKES])
     with OPT_LOCK:
         OPT[n] = (time.time(), out)
     return out
+
+OI_DIR = os.path.join(DATA_DIR, 'oi')    # the option chain every minute, for testing open-interest rules later
+OI_THREAD = []
+
+def oi_recorder(names):
+    """In market hours, once a minute: each index's option chain around the money (strike, call OI / price, put OI /
+    price) to oi/<day>-<index>.jsonl. Free intraday open-interest history doesn't exist for past days, so this builds
+    it from now on (about 1 MB a day)."""
+    if OI_THREAD:
+        return
+    def run():
+        last = {}
+        while True:
+            now = now_ist()
+            m = now.hour * 60 + now.minute
+            if now.weekday() < 5 and OPEN <= m < CLOSE:
+                for n in names:
+                    if last.get(n) == (now.date(), m) or n not in OPT_IDS:
+                        continue
+                    try:
+                        ch = option_chain(n, fresh=20)
+                        if not ch.get('live'):
+                            continue
+                        os.makedirs(OI_DIR, exist_ok=True)
+                        row = dict(m=m, spot=ch['spot'], pcr=ch['pcr'], res=ch['res'], sup=ch['sup'], expiry=ch['expiry'],
+                                   k=[[r['k'], (r['ce'] or {}).get('oi'), (r['ce'] or {}).get('ltp'), (r['pe'] or {}).get('oi'),
+                                       (r['pe'] or {}).get('ltp')] for r in ch['rows']])
+                        with open(os.path.join(OI_DIR, f"{now.date()}-{n}.jsonl"), 'a') as f:
+                            f.write(json.dumps(row, separators=(',', ':')) + '\n')
+                        last[n] = (now.date(), m)
+                    except Exception:
+                        pass
+            time.sleep(max(5, 62 - now_ist().second))
+    OI_THREAD.append(threading.Thread(target=run, daemon=True))
+    OI_THREAD[0].start()
 
 def option_chart(ex, t, fresh=20.0):
     """One option contract: today's 1-minute candles (Upstox, complete minutes; the last session's before the open),
@@ -337,7 +378,35 @@ def option_chart(ex, t, fresh=20.0):
                 OPT_CPR[ck] = None
         except Exception:
             pass                                      # no CPR this time; asked again with the next chart
-    return dict(day=day, candles=cs + live, cpr=OPT_CPR.get(ck))
+    cp = OPT_CPR.get(ck)
+    lines = [] if not cp else [dict(p=cp['top'], c='#e91e63', t='CPR top', w=2, s=0), dict(p=cp['p'], c='#e91e63', t='Pivot', w=1, s=0),
+                               dict(p=cp['bot'], c='#e91e63', t='CPR bottom', w=2, s=0),
+                               dict(p=cp['yh'], c='#fdd835', t='Yesterday high', w=1, s=2), dict(p=cp['yl'], c='#fdd835', t='Yesterday low', w=1, s=2)]
+    return dict(day=day, candles=cs + live, cpr=cp, lines=lines)
+
+def index_chart(n):
+    """The index for the Options screen: today's candles and live minutes (as the chart page), its CPR, pivots
+    R1 / S1 / R2 / S2, yesterday's high / low, the 15-minute range, the POC, and the strikes with the most call / put
+    open interest."""
+    d = CHART_DATA.get(n) or {}
+    if not d.get('candles'):
+        return dict(error='no chart data yet')
+    lp = live_part(n, d)
+    last = d['candles'][-1][0]
+    cs = d['candles'] + ([b for b in lp['bars'] if b[0] > last] if lp else [])
+    keep = ('CPR top', 'Pivot', 'CPR bottom', 'Yesterday high', 'Yesterday low', '15-min high', '15-min low')
+    lines = [dict(p=l['p'], c=l['c'], t=l['t'], w=l['w'], s=l['s']) for l in d.get('levels', []) if l['t'] in keep or l['t'].startswith('POC')]
+    by = {l['t']: l['p'] for l in lines}
+    if all(k in by for k in ('Pivot', 'Yesterday high', 'Yesterday low')):
+        P, H, L = by['Pivot'], by['Yesterday high'], by['Yesterday low']
+        for t, p in (('R1', 2 * P - L), ('S1', 2 * P - H), ('R2', P + (H - L)), ('S2', P - (H - L))):
+            lines.append(dict(p=round(p, 2), c='#ff9800', t=t, w=1, s=0))
+    try:
+        ch = option_chain(n)
+        lines += [dict(p=ch['res'], c='#ef5350', t='Call OI wall', w=1, s=1), dict(p=ch['sup'], c='#26a69a', t='Put OI wall', w=1, s=1)]
+    except Exception:
+        pass
+    return dict(day=d.get('day'), candles=cs, lines=lines)
 
 def live_now(n, fresh=20):
     """(price, 'hh:mm:ss') if the live price is recent, else None."""
@@ -2056,49 +2125,66 @@ OPTIONS_HTML = """<!doctype html><html><head><meta charset="utf-8">
 <style>
 html,body{height:100%}
 body{margin:0;background:#131722;color:#d1d4dc;font:13px -apple-system,BlinkMacSystemFont,Roboto,Ubuntu,sans-serif;display:flex;flex-direction:column;overflow:hidden}
-#bar{display:flex;flex-wrap:wrap;gap:2px;align-items:center;padding:4px 6px;border-bottom:1px solid #2a2e39}
-button{background:transparent;color:#d1d4dc;border:0;border-radius:4px;padding:7px 9px;font:inherit}
+#bar{display:flex;flex-wrap:wrap;gap:2px;align-items:center;padding:3px 6px;border-bottom:1px solid #2a2e39}
+button{background:transparent;color:#d1d4dc;border:0;border-radius:4px;padding:7px 8px;font:inherit}
 button.on{color:#2962ff;background:#1e222d;font-weight:600}
-.sep{width:1px;height:20px;background:#2a2e39;margin:0 4px}
+.sep{width:1px;height:20px;background:#2a2e39;margin:0 3px}
 #info{margin-left:auto;font-size:11px;color:#787b86;text-align:right;line-height:1.3;padding-right:2px}
-#info b{color:#d1d4dc;font-size:13px}
-#head{display:flex;flex-wrap:wrap;gap:4px 10px;align-items:baseline;padding:5px 8px;border-bottom:1px solid #2a2e39;min-height:18px}
-#head .nm{font-weight:600}
-#cw{position:relative;height:42%;min-height:170px;border-bottom:1px solid #2a2e39}
+#main{flex:1;display:flex;min-height:0}
+#left{flex:1;display:flex;flex-direction:column;min-width:0}
+#head{display:flex;flex-wrap:wrap;gap:2px 8px;align-items:baseline;padding:4px 8px;border-bottom:1px solid #2a2e39;min-height:18px;font-size:12px}
+#head .nm{font-weight:600;font-size:13px}
+#head button{padding:2px 7px;color:#2962ff}
+#cw{position:relative;flex:1;min-height:150px}
 #c{position:absolute;inset:0}
+#side{width:min(48vw,380px);border-left:1px solid #2a2e39;display:flex;flex-direction:column;min-height:0}
+#sidehead{display:flex;flex-wrap:wrap;gap:2px 8px;padding:5px 6px;font-size:11px;color:#787b86;border-bottom:1px solid #2a2e39}
 #chain{flex:1;overflow:auto;-webkit-overflow-scrolling:touch}
 table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
 th{position:sticky;top:0;background:#1e222d;color:#787b86;font-weight:normal;font-size:11px;padding:5px 3px;z-index:1}
-td{padding:7px 3px;text-align:right;border-bottom:1px solid #1e222d;font-size:12px;white-space:nowrap}
-td.k{text-align:center;font-weight:600;background:#1e222d;color:#d1d4dc}
-tr.atm td.k{background:#2962ff;color:#fff}
+td{padding:7px 4px;text-align:right;border-bottom:1px solid #1e222d;font-size:12px;white-space:nowrap}
+td.k{text-align:center;font-weight:600;color:#d1d4dc}
+tr.atm td.k{color:#2962ff}
 td.itm{background:rgba(245,166,35,0.07)}
 td.px{cursor:pointer;font-weight:600;color:#d1d4dc}
+td.px.pe{text-align:left}
 td.px small{display:block;font-weight:normal;font-size:10px}
 td.sel{box-shadow:inset 0 0 0 2px #2962ff}
-tr.spot td{padding:0;height:0;border-bottom:2px solid #f5a623}
+.bars{display:flex;height:3px;margin-top:4px;gap:2px}
+.bars span{flex:1;display:flex}.bars span:first-child{justify-content:flex-end}
+.bars i{display:block;height:3px;border-radius:2px}.bars .cb{background:#ef5350}.bars .pb{background:#26a69a}
+tr.spot td{padding:2px 0;text-align:center;border:0}
+tr.spot span{display:inline-block;background:#2a2e39;color:#d1d4dc;border-radius:10px;padding:2px 8px;font-size:11px}
 .up{color:#26a69a!important}.dn{color:#ef5350!important}.mut{color:#787b86}
-#msg{padding:10px;color:#787b86}
+#msg{padding:10px;color:#787b86;font-size:12px}
+body.table #main{flex-direction:column}
+body.table #side{width:auto;border-left:0;border-top:1px solid #2a2e39;flex:1.3}
+body.table #left{flex:1}
+body.table td.px.pe{text-align:right}
 </style></head><body>
 <div id="bar"><button data-i="nifty" class="on">NIFTY</button><button data-i="sensex">SENSEX</button><span class="sep"></span>
-<button data-tf="1" class="on">1m</button><button data-tf="3">3m</button><button data-tf="5">5m</button><div id="info"></div></div>
-<div id="head"><span class="mut">Tap a call or put price below to see its chart.</span></div>
-<div id="cw"><div id="c"></div></div>
-<div id="chain"><table><thead><tr><th>OI chg</th><th>OI</th><th>CALL</th><th>STRIKE</th><th>PUT</th><th>OI</th><th>OI chg</th></tr></thead>
-<tbody id="rows"></tbody></table><div id="msg">loading...</div></div>
+<button data-tf="1">1m</button><button data-tf="3">3m</button><button data-tf="5" class="on">5m</button><span class="sep"></span>
+<button id="mode">OI table</button><div id="info"></div></div>
+<div id="main">
+<div id="left"><div id="head"></div><div id="cw"><div id="c"></div></div></div>
+<div id="side"><div id="sidehead"></div><div id="chain"><table><thead id="th"></thead><tbody id="rows"></tbody></table><div id="msg">loading...</div></div></div>
+</div>
 <script src="/lwc.js"></script>
 <script>
 const $ = (id) => document.getElementById(id);
 const keyq = () => { const k = new URLSearchParams(location.search).get('key'); return k ? '&key=' + encodeURIComponent(k) : ''; };
 const fmt = (x) => x == null ? '-' : Number(x).toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2});
 const big = (x) => { const a = Math.abs(x), s = x < 0 ? '-' : ''; return a >= 1e7 ? s + (a / 1e7).toFixed(2) + 'Cr' : a >= 1e5 ? s + (a / 1e5).toFixed(1) + 'L' : a >= 1e3 ? s + (a / 1e3).toFixed(1) + 'K' : s + a; };
-let idx = 'nifty', tf = 1, C = null, sel = null, chainBusy = false, chartBusy = false, fitted = '', lines = [], centred = '';
+const sg = (x) => (x > 0 ? '+' : '') + fmt(x);
+let idx = 'nifty', tf = 5, C = null, sel = null, chainBusy = false, chartBusy = false, fitted = '', lines = [], centred = '';
+let table = false;
+try { table = localStorage.getItem('optmode') === 'table'; } catch (e) {}
 const box = $('c');
 const chart = LightweightCharts.createChart(box, {
-  layout: {background: {type: 'solid', color: '#131722'}, textColor: '#d1d4dc', fontSize: 12},
+  layout: {background: {type: 'solid', color: '#131722'}, textColor: '#d1d4dc', fontSize: 11},
   grid: {vertLines: {color: 'rgba(42,46,57,0.5)'}, horzLines: {color: 'rgba(42,46,57,0.5)'}},
-  rightPriceScale: {borderColor: '#2a2e39', scaleMargins: {top: 0.12, bottom: 0.08}},
-  timeScale: {timeVisible: true, secondsVisible: false, borderColor: '#2a2e39', rightOffset: 6},
+  rightPriceScale: {borderColor: '#2a2e39', scaleMargins: {top: 0.1, bottom: 0.08}},
+  timeScale: {timeVisible: true, secondsVisible: false, borderColor: '#2a2e39', rightOffset: 4},
   crosshair: {mode: 0}, localization: {locale: 'en-IN', priceFormatter: fmt}});
 const s = chart.addCandlestickSeries({upColor: '#26a69a', downColor: '#ef5350', borderVisible: false,
   wickUpColor: '#26a69a', wickDownColor: '#ef5350', priceLineStyle: 1});
@@ -2114,37 +2200,65 @@ function agg(day, rows) {
   }
   return out;
 }
-function cell(o, typ, itm) {
-  if (!o) return '<td></td><td></td><td></td>';
-  const chg = o.chg > 0 ? 'up' : o.chg < 0 ? 'dn' : 'mut', on = sel && sel.t === o.t ? ' sel' : '', it = itm ? ' itm' : '';
-  const px = `<td class="px${it}${on}" data-t="${o.t}" data-typ="${typ}">${fmt(o.ltp)}<small class="${chg}">${o.pct > 0 ? '+' : ''}${o.pct}%</small></td>`;
-  const oi = `<td class="${it}">${big(o.oi)}</td>`, doi = `<td class="${it} ${o.doi > 0 ? 'up' : o.doi < 0 ? 'dn' : 'mut'}">${big(o.doi)}</td>`;
-  return typ === 'CE' ? doi + oi + px : px + oi + doi;
+function setMode() {
+  document.body.classList.toggle('table', table);
+  $('mode').textContent = table ? 'Chain' : 'OI table';
+  $('th').innerHTML = table ? '<tr><th>OI chg</th><th>OI</th><th>CALL</th><th>STRIKE</th><th>PUT</th><th>OI</th><th>OI chg</th></tr>'
+                            : '<tr><th>Call LTP</th><th>Strike</th><th style="text-align:left">Put LTP</th></tr>';
+  centred = ''; render();
+}
+function pxCell(o, typ, itm) {
+  if (!o) return '<td></td>';
+  const chg = o.chg > 0 ? 'up' : o.chg < 0 ? 'dn' : 'mut', on = sel && sel.t === o.t ? ' sel' : '';
+  return `<td class="px ${typ.toLowerCase()}${itm ? ' itm' : ''}${on}" data-t="${o.t}" data-typ="${typ}">${fmt(o.ltp)}<small class="${chg}">${o.pct > 0 ? '+' : ''}${o.pct}%</small></td>`;
+}
+function oiCells(o, typ, itm) {
+  if (!o) return '<td></td><td></td>';
+  const it = itm ? ' itm' : '', oi = `<td class="${it}">${big(o.oi)}</td>`, doi = `<td class="${it} ${o.doi > 0 ? 'up' : o.doi < 0 ? 'dn' : 'mut'}">${big(o.doi)}</td>`;
+  return typ === 'CE' ? doi + oi : oi + doi;
 }
 function render() {
   if (!C) return;
   if (C.error) { $('msg').textContent = C.error; return; }
   $('msg').textContent = C.live ? '' : 'Market closed: last prices.';
-  $('info').innerHTML = `<b>${C.name} ${fmt(C.spot)}</b><br>expiry ${C.expiry || '-'} &middot; ${C.live ? 'live ' : ''}${C.at}`;
+  $('info').innerHTML = `expiry ${C.expiry || '-'}<br>${C.live ? 'live ' : ''}${C.at}`;
+  $('sidehead').innerHTML = `<span>PCR <b class="${C.pcr >= 1 ? 'up' : 'dn'}">${C.pcr == null ? '-' : C.pcr}</b></span>` +
+    `<span>Call OI wall <b class="dn">${(C.res || 0).toLocaleString('en-IN')}</b></span><span>Put OI wall <b class="up">${(C.sup || 0).toLocaleString('en-IN')}</b></span>`;
+  const mx = Math.max(1, ...C.rows.map((r) => Math.max(r.ce ? r.ce.oi : 0, r.pe ? r.pe.oi : 0)));
   let html = '', spotDone = false;
+  const cols = table ? 7 : 3;
   for (const r of C.rows) {
-    if (!spotDone && r.k > C.spot) { html += '<tr class="spot"><td colspan="7"></td></tr>'; spotDone = true; }
-    html += `<tr class="${r.atm ? 'atm' : ''}">${cell(r.ce, 'CE', r.k < C.spot)}<td class="k">${r.k.toLocaleString('en-IN')}</td>${cell(r.pe, 'PE', r.k > C.spot)}</tr>`;
+    if (!spotDone && r.k > C.spot) {
+      html += `<tr class="spot"><td colspan="${cols}"><span>${fmt(C.spot)} | <b class="${C.chg >= 0 ? 'up' : 'dn'}">${sg(C.chg)} (${C.pct}%)</b></span></td></tr>`;
+      spotDone = true;
+    }
+    const kc = `<td class="k">${r.k.toLocaleString('en-IN')}` + (table ? '' : `<div class="bars"><span><i class="cb" style="width:${r.ce ? Math.round(100 * r.ce.oi / mx) : 0}%"></i></span><span><i class="pb" style="width:${r.pe ? Math.round(100 * r.pe.oi / mx) : 0}%"></i></span></div>`) + '</td>';
+    html += `<tr class="${r.atm ? 'atm' : ''}">` + (table ? oiCells(r.ce, 'CE', r.k < C.spot) : '') + pxCell(r.ce, 'CE', r.k < C.spot) + kc +
+            pxCell(r.pe, 'PE', r.k > C.spot) + (table ? oiCells(r.pe, 'PE', r.k > C.spot) : '') + '</tr>';
   }
   $('rows').innerHTML = html;
   for (const td of document.querySelectorAll('td.px')) td.onclick = () => pick(td.dataset.t, td.dataset.typ);
   const a = document.querySelector('tr.atm');
-  if (a && centred !== idx) { centred = idx; const ch = $('chain'); ch.scrollTop = Math.max(0, a.offsetTop - ch.clientHeight / 2); }
-  if (sel) {
-    const r = C.rows.find((r) => (r.ce && r.ce.t === sel.t) || (r.pe && r.pe.t === sel.t));
-    const o = r && (r.ce && r.ce.t === sel.t ? r.ce : r.pe);
-    if (o) $('head').innerHTML = `<span class="nm">${o.name}</span><b>${fmt(o.ltp)}</b><span class="${o.chg >= 0 ? 'up' : 'dn'}">${o.chg >= 0 ? '+' : ''}${fmt(o.chg)} (${o.pct}%)</span>` +
-      `<span class="mut">OI ${big(o.oi)} (${o.doi >= 0 ? '+' : ''}${big(o.doi)}) &middot; lot ${C.lot}</span>`;
-  }
+  if (a && centred !== idx + table) { centred = idx + table; const ch = $('chain'); ch.scrollTop = Math.max(0, a.offsetTop - ch.clientHeight / 2); }
+  head();
 }
-function pick(t, typ, quiet) {
+function head() {
+  if (!C || C.error) return;
+  if (!sel) {
+    $('head').innerHTML = `<span class="nm">${C.name}</span><b>${fmt(C.spot)}</b><span class="${C.chg >= 0 ? 'up' : 'dn'}">${sg(C.chg)} (${C.pct}%)</span>` +
+      '<span class="mut">tap a call or put price to chart it</span>';
+    return;
+  }
+  const r = C.rows.find((r) => (r.ce && r.ce.t === sel.t) || (r.pe && r.pe.t === sel.t));
+  const o = r && (r.ce && r.ce.t === sel.t ? r.ce : r.pe);
+  if (!o) return;
+  $('head').innerHTML = `<span class="nm">${o.name}</span><b>${fmt(o.ltp)}</b><span class="${o.chg >= 0 ? 'up' : 'dn'}">${sg(o.chg)} (${o.pct}%)</span>` +
+    `<span class="mut">OI ${big(o.oi)} (${o.doi >= 0 ? '+' : ''}${big(o.doi)}) &middot; lot ${C.lot}</span><button id="back">&#10005; ${C.name} chart</button>`;
+  $('back').onclick = () => { sel = null; fitted = ''; const u = new URL(location.href); u.searchParams.delete('t'); history.replaceState(null, '', u); render(); loadChart(); };
+}
+function pick(t, typ) {
   sel = {t, typ, ex: C.ex}; fitted = '';
-  if (!quiet) { const u = new URL(location.href); u.searchParams.set('t', t); u.searchParams.set('i', idx); history.replaceState(null, '', u); }
+  const u = new URL(location.href); u.searchParams.set('t', t); u.searchParams.set('i', idx); history.replaceState(null, '', u);
   render(); loadChart();
 }
 async function loadChain() {
@@ -2154,41 +2268,41 @@ async function loadChain() {
   try {
     const d = await (await fetch('/api/options?i=' + want + keyq(), {cache: 'no-store'})).json();
     if (want !== idx) return;
+    const first = !C;
     C = d;
-    if (!sel && !d.error) {
-      const t0 = new URLSearchParams(location.search).get('t'), atm = d.rows.find((r) => r.atm);
-      const has = t0 && d.rows.some((r) => (r.ce && r.ce.t === t0) || (r.pe && r.pe.t === t0));
-      if (has) pick(t0, d.rows.some((r) => r.ce && r.ce.t === t0) ? 'CE' : 'PE', true);
-      else if (atm && atm.ce) pick(atm.ce.t, 'CE', true);
+    if (first && !d.error) {
+      const t0 = new URLSearchParams(location.search).get('t');
+      if (t0 && d.rows.some((r) => (r.ce && r.ce.t === t0) || (r.pe && r.pe.t === t0))) sel = {t: t0, ex: d.ex};
+      loadChart();
     }
     render();
   } catch (e) { $('msg').textContent = 'No data: is the program running?'; }
   finally { chainBusy = false; }
 }
 async function loadChart() {
-  if (!sel || chartBusy) return;
+  if (chartBusy) return;
   chartBusy = true;
-  const my = sel.t;
+  const my = sel ? sel.t : 'index:' + idx;
   try {
-    const d = await (await fetch(`/api/optchart?ex=${sel.ex}&t=${sel.t}` + keyq(), {cache: 'no-store'})).json();
-    if (!sel || sel.t !== my || d.error) return;
+    const url = sel ? `/api/optchart?ex=${sel.ex}&t=${sel.t}` : `/api/optchart?t=index&i=${idx}`;
+    const d = await (await fetch(url + keyq(), {cache: 'no-store'})).json();
+    if ((sel ? sel.t : 'index:' + idx) !== my || d.error) return;
     s.setData(agg(d.day, d.candles));
-    lines.forEach((l) => s.removePriceLine(l)); lines = [];
-    if (d.cpr) {
-      for (const [p, t, w] of [[d.cpr.top, 'CPR top', 2], [d.cpr.p, 'Pivot', 1], [d.cpr.bot, 'CPR bottom', 2]])
-        lines.push(s.createPriceLine({price: p, color: '#e91e63', lineWidth: w, lineStyle: 0, axisLabelVisible: true, title: t}));
-      lines.push(s.createPriceLine({price: d.cpr.yh, color: '#fdd835', lineWidth: 1, lineStyle: 2, axisLabelVisible: false, title: 'Yesterday high'}));
-      lines.push(s.createPriceLine({price: d.cpr.yl, color: '#fdd835', lineWidth: 1, lineStyle: 2, axisLabelVisible: false, title: 'Yesterday low'}));
+    const key = JSON.stringify(d.lines || []);
+    if (key !== s._lk) {
+      lines.forEach((l) => s.removePriceLine(l)); lines = []; s._lk = key;
+      for (const l of d.lines || []) lines.push(s.createPriceLine({price: l.p, color: l.c, lineWidth: l.w, lineStyle: l.s, axisLabelVisible: l.w > 1 || l.t.indexOf('OI') >= 0, title: l.t}));
     }
-    if (fitted !== my + tf) { fitted = my + tf; chart.timeScale().fitContent(); }
+    if (fitted !== my + tf) { fitted = my + tf; const n = s.data().length; chart.timeScale().setVisibleLogicalRange({from: Math.max(0, n - (tf === 1 ? 120 : 80)), to: n + 3}); }
   } catch (e) {}
   finally { chartBusy = false; }
 }
 for (const b of document.querySelectorAll('#bar button')) b.onclick = () => {
+  if (b.id === 'mode') { table = !table; try { localStorage.setItem('optmode', table ? 'table' : 'chain'); } catch (e) {} setMode(); return; }
   if (b.dataset.i) {
     if (b.dataset.i === idx) return;
-    idx = b.dataset.i; sel = null; C = null; s.setData([]); lines.forEach((l) => s.removePriceLine(l)); lines = [];
-    $('rows').innerHTML = ''; $('msg').textContent = 'loading...'; $('head').innerHTML = '';
+    idx = b.dataset.i; sel = null; C = null; fitted = ''; s.setData([]); lines.forEach((l) => s.removePriceLine(l)); lines = []; s._lk = '';
+    $('rows').innerHTML = ''; $('msg').textContent = 'loading...'; $('head').innerHTML = ''; $('sidehead').innerHTML = '';
     for (const x of document.querySelectorAll('#bar button[data-i]')) x.classList.toggle('on', x === b);
     const u = new URL(location.href); u.searchParams.delete('t'); u.searchParams.set('i', idx); history.replaceState(null, '', u);
     loadChain();
@@ -2200,6 +2314,7 @@ for (const b of document.querySelectorAll('#bar button')) b.onclick = () => {
 };
 const i0 = new URLSearchParams(location.search).get('i');
 if (i0 === 'sensex') { idx = 'sensex'; for (const x of document.querySelectorAll('#bar button[data-i]')) x.classList.toggle('on', x.dataset.i === idx); }
+setMode();
 loadChain();
 setInterval(loadChain, 3000);
 setInterval(loadChart, 3000);
@@ -2359,9 +2474,12 @@ def serve_chart(names):
                 q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
                 ex, t = q.get('ex', ['NSE'])[0], q.get('t', [''])[0]
                 try:
-                    if ex not in ('NSE', 'BSE') or not t.isdigit():
+                    if t == 'index':
+                        body = json.dumps(index_chart(q.get('i', ['nifty'])[0])).encode()
+                    elif ex not in ('NSE', 'BSE') or not t.isdigit():
                         raise ValueError('which contract?')
-                    body = json.dumps(option_chart(ex, t)).encode()
+                    else:
+                        body = json.dumps(option_chart(ex, t)).encode()
                 except Exception as e:
                     body = json.dumps(dict(error=f"chart not available ({e})")).encode()
                 ctype = 'application/json'
@@ -2468,6 +2586,7 @@ def live(names, lots, ladder, plan_only=False, forever=False):
     if CHART:
         serve_chart(names)
         live_prices(names)
+        oi_recorder(names)
         for n in names:
             chart_update(n, cxs[n], [], [], OPEN - 1, today)
     seen, first, last_ts, waited, shown, last_c = set(), True, {}, False, {}, {}
