@@ -407,19 +407,42 @@ def option_chart(ex, t, fresh=20.0):
         ts = option_trades(n, ex, t, day, comp)
     except Exception:
         ts = (OPT_SIG.get(key) or (None, None, []))[2]
-    marks, last = [], None
+    ocx = OPT_CX.get((ex, t, day))
+    marks, boxes, rows, last = [], [], [], None
     for x in ts:
         sd, out = x['side'], x['exit']
-        marks.append(dict(m=x['m'] - 1 if x['src'] == 'VOLUME LINE' else 555 if x['src'] == 'MAGNET' else x['m'],
-                          pos='belowBar' if sd > 0 else 'aboveBar', c='#26a69a' if sd > 0 else '#ef5350', x='BUY' if sd > 0 else 'SELL'))
+        m0 = x['m'] - 1 if x['src'] == 'VOLUME LINE' else 555 if x['src'] == 'MAGNET' else x['m']
+        marks.append(dict(m=m0, pos='belowBar' if sd > 0 else 'aboveBar', c='#089981' if sd > 0 else '#f23645', x='BUY' if sd > 0 else 'SELL'))
         if out:
             k = mark_of(out['why'])
             marks.append(dict(m=out['m'], pos=('belowBar' if sd > 0 else 'aboveBar') if k in ('SL', 'BE') else ('aboveBar' if sd > 0 else 'belowBar'),
-                              c='#9e9e9e' if k == 'BE' else '#26a69a' if out['pnl'] > 0 else '#ef5350', x=k))
+                              c='#9e9e9e' if k == 'BE' else '#089981' if out['pnl'] > 0 else '#f23645', x=k))
+        if ocx:                                   # drawn like TradingView's long / short position tool, as on the index chart
+            boxes.append(dict(m0=m0, m1=out['m'] if out else None, side=sd, e=round(x['e'], 2), sl=round(x['stp0'], 2),
+                              sl_now=round(x['stp'], 2), t=target_levels(ocx, comp, sd, x['e'], x['known'], half_price(x)),
+                              t1w=t1_word(x), pnl=round(out['pnl'], 1) if out else None, prob=None))
+        rows.append([hhmm(m0 + (1 if x['src'] == 'VOLUME LINE' else 0)), ('BUY ' if sd > 0 else 'SELL ') + x['src'].lower(), f2(x['e']),
+                     f2(x['stp0']), f"{out['why']} at {f2(out['px'])}: {out['pnl']:+.1f} pts" if out else f"open, stop now {f2(x['stp'])}"])
         last = dict(side='BUY' if sd > 0 else 'SELL', time=hhmm(x['m']), e=round(x['e'], 2), src=x['src'].lower(),
                     stop=round(x['stp'], 2), why=out['why'] if out else None, px=round(out['px'], 2) if out else None,
                     pnl=round(out['pnl'], 1) if out else None)
-    ocx = OPT_CX.get((ex, t, day))
+    info = []
+    if ocx:
+        lv, done_ = ocx['lv'], [x for x in ts if x['exit']]
+        first = [r for r in comp if r[0] < RANGE_END]
+        won = [x['exit']['pnl'] for x in done_ if x['exit']['pnl'] > 0]
+        lost = [x['exit']['pnl'] for x in done_ if x['exit']['pnl'] <= 0]
+        rng = first and comp[-1][0] >= RANGE_END - 1
+        info = [["Today's CPR", f"{f2(lv['bot'])} - {f2(lv['top'])}, {lv['top'] - lv['bot']:.1f} pts " + ('NARROW' if ocx['narrow'] else 'wide')],
+                ['Bias', 'up: no breakout SELLs' if ocx['rel'] > 0 else 'down: no breakout BUYs' if ocx['rel'] < 0 else 'both ways'],
+                ['15-minute range', f"{f2(min(r[3] for r in first))} - {f2(max(r[2] for r in first))}" if rng else 'forming'],
+                ['Volume POC / value area', f"{f2(ocx['poc'])} / {f2(ocx['val'])} - {f2(ocx['vah'])}" if ocx['poc'] is not None else '-'],
+                ['Today', open_note(ocx, ts)],
+                ['On this chart', f"{len(done_)} trade{'' if len(done_) == 1 else 's'}, {len(won)} won, {len(lost)} lost"],
+                ['Points won / lost / net', f"+{sum(won):.1f} / {sum(lost):.1f} / {sum(won) + sum(lost):+.1f}"]]
+        if rng:
+            lines = lines + [dict(p=max(r[2] for r in first), c='#4caf50', t='15-min high', w=1, s=2),
+                             dict(p=min(r[3] for r in first), c='#f44336', t='15-min low', w=1, s=2)]
     if ocx:                                       # its POC and the volume lines nearest the price (3 above, 3 below)
         px = (cs + live)[-1][4] if cs or live else ocx['yc']
         near = sorted(x for x in ocx['lines'] if x > px)[:3] + sorted(x for x in ocx['lines'] if x <= px)[-3:]
@@ -428,7 +451,8 @@ def option_chart(ex, t, fresh=20.0):
     if last and last['why'] is None:
         lines = lines + [dict(p=last['e'], c='#2962ff', t=last['side'], w=1, s=0), dict(p=last['stop'], c='#f23645', t='SL', w=1, s=2),
                          dict(p=round(half_price(ts[-1]), 2), c='#089981', t='T1', w=1, s=2)]
-    return dict(day=day, candles=cs + live, cpr=cp, lines=lines, marks=sorted(marks, key=lambda k: k['m']), last=last)
+    return dict(day=day, candles=cs + live, cpr=cp, lines=lines, marks=sorted(marks, key=lambda k: k['m']), last=last,
+                boxes=boxes, rows=rows, info=info)
 
 def option_cx(n, ex, t, day):
     """The indicator's context on one option's chart for `day`, as TradingView runs it there (an option's price is under
@@ -589,7 +613,8 @@ def index_chart(n):
         lines += [dict(p=ch['res'], c='#ef5350', t='Call OI wall', w=1, s=1), dict(p=ch['sup'], c='#26a69a', t='Put OI wall', w=1, s=1)]
     except Exception:
         pass
-    return dict(day=d.get('day'), candles=cs, lines=lines, marks=d.get('marks', []))
+    return dict(day=d.get('day'), candles=cs, lines=lines, marks=d.get('marks', []), boxes=d.get('boxes', []),
+                rows=d.get('rows', []), info=d.get('info', []))
 
 def live_now(n, fresh=20):
     """(price, 'hh:mm:ss') if the live price is recent, else None."""
@@ -2136,7 +2161,7 @@ def chart_update(n, cx, c_all, ts, got, day):
     info = [["Today's CPR", f"{f2(lv['bot'])} - {f2(lv['top'])}, {w:.0f} pts ({100 * w / lv['p']:.2f}%) " + ('NARROW' if cx['narrow'] else 'wide')],
             ['Bias', 'up: no breakout SELLs' if cx['rel'] > 0 else 'down: no breakout BUYs' if cx['rel'] < 0 else 'both ways'],
             ['15-minute range', f"{f2(min(x[3] for x in first))} - {f2(max(x[2] for x in first))}" if first and got >= RANGE_END - 1 else 'forming'],
-            ['Volume POC / value area' if cx['pocn'] == 1 else f"{cx['pocn']}-day volume POC / value area",
+            ['Volume POC' if cx['poc'] is None else 'Volume POC / value area' if cx['pocn'] == 1 else f"{cx['pocn']}-day volume POC / value area",
              f"{f2(cx['poc'])} / {f2(cx['val'])} - {f2(cx['vah'])}" if cx['poc'] is not None else 'no POC filter'],
             ['Today', open_note(cx, ts)],
             ['On this chart', f"{len(done_)} trade{'' if len(done_) == 1 else 's'}, {len(won)} won, {len(lost)} lost"],
@@ -2470,21 +2495,31 @@ body.table #main{flex-direction:column}
 body.table #side{width:auto;border-left:0;border-top:1px solid #e0e3eb;flex:1.3}
 body.table #left{flex:1}
 body.table td.px.pe{text-align:right}
+#tbl{position:absolute;right:72px;top:4px;z-index:3;background:rgba(255,255,255,0.94);border:1px solid #d1d4dc;font-size:11px;max-width:min(430px,calc(100% - 84px));border-collapse:collapse}
+#tbl td{padding:3px 7px;border-bottom:1px solid #e0e3eb;border-right:1px solid #e0e3eb;text-align:left;white-space:normal}
+#tbl td:first-child{color:#50535e;white-space:nowrap}#tbl td:last-child{color:#f23645;border-right:0}
+#tbl tr:first-child td{font-weight:600;color:#131722}
+#panel{position:fixed;left:0;right:0;bottom:0;max-height:55%;overflow:auto;background:#ffffff;border-top:1px solid #e0e3eb;z-index:5;box-shadow:0 -4px 16px rgba(0,0,0,0.12)}
+#panel h4{margin:8px;font-size:13px}#panel td{text-align:left;font-size:12px}
+.hidden{display:none!important}
 @media (max-width:699px){                 /* a phone (the app): the chart on top, full width, the chain under it */
 #main{flex-direction:column}
 #left{flex:none;height:50vh;min-height:250px}
 #side{width:auto;border-left:0;border-top:1px solid #e0e3eb;flex:1;min-height:0}
 body.table #left{flex:none}
 #info{font-size:10px}
+#tbl{font-size:10px;right:62px;max-width:calc(100% - 66px)}#tbl td{padding:2px 5px}
 }
 </style></head><body>
 <div id="bar"><button data-i="nifty" class="on">NIFTY</button><button data-i="sensex">SENSEX</button><span class="sep"></span>
 <button data-tf="1">1m</button><button data-tf="3">3m</button><button data-tf="5" class="on">5m</button><span class="sep"></span>
-<button id="mode">OI table</button><button id="bell" title="BUY CALL / BUY PUT alerts from the option charts">&#128277; alerts off</button><div id="info"></div></div>
+<button id="infob">Info</button><button id="tradesb">&#9776; Trades</button><button id="mode">OI table</button><button id="bell" title="BUY CALL / BUY PUT alerts from the option charts">&#128277; alerts off</button><div id="info"></div></div>
 <div id="main">
-<div id="left"><div id="head"></div><div id="cw"><div id="c"></div></div></div>
+<div id="left"><div id="head"></div><div id="cw"><div id="c"></div><table id="tbl" class="hidden"></table></div></div>
 <div id="side"><div id="sidehead"></div><div id="chain"><table><thead id="th"></thead><tbody id="rows"></tbody></table><div id="msg">loading...</div></div></div>
 </div>
+<div id="panel" class="hidden"><h4>Trades on this chart</h4>
+<table><thead><tr><th>Time</th><th>Trade</th><th>Entry</th><th>Stop</th><th>Result</th></tr></thead><tbody id="list"></tbody></table></div>
 <script src="/lwc.js"></script>
 <script>
 const $ = (id) => document.getElementById(id);
@@ -2505,6 +2540,98 @@ const chart = LightweightCharts.createChart(box, {
 const s = chart.addCandlestickSeries({upColor: '#089981', downColor: '#f23645', borderVisible: false,
   wickUpColor: '#089981', wickDownColor: '#f23645', priceLineStyle: 1});
 new ResizeObserver(() => chart.applyOptions({width: box.clientWidth, height: box.clientHeight})).observe(box);
+const fmt0 = (n) => Math.abs(n) < 2000 ? fmt(n) : Number(n).toLocaleString('en-IN', {maximumFractionDigits: 0});
+const sgn = (n) => (n > 0 ? '+' : n < 0 ? '-' : '') + (Math.abs(n) < 100 ? Math.abs(n).toFixed(1) : Math.round(Math.abs(n)));
+// ---- trades as TradingView's long / short position tool ----
+function pill(g, x, y, text, bg, right) {
+  g.font = '11px -apple-system,Roboto,sans-serif';
+  const w = g.measureText(text).width + 10, h = 17, x0 = right ? x - w : x;
+  g.fillStyle = bg; g.beginPath();
+  if (g.roundRect) g.roundRect(x0, y - h / 2, w, h, 3); else g.rect(x0, y - h / 2, w, h);
+  g.fill(); g.fillStyle = '#fff'; g.textBaseline = 'middle'; g.fillText(text, x0 + 5, y + 0.5);
+  return w;
+}
+function hline(g, x1, x2, y, color, dash) {
+  if (y == null) return;
+  g.strokeStyle = color; g.lineWidth = 1; g.setLineDash(dash); g.beginPath(); g.moveTo(x1, Math.round(y) + 0.5); g.lineTo(x2, Math.round(y) + 0.5); g.stroke(); g.setLineDash([]);
+}
+class Positions {
+  constructor() { this.items = []; }
+  attached(p) { this.chart = p.chart; this.series = p.series; this.req = p.requestUpdate; }
+  detached() { this.req = null; }
+  set(items) { this.items = items || []; if (this.req) this.req(); }
+  updateAllViews() {}
+  autoscaleInfo() {                          // the price scale always shows an open trade's T1 and stop loss
+    const o = this.items.filter((b) => b.t1 == null);
+    if (!o.length) return null;
+    const v = [].concat(...o.map((b) => [b.e, b.sl, b.sl_now, b.t[0]]));
+    return {priceRange: {minValue: Math.min(...v), maxValue: Math.max(...v)}};
+  }
+  paneViews() {                              // the zones under the candles, the labels over them
+    return [{zOrder: () => 'bottom', renderer: () => ({draw: (t) => this.draw(t, false)})},
+            {zOrder: () => 'top', renderer: () => ({draw: (t) => this.draw(t, true)})}];
+  }
+  draw(target, labels) {
+    target.useMediaCoordinateSpace(({context: g, mediaSize: sz}) => {
+      const tsc = this.chart.timeScale(), y = (p) => (p == null ? null : this.series.priceToCoordinate(p));
+      for (const b of this.items) {
+        const x1 = tsc.timeToCoordinate(b.t0);
+        if (x1 == null) continue;
+        const open = b.t1 == null;
+        let x2 = open ? sz.width : tsc.timeToCoordinate(b.t1);      // an open trade: on to the price scale
+        if (x2 == null || x2 - x1 < 14) x2 = x1 + 14;
+        const ye = y(b.e), ys = y(b.sl), y1 = y(b.t[0]), y2 = y(b.t[1]), y3 = y(b.t[2]), yn = y(b.sl_now);
+        if (ye == null || ys == null || y1 == null) continue;
+        const moved = open && Math.abs(b.sl_now - b.sl) > 0.01, dir = b.side > 0 ? 1 : -1;
+        if (!labels) {
+          const fill = (ya, yb, c) => { g.fillStyle = c; g.fillRect(x1, Math.min(ya, yb), x2 - x1, Math.abs(yb - ya)); };
+          fill(ye, ys, 'rgba(242,54,69,0.22)');
+          fill(ye, y1, 'rgba(8,153,129,0.30)');
+          if (y3 != null) fill(y1, y3, 'rgba(8,153,129,0.10)');
+          hline(g, x1, x2, ye, '#9598a1', []);
+          hline(g, x1, x2, y2, 'rgba(8,153,129,0.8)', [4, 3]);
+          hline(g, x1, x2, y3, 'rgba(8,153,129,0.8)', [4, 3]);
+          if (moved) hline(g, x1, x2, yn, '#f23645', [4, 3]);
+          continue;
+        }
+        const left = x2 - x1 < 110, used = [];       // a narrow box (a recent entry): the labels left of it
+        const put = (yy, text, bg) => {              // a label at its price, moved aside if it would cover another
+          if (yy == null) return;
+          let xx = left ? x1 - 3 : x1 + 3;
+          for (const u of used) if (Math.abs(u.y - yy) < 17) xx = left ? Math.min(xx, u.l - 4) : Math.max(xx, u.r + 4);
+          const w = pill(g, xx, yy, text, bg, left);
+          used.push({y: yy, l: left ? xx - w : xx, r: left ? xx : xx + w});
+        };
+        put(ye, (b.side > 0 ? 'BUY ' : 'SELL ') + fmt0(b.e) + (open ? '' : '  ' + sgn(b.pnl) + ' pts'), open ? '#2962ff' : '#5d606b');
+        const pct = (k) => (b.prob && b.prob[k] != null ? ' ' + b.prob[k] + '%' : '');
+        put(y1, 'T1 ' + fmt0(b.t[0]) + ' (' + sgn(dir * (b.t[0] - b.e)) + ')' + pct(0), '#089981');
+        if (open || x2 - x1 > 90) {
+          put(y2, 'T2 ' + fmt0(b.t[1]) + ' (' + sgn(dir * (b.t[1] - b.e)) + ')' + pct(1), 'rgba(8,153,129,0.8)');
+          put(y3, 'T3 ' + fmt0(b.t[2]) + ' (' + sgn(dir * (b.t[2] - b.e)) + ')' + pct(2), 'rgba(8,153,129,0.8)');
+        }
+        put(ys, 'SL ' + fmt0(b.sl) + ' (' + sgn(dir * (b.sl - b.e)) + ')', '#f23645');
+        if (moved) put(yn, stopName(b) + ' ' + fmt0(b.sl_now), stopName(b) === 'BE' ? '#787b86' : '#f23645');
+      }
+    });
+  }
+}
+function stopName(b) {                      // the stop now: the first one, at the entry (breakeven), or trailing
+  const d = (b.side > 0 ? 1 : -1) * (b.sl_now - b.e);
+  return Math.abs(d) < 0.01 ? 'BE' : d > 0 ? 'Trailing SL' : 'SL';
+}
+const pos = new Positions();
+s.attachPrimitive(pos);
+let tblOn = innerWidth >= 700;              // the table: shown on a wide screen, behind the Info button on a phone
+try { const v = localStorage.getItem('opttbl'); if (v) tblOn = v === 'on'; } catch (e) {}
+function extras(d) {                        // the info table and the trades list of the chart shown
+  const name = sel ? (($('head').querySelector('.nm') || {}).textContent || '') : (C ? C.name : '');
+  $('tbl').innerHTML = (d && d.info && d.info.length) ? '<tr><td>CPR Breakout</td><td>' + name + '</td></tr>' +
+    d.info.map((r) => '<tr><td>' + r[0] + '</td><td>' + r[1] + '</td></tr>').join('') : '';
+  $('tbl').classList.toggle('hidden', !tblOn || !(d && d.info && d.info.length));
+  $('infob').classList.toggle('on', tblOn);
+  $('list').innerHTML = (d && d.rows && d.rows.length) ? d.rows.map((r) => '<tr>' + r.map((x) => '<td>' + x + '</td>').join('') + '</tr>').join('')
+    : '<tr><td colspan="5">No trades on this chart today.</td></tr>';
+}
 const ts = (day, m) => { const [y, mo, d] = day.split('-').map(Number); return Date.UTC(y, mo - 1, d) / 1000 + m * 60; };
 const bucket = (m) => 555 + Math.floor((m - 555) / tf) * tf;
 function agg(day, rows) {
@@ -2629,6 +2756,8 @@ async function loadChart() {
     head();
     s.setMarkers((d.marks || []).map((k) => ({time: ts(d.day, bucket(k.m)), position: k.pos, color: k.c, text: markText(k.x),
       shape: k.x === 'B' || k.x === 'BUY' ? 'arrowUp' : k.x === 'S' || k.x === 'SELL' ? 'arrowDown' : 'circle'})));
+    pos.set((d.boxes || []).map((b) => Object.assign({}, b, {t0: ts(d.day, bucket(b.m0)), t1: b.m1 == null ? null : ts(d.day, bucket(b.m1))})));
+    extras(d);
     const key = JSON.stringify(d.lines || []);
     if (key !== s._lk) {
       lines.forEach((l) => s.removePriceLine(l)); lines = []; s._lk = key;
@@ -2639,11 +2768,13 @@ async function loadChart() {
   finally { chartBusy = false; }
 }
 for (const b of document.querySelectorAll('#bar button')) b.onclick = () => {
+  if (b.id === 'infob') { tblOn = !tblOn; try { localStorage.setItem('opttbl', tblOn ? 'on' : 'off'); } catch (e) {} $('tbl').classList.toggle('hidden', !tblOn || !$('tbl').innerHTML); b.classList.toggle('on', tblOn); return; }
+  if (b.id === 'tradesb') { $('panel').classList.toggle('hidden'); b.classList.toggle('on', !$('panel').classList.contains('hidden')); return; }
   if (b.id === 'bell') { if (alertsOn !== null) bell(!alertsOn); return; }
   if (b.id === 'mode') { table = !table; try { localStorage.setItem('optmode', table ? 'table' : 'chain'); } catch (e) {} setMode(); return; }
   if (b.dataset.i) {
     if (b.dataset.i === idx) return;
-    idx = b.dataset.i; sel = null; C = null; fitted = ''; s.setData([]); lines.forEach((l) => s.removePriceLine(l)); lines = []; s._lk = '';
+    idx = b.dataset.i; sel = null; C = null; fitted = ''; s.setData([]); pos.set([]); extras(null); lines.forEach((l) => s.removePriceLine(l)); lines = []; s._lk = '';
     $('rows').innerHTML = ''; $('msg').textContent = 'loading...'; $('head').innerHTML = ''; $('sidehead').innerHTML = '';
     for (const x of document.querySelectorAll('#bar button[data-i]')) x.classList.toggle('on', x === b);
     const u = new URL(location.href); u.searchParams.delete('t'); u.searchParams.set('i', idx); history.replaceState(null, '', u);
