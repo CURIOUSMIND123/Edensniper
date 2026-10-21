@@ -149,13 +149,14 @@ function renderHistory() {
   if (!history) return;
   const r = history.rule || {};
   const cp = history.cpr || {};
-  $('rule').textContent = `A call is a success when the index went at least ${r.NIFTY || 50} points (Nifty) / ${r.SENSEX || 150} points (Sensex) its way before the stop loss; a CPR break call when it reached its target (${(cp.NIFTY || [60])[0]} / ${(cp.SENSEX || [200])[0]} points) before its stop (${(cp.NIFTY || [0, 35])[1]} / ${(cp.SENSEX || [0, 100])[1]}): it makes money above about 41% / 37%. The All / Nifty / Sensex cards: the other calls; the CPR break calls have their own. Points = the call's result after costs. avg + / - = how far the index went its way (before the stop) and against it (while the call was open). T1 = how often the call reached its book-half price (a volume-line or CPR break call: its target); T2 / T3 = how often the next two price levels after it were reached.`;
+  $('rule').textContent = `A call is a success when the index went at least ${r.NIFTY || 50} points (Nifty) / ${r.SENSEX || 150} points (Sensex) its way before the stop loss. The extra calls (CPR break, open high low, gap fill, second chance) have their own cards: one is a success when it reached its target before its stop (second chance: ${r.NIFTY || 50} / ${r.SENSEX || 150} points); they win less often than the others (about 4-6 in 10) and still made money. Points = the call's result after costs. avg + / - = how far the index went its way (before the stop) and against it (while the call was open). T1 = how often the call reached its book-half price (a volume-line or CPR break call: its target); T2 / T3 = how often the next two price levels after it were reached.`;
   const st = history.stats;
   $('stats').innerHTML = statCard('All', st.ALL) + statCard('Nifty', st.NIFTY) + statCard('Sensex', st.SENSEX) +
-    (st['CPR NIFTY'] ? statCard('CPR break Nifty', st['CPR NIFTY']) : '') + (st['CPR SENSEX'] ? statCard('CPR break Sensex', st['CPR SENSEX']) : '');
-  const cb = document.querySelector('.filter [data-f="CPR"]');
-  if (cb) cb.classList.toggle('hidden', !st['CPR NIFTY'] && !st['CPR SENSEX']);
-  const rows = history.calls.filter((c) => histFilter === 'ALL' || c.index === histFilter || (histFilter === 'CPR' && c.setup === 'cpr break'));
+    (st['X NIFTY'] ? statCard('Extra calls Nifty', st['X NIFTY']) : '') + (st['X SENSEX'] ? statCard('Extra calls Sensex', st['X SENSEX']) : '');
+  const cb = document.querySelector('.filter [data-f="X"]');
+  if (cb) cb.classList.toggle('hidden', !st['X NIFTY'] && !st['X SENSEX']);
+  const extra = ['cpr break', 'open high low', 'gap fill', 'second chance'];
+  const rows = history.calls.filter((c) => histFilter === 'ALL' || c.index === histFilter || (histFilter === 'X' && extra.includes(c.setup)));
   let html = '', day = '';
   for (const c of rows.slice(0, histShown)) {
     if (c.d !== day) { day = c.d; html += `<div class="day">${esc(new Date(day + 'T00:00:00').toDateString())}</div>`; }

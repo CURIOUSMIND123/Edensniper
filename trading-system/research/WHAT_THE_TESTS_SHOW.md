@@ -1882,6 +1882,25 @@ each of 2023, 2024 and 2025. None did, on either index.
   quarter of the risk. The same exit on the trend entries of `missed_moves.py` won 76-88% and lost money; it can't
   turn a losing entry into a winning one.
 
+## A second chance after a stopped call (`reentry.py`); the extra calls switched on (21 October 2026)
+
+After a call (default settings + CPR BREAK) loses at its stop, one more trade the same way: at the same price again,
+when the day turns that call's way (a 5-minute close beyond both the open and the CPR), on a pullback to the CPR edge
+after that, or 20 / 35 (Sensex 60 / 100) points beyond the entry; stops 35 / 55 (100 / 170); out at 2x the stop,
+trailing, the calls' management or 3:15. 2023-2026, one a day.
+
+- Nifty: no version made money in each of 2023-2025 (many made money in 2026: e.g. the pullback to the CPR edge,
+  stop 55, trailing: −30 / −495 / +682 / +537).
+- Sensex: one did, the pullback to the broken CPR edge with a 170-point stop held to 3:15: +865 / +298 / +1,725 /
+  +371 (88 trades, 44% won). It is in the alerts as SECOND CHANCE (limit order alert, then the fill).
+- 21 October, Nifty: after the 10:16 stop the day turned falling only at 11:20 and never came back to the CPR bottom,
+  so the pullback order would not have filled; the entry at the 11:20 close would have caught the fall.
+
+Switched on as their own trades (the user: "add whatever makes money"), each checked minute by minute in the alert
+program against its test (`extras_check.py`, `cpr_plus.py`): CPR BREAK (both indices), OPEN HIGH LOW (Nifty: +138 /
++188 / +445 in 2024-2026, −74 in 2023), GAP FILL (Sensex: +190 / +1,278 / +611, −514 in 2023), SECOND CHANCE (Sensex).
+They win about 4-6 in 10; the History screen shows them on their own cards.
+
 ## How to re-check all of this
 
 - `python research/fair_price_backtest.py` downloads the candles and re-runs the Fair Price test.

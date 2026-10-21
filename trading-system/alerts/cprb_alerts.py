@@ -5,8 +5,8 @@ Follows the same rules as tradingview/cpr_breakout.pine (its default settings) o
 Upstox's free public candle data. It tells you when to BUY (a call) or SELL (a put), where the stop and the target
 are and when to exit: on this screen, and on your phone through Telegram if you set that up (free).
 Default rules ('classic'): the daily plan (CPR Magnet at 9:16 or the 9:30 breakout) and the 3-day volume lines, one
-trade at a time, set differently for each index (the most profit in the 2026 tests); CPR_CALLS = True adds the CPR
-BREAK calls as their own trades (off: they win only about 4 in 10, though they made money):
+trade at a time, set differently for each index (the most profit in the 2026 tests); and, as their own trades, the
+extra calls that made money (CPR BREAK on both; OPEN HIGH LOW on Nifty; GAP FILL and SECOND CHANCE on Sensex):
   Nifty:  the Magnet and the breakout only on the volume side of yesterday's POC (buys above it, sells below); no
           volume check.
   Sensex: the volume check on every signal (a BUY only when the last 2 hours' up candles carried more NIFTYBEES volume
@@ -59,12 +59,26 @@ POC_DAYS = {'nifty': 1, 'sensex': 0}    # the volume POC filter (buys only above
                                   # last N sessions' volume (1 = yesterday's); 0 = no POC filter. 2026 tests
                                   # (research/quant/y2026_pocdays.py): Nifty made the most with yesterday's POC and no
                                   # volume check, Sensex with the volume check and no POC filter
-CPR_CALLS = False                 # 'classic' rules: also the CPR BREAK calls: the first touch of the CPR top (BUY) /
+CPR_CALLS = True                  # 'classic' rules: also the CPR BREAK calls: the first touch of the CPR top (BUY) /
                                   # bottom (SELL), 9:16-2:30, when one of four things holds (cpr_conditions()); a
                                   # fixed target and stop, out by 3:15; their own trades, one at a time (one may be
                                   # open together with another call). 2023-2026 they made money in every year on
-                                  # both indices but won only 34-46% of the time (research/quant/cpr_plus.py), so
-                                  # they are off: the user wants calls that win about 8 in 10
+                                  # both indices, winning 34-46% of the time (research/quant/cpr_plus.py)
+OHL_CALLS = {'nifty': True, 'sensex': False}   # OPEN HIGH LOW calls (ohl_trades()): the first 15 minutes never
+                                  # above the open -> SELL at 9:30 (never below -> BUY), stop just beyond the open,
+                                  # target 1x the stop. Nifty 2024 / 2025 / 2026 +138 / +188 / +445 (won 54-64%),
+                                  # 2023 -74 (research/quant/classic_setups.py)
+GAPFILL_CALLS = {'nifty': False, 'sensex': True}   # GAP FILL calls (gapfill_trades()): a gap of 0.5-1.5% and a first
+                                  # 5 minutes that closed back against it -> toward the gap's fill, half way to
+                                  # yesterday's close. Sensex 2024 / 2025 / 2026 +190 / +1,278 / +611 (won 50-61%),
+                                  # 2023 -514 (classic_setups.py)
+REENTRY_CALLS = {'nifty': False, 'sensex': True}   # SECOND CHANCE calls (reentry_trades()): after a call is stopped
+                                  # out, the day turns that call's way (a 5-minute close beyond both the open and the
+                                  # CPR) -> a limit order back at the broken CPR edge, stop REENTRY_STOP points, held
+                                  # to 3:15. Sensex 2023-2026 +865 / +298 / +1,725 / +371 (won 36-56%); on Nifty no
+                                  # version made money every year (research/quant/reentry.py)
+REENTRY_STOP = 170
+EXTRA_SRC = ('CPR BREAK', 'OPEN HIGH LOW', 'GAP FILL', 'SECOND CHANCE')   # their own trades, next to the others
 CPR_TP = {'nifty': 60, 'sensex': 200}   # the CPR BREAK calls' target and stop, index points
 CPR_SL = {'nifty': 35, 'sensex': 100}
 REV_CHANCE = {'nifty': (34, 29, 22), 'sensex': (31, 28, 20)}   # on a trending day (price below both the day's open
@@ -848,6 +862,86 @@ def cpr_trades(cx, c1, upto, over):
             out.append(t)
     return out
 
+def ohl_trades(cx, c1, upto, over):
+    """OPEN HIGH LOW: the first 15 minutes never traded above the open (by more than 0.02%) -> SELL at the close of
+    the 9:29 candle; never below it -> BUY. Stop 0.05% beyond the open (at least 0.1% from the entry, at most
+    STOP_MAX); target 1x the stop; out by 3:15."""
+    if not OHL_CALLS.get(cx['name'].lower()) or upto < RANGE_END - 1:
+        return []
+    first = [x for x in c1 if x[0] < RANGE_END]
+    if len(first) < 10:
+        return []
+    o, e = c1[0][1], first[-1][4]
+    hi, lo = max(x[2] for x in first), min(x[3] for x in first)
+    side = -1 if hi <= o * 1.0002 else 1 if lo >= o * 0.9998 else 0
+    if not side:
+        return []
+    stp = o - side * 0.0005 * o
+    if side * (e - stp) < 0.001 * e:
+        stp = e - side * 0.001 * e
+    cap = stop_max(cx)
+    if cap and side * (e - stp) > cap:
+        stp = e - side * cap
+    tgt = e + side * side * (e - stp)
+    r = run_fixed(c1, side, e, RANGE_END, stp, tgt, OUT, over, cx['cost'])
+    return [dict(src='OPEN HIGH LOW', side=side, m=RANGE_END - 1, known=RANGE_END, e=e, stp0=stp, tgt=tgt, o=o,
+                 full=False, taken=True, **r)]
+
+def gapfill_trades(cx, c1, upto, over):
+    """GAP FILL: the open 0.5-1.5% away from yesterday's close and the first 5-minute candle closed back against the
+    gap -> that way at its close; stop 0.05% beyond that candle's high (low), at most STOP_MAX; target half way to
+    yesterday's close; out by 3:15."""
+    if not GAPFILL_CALLS.get(cx['name'].lower()) or upto < OPEN + 4 or not c1:
+        return []
+    b = candles5(c1, upto)[0]
+    o0, yc = c1[0][1], cx['yc']
+    g = (o0 - yc) / yc * 100
+    side = -1 if g > 0 else 1
+    if not 0.5 <= abs(g) <= 1.5 or side * (b[4] - b[1]) <= 0 or side * (yc - b[4]) <= 0:
+        return []
+    e, ext = b[4], (b[2] if side < 0 else b[3])
+    stp = ext - side * 0.0005 * ext
+    cap = stop_max(cx)
+    if cap and side * (e - stp) > cap:
+        stp = e - side * cap
+    tgt = e + side * 0.5 * abs(yc - e)
+    r = run_fixed(c1, side, e, OPEN + 5, stp, tgt, OUT, over, cx['cost'])
+    return [dict(src='GAP FILL', side=side, m=OPEN + 4, known=OPEN + 5, e=e, stp0=stp, tgt=tgt, gap=g, full=False,
+                 taken=True, **r)]
+
+def reentry_trades(cx, c1, upto, over, ts):
+    """SECOND CHANCE: after a call (not an extra one but CPR BREAK) loses at its stop (before 2:20), the first 5-minute
+    close that makes it a trend day that call's way (beyond both the day's open and the CPR, until 2:30) arms a limit
+    order back at the CPR edge it broke (SELL: the bottom; BUY: the top), valid until 2:30; stop REENTRY_STOP points;
+    held to 3:15. One a day. -> (trades, the armed order or None)."""
+    if not REENTRY_CALLS.get(cx['name'].lower()) or not c1:
+        return [], None
+    o0, top, bot = c1[0][1], cx['lv']['top'], cx['lv']['bot']
+    b5 = candles5(c1, upto)
+    for t in sorted(ts, key=lambda t: t['m']):
+        if (t['src'] in EXTRA_SRC and t['src'] != 'CPR BREAK') or not t['taken'] or not t['exit'] \
+                or t['exit']['why'] != 'stop' or t['exit']['m'] >= 860:
+            continue
+        sd, x0 = t['side'], t['exit']['m']
+        conf = next(((s + 5, c) for s, o, h, l, c in b5 if x0 < s + 5 <= VOL_END and
+                     ((sd < 0 and c < min(o0, bot)) or (sd > 0 and c > max(o0, top)))), None)
+        if not conf:
+            continue
+        lvl = bot if sd < 0 else top
+        fill = next(((m, max(o, lvl) if sd < 0 else min(o, lvl)) for m, o, h, l, c in c1
+                     if conf[0] <= m <= VOL_END and ((sd < 0 and h >= lvl) or (sd > 0 and l <= lvl))), None)
+        arm = dict(side=sd, m=conf[0], lvl=lvl, call=t, expired=upto >= VOL_END)
+        if not fill:
+            if upto < VOL_END:
+                return [], arm
+            continue
+        e = fill[1]
+        stp = e - sd * REENTRY_STOP
+        r = run_fixed(c1, sd, e, fill[0] + 1, stp, e + sd * 10 ** 6, OUT, over, cx['cost'])
+        return [dict(src='SECOND CHANCE', side=sd, m=fill[0], known=fill[0] + 1, e=e, stp0=stp, tgt=None, lvl=lvl,
+                     call=t, armed=conf[0], full=False, taken=True, **r)], dict(arm, done=True)
+    return [], None
+
 def trend_now(cx, c1, upto):
     """The day's trend at the last 5-minute close (from 9:35): falling = below both the day's open and the CPR, rising =
     above both, else none; with how often price reversed from moments like it (REV_CHANCE). None before 9:35."""
@@ -1042,8 +1136,10 @@ def day_trades(cx, c1, upto, over=False, ladder=False, rules=None):
         if t['taken']:
             free = t['exit']['m'] + 1 if t['exit'] else 10 ** 9
             nsw += t['src'] == 'SWEEP'
-    if rules == 'classic' and CPR_CALLS:
-        ts = sorted(ts + cpr_trades(cx, c1, upto, over), key=lambda t: t['m'])
+    if rules == 'classic':
+        ts = ts + (cpr_trades(cx, c1, upto, over) if CPR_CALLS else [])
+        re, cx['re_arm'] = reentry_trades(cx, c1, upto, over, ts)
+        ts = sorted(ts + ohl_trades(cx, c1, upto, over) + gapfill_trades(cx, c1, upto, over) + re, key=lambda t: t['m'])
     return ts
 
 
@@ -1097,6 +1193,16 @@ def plan_text(cx):
     if vcheck(cx['name']):
         out.append("Volume check on every signal: a BUY only if, over the last 2 hours, the up candles carried more volume "
                    "(NIFTYBEES) than the down candles; a SELL only if the down candles did. Otherwise the signal is skipped.")
+    if OHL_CALLS.get(nm.lower()):
+        out.append(f"OPEN HIGH LOW call at 9:30 (its own trade): if the first 15 minutes never trade above the open -> SELL, "
+                   "never below it -> BUY; stop just beyond the open, target 1x the stop, out by 3:15.")
+    if GAPFILL_CALLS.get(nm.lower()):
+        out.append(f"GAP FILL call at 9:20 (its own trade): if the open is 0.5-1.5% away from yesterday's close {f2(cx['yc'])} "
+                   "and the first 5 minutes close back against the gap -> toward the fill; stop beyond the first 5 minutes, "
+                   "target half way to yesterday's close, out by 3:15.")
+    if REENTRY_CALLS.get(nm.lower()):
+        out.append(f"SECOND CHANCE (its own trade): if a call is stopped out and the day then turns its way (beyond both the "
+                   f"open and the CPR), a limit order back at the CPR edge, stop {REENTRY_STOP} points, held to 3:15.")
     if CPR_CALLS and CPR_TP.get(nm.lower()):
         out.append(f"CPR BREAK calls, 9:16-2:30 (their own trades; the CPR / gap / POC / volume rules above don't apply): "
                    f"the first touch of the CPR top {f2(lv['top'])} -> BUY, of its bottom {f2(lv['bot'])} -> SELL, at the "
@@ -1178,7 +1284,7 @@ def range_note(cx, c1):
 def messages(cx, ts, c1, upto, lots):
     """(id, minute known, text, important) for everything that has happened so far."""
     nm, out = cx['name'], []
-    plan = [t for t in ts if t['src'] not in ('VOLUME LINE', 'SWEEP', 'CPR BREAK')]
+    plan = [t for t in ts if t['src'] not in ('VOLUME LINE', 'SWEEP') + EXTRA_SRC]
     if cx.get('rules_used') in ('small', 'rr'):
         return messages_small(cx, ts, c1, upto, lots)
     if c1 and not cx['narrow'] and upto >= 556 and not any(t['src'] == 'MAGNET' for t in plan):
@@ -1202,11 +1308,25 @@ def messages(cx, ts, c1, upto, lots):
                         (f"{SWEEP_MAX} sweep trades already today." if t.get('full') else "another CPR BREAK call is still open."
                          if t['src'] == 'CPR BREAK' else "another trade is still open."), False))
             continue
+        own = " Its own trade: it can be open together with another call."
         if t['src'] == 'CPR BREAK':
             how = (f"First touch of the CPR {'top' if t['side'] > 0 else 'bottom'} today; " + '; '.join(t['why']) +
                    f". Stop {f2(t['stp0'])} ({abs(t['e'] - t['stp0']):.0f} points). Target {f2(t['tgt'])} "
-                   f"({abs(t['tgt'] - t['e']):.0f} points), all out there. Out by 15:15 at the latest. Its own trade: it can be "
-                   "open together with another call.")
+                   f"({abs(t['tgt'] - t['e']):.0f} points), all out there. Out by 15:15 at the latest." + own)
+        elif t['src'] == 'OPEN HIGH LOW':
+            how = (f"The first 15 minutes never traded {'above' if t['side'] < 0 else 'below'} the open {f2(t['o'])} (open = "
+                   f"{'high' if t['side'] < 0 else 'low'}). Stop {f2(t['stp0'])} ({abs(t['e'] - t['stp0']):.0f} points). Target "
+                   f"{f2(t['tgt'])} (1x the stop), all out there. Out by 15:15 at the latest." + own)
+        elif t['src'] == 'GAP FILL':
+            how = (f"Opened {abs(t['gap']):.2f}% {'above' if t['gap'] > 0 else 'below'} yesterday's close {f2(cx['yc'])} and the "
+                   f"first 5 minutes closed back {'down' if t['side'] < 0 else 'up'}: toward filling the gap. Stop {f2(t['stp0'])} "
+                   f"(beyond the first 5 minutes' {'high' if t['side'] < 0 else 'low'}). Target {f2(t['tgt'])} (half way to "
+                   "yesterday's close), all out there. Out by 15:15 at the latest." + own)
+        elif t['src'] == 'SECOND CHANCE':
+            c0 = t['call']
+            how = (f"Limit order filled back at the CPR {'bottom' if t['side'] < 0 else 'top'} {f2(t['lvl'])}: the {c0['src'].lower()} "
+                   f"{sd} from {hhmm(c0['m'])} was stopped out, then the day turned {'falling' if t['side'] < 0 else 'rising'}. "
+                   f"Stop {f2(t['stp0'])} ({REENTRY_STOP} points). No target: hold until 15:15 (or the stop)." + own)
         elif t['src'] == 'SWEEP':
             hi = t['side'] < 0
             how = (f"Price went {'above' if hi else 'below'} yesterday's {'high' if hi else 'low'} {f2(t['lvl'])} and closed back "
@@ -1224,7 +1344,7 @@ def messages(cx, ts, c1, upto, lots):
                    f"Stop {f2(t['stp0'])} ({sn or 'other side of the 15-minute range'}). Book half at "
                    f"{f2(t['e'] + t['side'] * 0.25 * t['R'])}, then stop to entry; after {f2(t['e'] + t['side'] * t['R'])} "
                    "trail the stop 1R behind the best price.")
-        tn = trend_now(cx, c1, t['m']) if t['src'] != 'CPR BREAK' else None
+        tn = trend_now(cx, c1, t['m']) if t['src'] not in EXTRA_SRC else None
         if tn and tn['dir'] == -t['side']:
             how += (f" CAREFUL: this is against today's trend (price {'below' if tn['dir'] < 0 else 'above'} the day's open and "
                     "the CPR); calls like this won only about 3 in 10 in 2023-2026 and lost money overall.")
@@ -1251,6 +1371,17 @@ def messages(cx, ts, c1, upto, lots):
     tn = trend_now(cx, c1, upto)
     if tn and tn['dir']:
         out.append((('trend', tn['dir']), tn['m'], tn['text'], True))
+    ra = cx.get('re_arm')
+    if ra:
+        w, c0 = ('SELL' if ra['side'] < 0 else 'BUY'), ra['call']
+        out.append((('re-arm', ra['m']), ra['m'], f"{nm} {hhmm(ra['m'])} SECOND CHANCE: the {c0['src'].lower()} {w} from "
+                    f"{hhmm(c0['m'])} was stopped out and now it is a {'falling' if ra['side'] < 0 else 'rising'} day. Place a {w} "
+                    f"LIMIT order at {f2(ra['lvl'])} (back at the CPR {'bottom' if ra['side'] < 0 else 'top'}), valid until 14:30 -> "
+                    f"{option(cx, ra['side'], ra['lvl'])}. Stop {f2(ra['lvl'] - ra['side'] * REENTRY_STOP)} ({REENTRY_STOP} points); "
+                    "no target, hold until 15:15.", True))
+        if ra.get('expired') and not ra.get('done'):
+            out.append((('re-cancel', ra['m']), VOL_END, f"{nm} 14:30: the SECOND CHANCE limit order at {f2(ra['lvl'])} wasn't "
+                        f"filled. Cancel it.", True))
     for m, side, e in cx.get('cpr_none') or []:
         out.append((('cprnone', side), m + 1, f"{nm} {hhmm(m)} first touch of the CPR {'top' if side > 0 else 'bottom'} at "
                     f"{f2(e)}: no CPR BREAK call (none of its four conditions today).", False))
@@ -1405,13 +1536,13 @@ def mfe_before_stop(c1, side, e, stop, start_m, last_m=CLOSE - 1):
             best = max(best, side * (p - e))
     return best, False
 
-TARGETS_V = 4                     # the saved history's version (2: T1 = where half is booked; 3: stops capped at
-                                  # 55 Nifty / 170 Sensex points; 4: the CPR BREAK calls): days saved with an older
-                                  # one are worked out again
+TARGETS_V = 5                     # the saved history's version (2: T1 = where half is booked; 3: stops capped at
+                                  # 55 Nifty / 170 Sensex points; 4: the CPR BREAK calls; 5: all the extra calls):
+                                  # days saved with an older one are worked out again
 
 def half_price(t):
     """Where the call books half (or, for a single target, its target): T1."""
-    if t.get('small') or t['src'] in ('VOLUME LINE', 'SWEEP', 'CPR BREAK'):
+    if t.get('small') or t['src'] in ('VOLUME LINE', 'SWEEP') + EXTRA_SRC:
         return t['tgt']
     if t['src'] == 'MAGNET':
         return t['t1']
@@ -1430,12 +1561,14 @@ def t_probs(name, src):
         except Exception:
             PROBS['-'] = {}
     by = PROBS.get(name, {})
-    v = by.get(src) if by.get(src, {}).get('n', 0) >= 30 else None if src == 'CPR BREAK' else by.get('ALL')
+    v = by.get(src) if by.get(src, {}).get('n', 0) >= 30 else None if src in EXTRA_SRC else by.get('ALL')
     return v or None
 
 def t1_word(t):
     """What the call does at T1: books half, or (a single target) books all."""
-    return 'target' if t['src'] in ('VOLUME LINE', 'SWEEP', 'CPR BREAK') and not t.get('tgt2') else 'book half'
+    if t['src'] == 'SECOND CHANCE':
+        return 'reference: held to 3:15'
+    return 'target' if t['src'] in ('VOLUME LINE', 'SWEEP') + EXTRA_SRC and not t.get('tgt2') else 'book half'
 
 def target_levels(cx, c1, side, e, start, t1=None):
     """T1 / T2 / T3 for the app, the chart and the alerts. T1 = where the call books half (`t1`; the exits are the
@@ -1475,7 +1608,7 @@ def call_info(cx, t, c1):
     """One taken trade as the app shows it."""
     sd, x = t['side'], t['exit']
     mfe, stopped = mfe_before_stop(c1, sd, t['e'], t['stp0'], t['known'])
-    need = CPR_TP.get(cx['name'].lower(), 0) if t['src'] == 'CPR BREAK' else SUCCESS_PTS.get(cx['name'], 0)   # CPR BREAK: its target
+    need = abs(t['tgt'] - t['e']) if t['src'] in EXTRA_SRC and t.get('tgt') else SUCCESS_PTS.get(cx['name'], 0)   # extra calls: their target
     m0 = 556 if t['src'] == 'MAGNET' else t['m']           # as the alert says it
     tg = target_levels(cx, c1, sd, t['e'], t['known'], half_price(t))
     pr = t_probs(cx['name'], t['src'])
@@ -1527,11 +1660,12 @@ def history_all():
     out = dict(rule={k: v for k, v in SUCCESS_PTS.items()}, cpr={k.upper(): (CPR_TP[k], CPR_SL[k]) for k in CPR_TP},
                calls=calls, stats={})
     cut = str(dt.date.fromisoformat(calls[0]['d']) - dt.timedelta(days=30)) if calls else ''
-    for idx in ('ALL', 'NIFTY', 'SENSEX', 'CPR NIFTY', 'CPR SENSEX'):     # ALL / NIFTY / SENSEX: the other calls
-        cpr = idx.startswith('CPR')
-        rs = [r for r in calls if (r.get('setup') == 'cpr break') == cpr and idx in ('ALL', r['index'], 'CPR ' + r['index'])]
-        if cpr and not rs:
-            continue                                  # no CPR BREAK calls (they are off)
+    extra = {x.lower() for x in EXTRA_SRC}
+    for idx in ('ALL', 'NIFTY', 'SENSEX', 'X NIFTY', 'X SENSEX'):     # ALL / NIFTY / SENSEX: the calls; X: the extra ones
+        x = idx.startswith('X ')
+        rs = [r for r in calls if (r.get('setup') in extra) == x and idx in ('ALL', r['index'], 'X ' + r['index'])]
+        if x and not rs:
+            continue
         out['stats'][idx] = dict(all=stats(rs), last30=stats([r for r in rs if r['d'] > cut]))
     return out
 
@@ -1625,8 +1759,8 @@ def chart_update(n, cx, c_all, ts, got, day):
         levels.append(dict(p=T[0], c='#26a69a', t='T1', s=2, w=1))      # T2 / T3: in the position box
         half = any(e['kind'] == 'half' for e in open_t['ev'])
         sd = open_t['side']
-        if open_t.get('small') or open_t['src'] == 'CPR BREAK':
-            tg = open_t['tgt']
+        if open_t.get('small') or open_t['src'] in EXTRA_SRC:
+            tg = open_t.get('tgt')
         elif open_t['src'] == 'MAGNET':
             tg = open_t['edge'] if half else open_t['t1']
         elif open_t['src'] == 'VOLUME LINE':

@@ -82,6 +82,8 @@ Costs: 4 Nifty points or 12 Sensex points per trade. `pip install pandas scikit-
 | `y2026_reentry.py` | 2026: small stops with one re-entry (or a flip), and reversals from our T2 / T3 levels with a very small stop |
 | `lower_buy.py` | 2023-2026: the order 30 (Nifty) / 100 (Sensex) points lower than the call, same stop price: which calls fill, and what it makes |
 | `user_rule.py` | 2023-2026: every losing family's entries and the daily CPR breakouts, as they are and reversed, with the user's 60 / 35 (Nifty) and 200 / 100 (Sensex) target / stop |
+| `reentry.py` | 2023-2026: a second trade after a stopped call (same price, trend confirmation, pullback to the CPR edge, a zone) |
+| `extras_check.py` | the alert program's OPEN HIGH LOW / GAP FILL / SECOND CHANCE calls, minute by minute, against their tests |
 | `classic_setups.py` | 2023-2026: Camarilla reversals / breakouts, gap fill, open = high / low, RSI-2, Bollinger reversals, VWAP pullbacks (37 versions) |
 | `missed_moves.py` | 2023-2026: the big days (0.8%+ open to close), what the calls did on them, and add-ons to catch them (late / conflict-day breakouts, entering when the day turns falling / rising) |
 | `option_flip.py` | Jul-Oct 2026: the indicator on the call and the put charts; a SELL on one -> buy the other (real 1-minute option candles of contracts still trading, and the nearest weekly rebuilt from the index: `python option_flip.py nifty synthetic`) |

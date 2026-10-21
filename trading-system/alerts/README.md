@@ -35,8 +35,7 @@ Alerts appear on the screen (with a beep) and, if you set it up, on your phone t
   trade −182 (before −789); Nifty −135 / −505 / −224 / +1,638 (before −275 / −267 / −416 / +2,389), worst −59 (before
   −183). 95% of the calls that reached T1 came back less than 55 / 171 points first (`research/quant/mae_study.py`).
   `STOP_MAX = {'nifty': 0, 'sensex': 0}` goes back to each setup's own stop.
-  **CPR BREAK calls** (`CPR_CALLS = True`; OFF by default since 19 October 2026: they win only about 4 in 10 and the
-  user wants calls that win about 8 in 10): their own trades next to the others (one at a
+  **CPR BREAK calls** (`CPR_CALLS = True`; on again from 21 October 2026, the user: "add whatever makes money"): their own trades next to the others (one at a
   time; one may be open together with another call). The first 1-minute touch of today's CPR top from below -> BUY,
   of its bottom from above -> SELL (each once a day, 9:16-2:30), at the close of that candle, when one of four things
   holds: today's CPR overlaps yesterday's; the touch is between 10:00 and 11:30; price is still inside the 15-minute
@@ -46,6 +45,12 @@ Alerts appear on the screen (with a beep) and, if you set it up, on your phone t
   2025 / 2026 after costs: Nifty +131 / +211 / +111 / +636 points (91 / 145 / 128 / 81 trades), Sensex +2,734 /
   +419 / +2,594 / +1,366 (103 / 156 / 127 / 90); the target came first on 34-46% (break-even 41% / 37%)
   (`research/quant/cpr_plus.py`; the program's own trades match that test). `CPR_CALLS = False` turns them off.
+  **More extra calls** (from 21 October 2026, their own trades): `OHL_CALLS` OPEN HIGH LOW on Nifty (9:30: the first
+  15 minutes never above the open -> SELL, never below -> BUY; target 1x the stop), `GAPFILL_CALLS` GAP FILL on Sensex
+  (9:20: a 0.5-1.5% gap and a first 5 minutes back against it -> toward the fill, half way), `REENTRY_CALLS` SECOND
+  CHANCE on Sensex (a call stopped, then the day turns its way -> a limit order back at the CPR edge, stop 170, held
+  to 3:15). They made money in 2024-2026 (SECOND CHANCE: every year 2023-2026) and win about 4-6 in 10
+  (`research/quant/classic_setups.py`, `reentry.py`, `extras_check.py`).
   **Trend / no reversal** (from 19 October 2026): at each 5-minute close from 9:35, a FALLING day (price below both
   the day's open and the CPR) or a RISING day (above both). From such moments in 2023-2026 price turned 60 / 200
   points the other way before 35 / 100 more only about 1 time in 3 before 10:30, 1 in 4 to 12:30, 1 in 5 after

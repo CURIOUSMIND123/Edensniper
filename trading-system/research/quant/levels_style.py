@@ -42,7 +42,12 @@ vol = collections.defaultdict(dict)
 for f in ('../.cache/niftybees_1m_old.json', '../.cache/niftybees_1m.json'):
     for k, v in json.load(open(f)).items():
         vol[k[:10]][int(k[11:13]) * 60 + int(k[14:16])] = v[4]
-A.RULES, A.SWEEP, A.CPR_CALLS = 'classic', False, False       # the calls as before (cpr_plus.py: the CPR BREAK calls)
+EXTRAS = (A.CPR_CALLS, A.OHL_CALLS, A.GAPFILL_CALLS, A.REENTRY_CALLS)    # the alert program's extra calls, as set there
+def extras(on):
+    """The extra calls (CPR BREAK, OPEN HIGH LOW, GAP FILL, SECOND CHANCE) as the alert program has them, or none."""
+    A.CPR_CALLS, A.OHL_CALLS, A.GAPFILL_CALLS, A.REENTRY_CALLS = EXTRAS if on else (False, {}, {}, {})
+A.RULES, A.SWEEP = 'classic', False
+extras(False)                                                   # the calls as before (cpr_plus.py etc.: the extra ones)
 CACHE = f'../.cache/levels_cx_{NM}.pkl'
 if os.path.exists(CACHE):
     CX = pickle.load(open(CACHE, 'rb'))

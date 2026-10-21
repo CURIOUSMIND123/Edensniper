@@ -17,7 +17,7 @@ import y2026 as Y, y2026_combo as K, y2026_improve as I, y2026_vol_lines as V, c
 import y2026_rr as RR, y2026_smc as M, y2026_sweep as SW
 sys.path.insert(0, '../../alerts')
 import cprb_alerts as A
-A.CPR_CALLS = False                                   # the CPR BREAK calls: cpr_plus.py checks them
+A.CPR_CALLS, A.OHL_CALLS, A.GAPFILL_CALLS, A.REENTRY_CALLS = False, {}, {}, {}   # the extra calls: extras_check.py
 POC_NOW, VC_NOW = dict(A.POC_DAYS), A.VOLCHECK
 STOP_NOW = dict(A.STOP_MAX)
 A.STOP_MAX = dict.fromkeys(A.STOP_MAX, 0)             # the backtests in 1.-3. have each setup's own stop (no cap)

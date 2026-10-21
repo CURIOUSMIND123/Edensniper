@@ -14,7 +14,7 @@ def run(nm):
     sys.argv = [sys.argv[0], nm]
     import levels_style as LS
     A = LS.A
-    A.CPR_CALLS = True                          # the CPR BREAK calls too
+    LS.extras(True)                             # the extra calls too
     cnt = collections.defaultdict(lambda: [0, 0, 0, 0])
     for d in LS.DAYS:
         cx, c1 = LS.CX[d], LS.sess[d]
