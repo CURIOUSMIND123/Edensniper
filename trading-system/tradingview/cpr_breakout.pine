@@ -161,27 +161,35 @@ vlN    = input.int(3, "Volume lines from the last N sessions", minval = 2, maxva
 vlRR   = input.float(1.5, "Skip when the next line is less than this x the stop away", step = 0.25, group = G5)
 vlLad  = input.bool(false, "Ladder: at the next line book half, move the stop to the broken line, ride the rest to the line after", group = G5, tooltip = "2026 test, whole indicator: Sensex net +8,612 instead of +7,894 (all of the gain in Jan-Jun), Nifty +2,373 instead of +2,454. Booking half needs at least 2 lots.")
 vlShow = input.bool(true, "Draw the volume lines", group = G5)
+vlCry  = input.bool(true, "On crypto charts (BTC and others): volume-line calls only", group = G5,
+         tooltip = "Asked for on 21 October 2026. On a crypto chart the other calls (CPR Magnet, the breakout, CPR BREAK, sweeps, open high low, gap fill, second chance) are not taken. Not tested on crypto. On Nifty / Sensex 2023-2026 the volume-line calls won 40% / 48% of the time: Sensex made money every year, Nifty only in 2026.")
+VLONLY = vlCry and syminfo.type == "crypto"
 G7 = "Volume check (Dr David Paul; original rules)"
 vcNf   = input.bool(false, "Volume check on Nifty: BUY only when the up candles carried more volume than the down candles (SELL the other way)", group = G7, tooltip = "Price and volume move together in a healthy up move (rises on heavy volume, dips on light volume); in distribution the falls come on heavy volume and the rallies on light volume. Volume from the 'Volume from' symbol (NIFTYBEES). Over the last N five-minute candles closed by the signal. 2026 Nifty with yesterday's POC: 93 trades, net +2,389, worst fall -204 without the check; 77 trades, +2,114, worst fall -145 with it.")
 vcSx   = input.bool(true, "Volume check on Sensex", group = G7, tooltip = "2026 Sensex with no POC filter: 82 trades, net +9,166, worst fall -336 with the check; 152 trades, +7,893, worst fall -1,505 without it.")
 vcN    = input.int(24, "Volume check: over the last N five-minute candles (24 = 2 hours)", minval = 6, maxval = 100, group = G7)
 G6 = "Liquidity sweeps of yesterday's high / low (same book; original rules)"
-swOn   = input.bool(false, "Trade liquidity sweeps: a 5-minute candle goes beyond yesterday's high / low and closes back -> the other way", group = G6, tooltip = "9:30-2:30, only when no other trade is open. Above yesterday's high and back below -> SELL; below yesterday's low and back above -> BUY. Stop 0.02% beyond the candle's high / low (skipped if wider than 0.5% of price), target 3x the stop, out by 3:15. 2026: Nifty +2,993 instead of +2,274, Sensex +9,279 instead of +8,102.")
+swOnIn = input.bool(false, "Trade liquidity sweeps: a 5-minute candle goes beyond yesterday's high / low and closes back -> the other way", group = G6, tooltip = "9:30-2:30, only when no other trade is open. Above yesterday's high and back below -> SELL; below yesterday's low and back above -> BUY. Stop 0.02% beyond the candle's high / low (skipped if wider than 0.5% of price), target 3x the stop, out by 3:15. 2026: Nifty +2,993 instead of +2,274, Sensex +9,279 instead of +8,102.")
 swMax  = input.int(3, "Sweeps: at most this many a day", minval = 1, maxval = 10, group = G6)
 swMult = input.float(3.0, "Sweeps: target = this x the stop", step = 0.5, group = G6)
 swShow = input.bool(true, "Draw yesterday's high / low", group = G6)
 costIn = input.float(0, "Cost per trade in index points (0 = auto: Nifty 4, Sensex 12)", step = 1, group = G1)
 G8 = "CPR break calls (their own trades; original rules)"
-cbOn   = input.bool(true, "CPR BREAK calls (win about 4 in 10): the first touch of the CPR top (BUY) / bottom (SELL), 9:16-2:30, when one of four things holds", group = G8, tooltip = "The four: today's CPR overlaps yesterday's; the touch is between 10:00 and 11:30; price is still inside the 15-minute range (after 9:30); the day opened beyond that side of the CPR, came back and broke out again with RSI 14 above 55 (BUY) / below 45 (SELL). Entry at the close of the touching 1-minute candle, fixed target and stop, out by 3:15. One at a time; may be open together with another call. 2023 / 2024 / 2025 / 2026: Nifty +131 / +211 / +111 / +636, Sensex +2,734 / +419 / +2,594 / +1,366 points after costs.")
+cbOnIn = input.bool(true, "CPR BREAK calls (win about 4 in 10): the first touch of the CPR top (BUY) / bottom (SELL), 9:16-2:30, when one of four things holds", group = G8, tooltip = "The four: today's CPR overlaps yesterday's; the touch is between 10:00 and 11:30; price is still inside the 15-minute range (after 9:30); the day opened beyond that side of the CPR, came back and broke out again with RSI 14 above 55 (BUY) / below 45 (SELL). Entry at the close of the touching 1-minute candle, fixed target and stop, out by 3:15. One at a time; may be open together with another call. 2023 / 2024 / 2025 / 2026: Nifty +131 / +211 / +111 / +636, Sensex +2,734 / +419 / +2,594 / +1,366 points after costs.")
 cbTpN  = input.float(60, "CPR break: target on Nifty, points", step = 5, group = G8)
 cbSlN  = input.float(35, "CPR break: stop on Nifty, points", step = 5, group = G8)
 cbTpS  = input.float(200, "CPR break: target on Sensex, points", step = 10, group = G8)
 cbSlS  = input.float(100, "CPR break: stop on Sensex, points", step = 10, group = G8)
-ohOn   = input.bool(true, "OPEN HIGH LOW calls on Nifty (9:30: the first 15 minutes never above / below the open)", group = G8)
-gfOn   = input.bool(true, "GAP FILL calls on Sensex (9:20: a 0.5-1.5% gap, the first 5 minutes back against it)", group = G8)
-scOn   = input.bool(true, "SECOND CHANCE calls on Sensex (a call stopped, then the day turns its way: limit back at the CPR edge)", group = G8)
+ohOnIn = input.bool(true, "OPEN HIGH LOW calls on Nifty (9:30: the first 15 minutes never above / below the open)", group = G8)
+gfOnIn = input.bool(true, "GAP FILL calls on Sensex (9:20: a 0.5-1.5% gap, the first 5 minutes back against it)", group = G8)
+scOnIn = input.bool(true, "SECOND CHANCE calls on Sensex (a call stopped, then the day turns its way: limit back at the CPR edge)", group = G8)
 scStop = input.float(170, "Second chance: stop, points", step = 10, group = G8)
 trOn   = input.bool(true, "Say when it is a FALLING / RISING day with no sign of a reversal (box, label, alert)", group = G8, tooltip = "Falling: price below both the day's open and the CPR at a 5-minute close; rising: above both. 2023-2026, a trade against such a move won (60 / 200 before 35 / 100) only 34 / 29 / 22% of the time on Nifty, 31 / 28 / 20% on Sensex (before 10:30 / to 12:30 / after); break-even 41% / 37%.")
+swOn = swOnIn and not VLONLY                    // on a crypto chart with "volume-line calls only": none of these
+cbOn = cbOnIn and not VLONLY
+ohOn = ohOnIn and not VLONLY
+gfOn = gfOnIn and not VLONLY
+scOn = scOnIn and not VLONLY
 G2 = "Display"
 cprPink = input.color(color.new(#e91e63, 0), "CPR colour", group = G2)
 cprNar  = input.color(color.new(#f57c00, 0), "CPR colour on narrow days", group = G2)
@@ -202,7 +210,10 @@ pocNn   = input.int(1, "Volume POC on Nifty: last N sessions (1 = yesterday's; 0
 pocNs   = input.int(0, "Volume POC on Sensex: last N sessions (1 = yesterday's; 0 = no POC filter)", minval = 0, maxval = 30, group = G3,
          tooltip = "2026 Sensex with the volume check: 30 sessions +8,001, 15 +8,700, 7 +8,668, 3 +8,587, 1 +8,537, no POC filter +9,166 (82 trades, worst fall -336, better in both halves).")
 showEma = input.bool(false, "Show the EMA 50", group = G2)
-showBox = input.bool(true, "Show the status and results box", group = G2)
+boxMode = input.string("Small", "Status and results box", options = ["Small", "Full", "Off"], group = G2,
+         tooltip = "Small: the key lines in tiny text (CPR, trend, what is happening now, the CPR break call, the results on this chart). Full: every line.")
+boxPos  = input.string("Top right", "Box position", options = ["Top right", "Bottom right", "Bottom left", "Top left"], group = G2)
+showBox = boxMode != "Off"
 
 TZ     = "Asia/Kolkata"
 GREEN  = color.new(#089981, 0)
@@ -720,7 +731,7 @@ if is5 and n1 > 0
             dOpen := ok
             cb := ok > top ? 1 : ok < bot ? -1 : 0
             gapDir := ok > pC ? 1 : ok < pC ? -1 : 0
-            if magOn and not narrow and state == 0 and complete and not volOpen
+            if magOn and not VLONLY and not narrow and state == 0 and complete and not volOpen
                 int ms = ok > top and ck >= top / (1 - magGap / 100) ? -1 : ok < bot and ck <= bot / (1 + magGap / 100) ? 1 : 0
                 if magPoc and pocOn and (na(poc) or ms * (ck - poc) <= 0)
                     ms := 0
@@ -1043,7 +1054,7 @@ if is5 and n1 > 0
         if complete
             pc1 := ck
         // touch entries
-        if not shortMode and mk >= 570 and not volOpen and entF == "Touch of the range high / low" and mk < CUT and not na(orh) and (state == 0 or (state == 2 and mk >= afterMin))
+        if not shortMode and not VLONLY and mk >= 570 and not volOpen and entF == "Touch of the range high / low" and mk < CUT and not na(orh) and (state == 0 or (state == 2 and mk >= afterMin))
             int sd = hk >= orh ? 1 : lk <= orl ? -1 : 0
             if state == 2 and sd != -side
                 sd := 0
@@ -1068,7 +1079,7 @@ if is5 and n1 > 0
                         state := 1
 
         // small stops: the pullback after the 9:30 breakout, a limit order back at the broken 15-minute level (until 12:00)
-        if shortMode and mk >= 570 and not na(orh)
+        if shortMode and not VLONLY and mk >= 570 and not na(orh)
             if pullState == 0 and mk < CUT
                 int pls = hk >= orh ? 1 : lk <= orl ? -1 : 0
                 if pls != 0
@@ -1124,7 +1135,7 @@ if is5 and n1 > 0
                                 state := 1
 
 // 5-minute close entries (at the close of this candle)
-if is5 and not shortMode and not volOpen and entF == "5-minute close beyond the range" and barstate.isconfirmed and not na(orh) and mins >= 570 and mins + 5 <= CUT and (state == 0 or (state == 2 and mins >= afterMin))
+if is5 and not shortMode and not VLONLY and not volOpen and entF == "5-minute close beyond the range" and barstate.isconfirmed and not na(orh) and mins >= 570 and mins + 5 <= CUT and (state == 0 or (state == 2 and mins >= afterMin))
     int sd = close > orh ? 1 : close < orl ? -1 : 0
     if state == 2 and sd != -side
         sd := 0
@@ -1468,11 +1479,27 @@ if barstate.islast and cprOn
                         edgeName(edgeLbl, xb, x, "Next: 3-day volume line " + fmt(x), TEAL, size.small)
 
 // ---------------- status and results box ----------------
-var table tbl = table.new(position.top_right, 2, 15, bgcolor = color.new(chart.bg_color, 5), border_width = 1, border_color = color.new(GREY, 60), frame_width = 1, frame_color = GREY)
+var table tbl = table.new(boxPos == "Bottom right" ? position.bottom_right : boxPos == "Bottom left" ? position.bottom_left : boxPos == "Top left" ? position.top_left : position.top_right,
+     2, 15, bgcolor = color.new(chart.bg_color, 5), border_width = 1, border_color = color.new(GREY, 60), frame_width = 1, frame_color = GREY)
 cell(int r, string a, string b, color tc) =>
-    table.cell(tbl, 0, r, a, text_color = GREY, text_size = size.small, text_halign = text.align_left)
-    table.cell(tbl, 1, r, b, text_color = tc, text_size = size.small, text_halign = text.align_left)
-if barstate.islast and showBox
+    table.cell(tbl, 0, r, a, text_color = GREY, text_size = boxMode == "Small" ? size.tiny : size.small, text_halign = text.align_left)
+    table.cell(tbl, 1, r, b, text_color = tc, text_size = boxMode == "Small" ? size.tiny : size.small, text_halign = text.align_left)
+cut(string x, int n) =>
+    str.length(x) > n ? str.substring(x, 0, n - 3) + "..." : x
+if barstate.islast and boxMode == "Small"
+    cell(0, "CPRB", is5 ? syminfo.ticker : "use a 5m chart", is5 ? chart.fg_color : RED)
+    cell(1, "CPR", fmt(bot) + " - " + fmt(top) + (narrow ? " NARROW" : ""), narrow ? cprNar : cprPink)
+    if trOn and not shortMode and is5
+        cell(2, "Trend", trDir == 0 ? "no clear trend" : (trDir < 0 ? "FALLING: don't BUY" : "RISING: don't SELL") + " (" + str.tostring(trPct) + "% turn)", trDir < 0 ? RED : trDir > 0 ? GREEN : GREY)
+    cell(3, "Now", cut(todayMsg, 40), chart.fg_color)
+    if cbOn and not shortMode
+        cell(4, "CPR break", cut(cbMsg, 40), chart.fg_color)
+    if pocOn
+        cell(5, "POC", na(poc) ? "-" : fmt(poc), PURPLE)
+    if vcOn and not shortMode
+        cell(6, "Volume", vcUp > vcDn ? "BUYs allowed" : vcDn > vcUp ? "SELLs allowed" : "no trades", vcUp > vcDn ? GREEN : vcDn > vcUp ? RED : GREY)
+    cell(7, "This chart", str.tostring(nTr) + " trades, " + str.tostring(nWon) + " won, " + pts(totPts) + " pts", totPts >= 0 ? GREEN : RED)
+if barstate.islast and boxMode == "Full"
     bias = cprF == "Off" ? "both ways" : cb > 0 ? "opened above the CPR: buys" : cb < 0 ? "opened below the CPR: sells" : (cprF == "With the CPR" ? "opened inside the CPR: no trade" : "opened inside: both ways")
     cell(0, "CPR Breakout", is5 ? syminfo.ticker : "Use a 5-minute chart", is5 ? chart.fg_color : RED)
     cell(1, "Today's CPR", fmt(bot) + " - " + fmt(top) + ", " + str.tostring(top - bot, "#,##0") + " pts (" + str.tostring((top - bot) / P * 100, "0.00") + "%) " + (narrow ? "NARROW" : nNar * 3 >= 40 ? "wide" : "normal"), narrow ? cprNar : cprPink)

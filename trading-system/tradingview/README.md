@@ -41,6 +41,13 @@ File: [`cpr_breakout.pine`](cpr_breakout.pine). An indicator; reads 1-minute can
   a day per direction. From such moments (2023-2026) price turned 60 / 200 points the other way before 35 / 100 more
   only 34 / 29 / 22% of the time on Nifty (before 10:30 / to 12:30 / after), 31 / 28 / 20% on Sensex; no reversal
   sign tested changed that (`research/quant/reversal_odds.py`).
+- **The box** (from 21 October 2026): small by default, in tiny text: CPR, trend, what is happening now, the CPR
+  break call, the POC / volume check where they apply, and the results on the chart. "Status and results box": Full
+  for every row as before, or Off; "Box position" puts it in any corner.
+- **Crypto charts** (BTC and others; from 21 October 2026, on by default): only the volume-line calls are taken there
+  ("On crypto charts: volume-line calls only", in the volume-line settings). Not tested on crypto; on Nifty / Sensex
+  2023-2026 the volume-line calls won 40% / 48% (Sensex made money every year, Nifty only in 2026). The times are
+  still 9:15-3:30 IST and the volume comes from the "Volume from" symbol (NIFTYBEES), not from the coin.
 - **Liquidity sweeps** of yesterday's high / low (yellow lines) are in their own settings group, off by default:
   more points (Nifty +2,993, Sensex +9,279 without the volume check) but twice the trades.
 - Also tested and not added: the squeeze, Smart Money Concepts, the low-volume areas of the last 2 days' volume
