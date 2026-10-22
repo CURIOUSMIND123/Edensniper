@@ -434,7 +434,7 @@ def option_chart(ex, t, fresh=20.0):
         won = [x['exit']['pnl'] for x in done_ if x['exit']['pnl'] > 0]
         lost = [x['exit']['pnl'] for x in done_ if x['exit']['pnl'] <= 0]
         rng = first and comp[-1][0] >= RANGE_END - 1
-        info = [["Today's CPR", f"{f2(lv['bot'])} - {f2(lv['top'])}, {lv['top'] - lv['bot']:.1f} pts " + ('NARROW' if ocx['narrow'] else 'wide')],
+        info = [["Today's CPR", cpr_width(ocx)['text']],
                 ['Bias', 'up: no breakout SELLs' if ocx['rel'] > 0 else 'down: no breakout BUYs' if ocx['rel'] < 0 else 'both ways'],
                 ['15-minute range', f"{f2(min(r[3] for r in first))} - {f2(max(r[2] for r in first))}" if rng else 'forming'],
                 ['Volume POC / value area', f"{f2(ocx['poc'])} / {f2(ocx['val'])} - {f2(ocx['vah'])}" if ocx['poc'] is not None else '-'],
@@ -485,7 +485,7 @@ def option_cx(n, ex, t, day):
     H = {d: day_hist(sess[d], vol.get(d, {}), spec['bin']) for d in days[-3:]}
     poc, vah, val = poc_va(*combine([H[days[-1]]]), spec['bin'])
     rank = sum(w < lv['w'] for w in past) / len(past) if len(past) >= 5 else 0.5
-    cx = dict(spec, key=ik, cost=OPT_COST[n], lot=SPEC[n]['lot'], option=True, today=day, prev=prev, lv=lv, rank=rank,
+    cx = dict(spec, nrank=len(past) if len(past) >= 5 else 0, key=ik, cost=OPT_COST[n], lot=SPEC[n]['lot'], option=True, today=day, prev=prev, lv=lv, rank=rank,
               narrow=rank < 1 / 3, rel=1 if lv['bot'] > ylv['top'] else -1 if lv['top'] < ylv['bot'] else 0,
               yc=D[prev][3], yh=D[prev][1], yl=D[prev][2], poc=poc, vah=vah, val=val, pocn=1,
               yday=sess.get(prev) or sess[days[-1]], yvol=vol.get(prev, {}), c5h=closes5(sess, days[-3:]),
@@ -592,6 +592,16 @@ def option_alert_pass(n, day, m, sent, open_):
                          opt=dict(n=n, k=k, typ=typ, t=t, buy=buy, m=tr['m']))
             open_[oid] = dict(n=n, k=k, typ=typ, t=t, buy=buy, m=tr['m'])
 
+def cpr_width(cx):
+    """Today's CPR width in words: NARROW = narrower than at least 2/3 of the last 20 days' CPRs (a breakout day: the
+    9:30 breakout plan), wide = wider than 2/3 of them, normal in between (the CPR Magnet plan on both)."""
+    lv, n = cx['lv'], cx.get('nrank', 20)
+    w = lv['top'] - lv['bot']
+    word = 'NARROW' if cx['narrow'] else 'wide' if cx['rank'] >= 2 / 3 else 'normal'
+    return dict(narrow=bool(cx['narrow']), word=word,
+                text=f"{f2(lv['bot'])} - {f2(lv['top'])}, {w:,.{1 if w < 100 else 0}f} pts ({100 * w / lv['p']:.2f}%) {word}: "
+                     f"wider than {round(cx['rank'] * n)} of the last {n} days")
+
 def pivot_lines(P, H, L):
     """The floor pivots around the CPR's pivot P from yesterday's high H / low L, as chart lines (orange)."""
     return [dict(p=round(p, 2), c='#ff9800', t=t, w=1, s=0)
@@ -619,7 +629,7 @@ def index_chart(n):
     except Exception:
         pass
     today = day == d.get('day')
-    return dict(day=day, candles=cs, lines=lines, marks=d.get('marks', []) if today else [], boxes=d.get('boxes', []) if today else [],
+    return dict(day=day, candles=cs, lines=lines, cpr=d.get('cpr'), marks=d.get('marks', []) if today else [], boxes=d.get('boxes', []) if today else [],
                 rows=d.get('rows', []) if today else [], info=d.get('info', []))
 
 def live_now(n, fresh=20):
@@ -2169,7 +2179,7 @@ def chart_update(n, cx, c_all, ts, got, day):
     won = [t['exit']['pnl'] for t in done_ if t['exit']['pnl'] > 0]
     lost = [t['exit']['pnl'] for t in done_ if t['exit']['pnl'] <= 0]
     w = lv['top'] - lv['bot']
-    info = [["Today's CPR", f"{f2(lv['bot'])} - {f2(lv['top'])}, {w:.0f} pts ({100 * w / lv['p']:.2f}%) " + ('NARROW' if cx['narrow'] else 'wide')],
+    info = [["Today's CPR", cpr_width(cx)['text']],
             ['Bias', 'up: no breakout SELLs' if cx['rel'] > 0 else 'down: no breakout BUYs' if cx['rel'] < 0 else 'both ways'],
             ['15-minute range', f"{f2(min(x[3] for x in first))} - {f2(max(x[2] for x in first))}" if first and got >= RANGE_END - 1 else 'forming'],
             ['Volume POC' if cx['poc'] is None else 'Volume POC / value area' if cx['pocn'] == 1 else f"{cx['pocn']}-day volume POC / value area",
@@ -2180,7 +2190,7 @@ def chart_update(n, cx, c_all, ts, got, day):
     import hashlib
     d = dict(name=cx['name'], day=day, yday_date=cx['prev'], yday=[list(x) for x in cx['yday']],
              candles=[list(x) for x in c_all], levels=levels, marks=sorted(marks, key=lambda k: k['m']),
-             rows=rows, boxes=boxes, status=status, info=info)
+             rows=rows, boxes=boxes, status=status, info=info, cpr=cpr_width(cx))
     tn = trend_now(cx, upto_c, got)
     d['trend'] = dict(dir=tn['dir'], short=tn['short'], pct=tn['pct']) if tn else None
     d['ver'] = hashlib.sha256(json.dumps(d, sort_keys=True).encode()).hexdigest()[:12]   # changes with what is drawn
@@ -2202,6 +2212,7 @@ button.on{color:#2962ff;background:#f0f3fa;font-weight:600}
 #legend{position:absolute;left:6px;top:4px;z-index:3;font-size:12px;line-height:1.6;pointer-events:none;background:rgba(255,255,255,0.85);padding:0 4px;border-radius:3px}
 #legend b{font-weight:600;color:#131722;margin-right:6px}
 #legend i{font-style:normal;color:#787b86;margin-left:6px}
+#legend .cprw{color:#e91e63;font-weight:600}#legend .cprw.nar{color:#ff9800}
 .up{color:#089981}.dn{color:#f23645}
 #trend{font-size:12px;line-height:1.4;padding:4px 8px;background:#f0f3fa;color:#50535e;border-bottom:1px solid #e0e3eb}
 #trend.dn{background:#c62828;color:#fff;font-weight:600}#trend.up{background:#00796b;color:#fff;font-weight:600}
@@ -2364,7 +2375,8 @@ function legend(bar) {
   const ch = bar.close - prev, cls = ch >= 0 ? 'up' : 'dn';
   $('legend').innerHTML = '<b>' + D.name + ' &middot; ' + tf + 'm</b>' +
     ['O', 'H', 'L', 'C'].map((k, j) => '<i>' + k + '</i> <span class="' + cls + '">' + fmt([bar.open, bar.high, bar.low, bar.close][j]) + '</span>').join('') +
-    ' <span class="' + cls + '">' + (ch >= 0 ? '+' : '') + fmt(ch) + ' (' + (ch >= 0 ? '+' : '') + (100 * ch / prev).toFixed(2) + '%)</span>';
+    ' <span class="' + cls + '">' + (ch >= 0 ? '+' : '') + fmt(ch) + ' (' + (ch >= 0 ? '+' : '') + (100 * ch / prev).toFixed(2) + '%)</span>' +
+    (D.cpr ? '<div class="cprw' + (D.cpr.narrow ? ' nar' : '') + '">' + "Today's CPR " + D.cpr.text + '</div>' : '');
 }
 let hover = false;
 chart.subscribeCrosshairMove((p) => {
@@ -2543,7 +2555,7 @@ const big = (x) => { const a = Math.abs(x), s = x < 0 ? '-' : ''; return a >= 1e
 const sg = (x) => (x > 0 ? '+' : '') + fmt(x);
 const PV = '%PAGEVER%';                     // this page's version: reload when the server has a newer one
 let idx = 'nifty', tf = 5, C = null, sel = null, chainBusy = false, chartBusy = false, fitted = '', lines = [], centred = '';
-let table = false, L = null, alertsOn = null;
+let table = false, L = null, alertsOn = null, IC = null;
 try { table = localStorage.getItem('optmode') === 'table'; } catch (e) {}
 const box = $('c');
 const chart = LightweightCharts.createChart(box, {
@@ -2704,7 +2716,8 @@ function head() {
   if (!C || C.error) return;
   if (!sel) {
     $('head').innerHTML = `<span class="nm">${C.name}</span><b>${fmt(C.spot)}</b><span class="${C.chg >= 0 ? 'up' : 'dn'}">${sg(C.chg)} (${C.pct}%)</span>` +
-      '<span class="mut">tap a call or put price to chart it</span>';
+      '<span class="mut">tap a call or put price to chart it</span>' +
+      (IC ? `<span style="flex-basis:100%;font-weight:600;color:${IC.narrow ? '#ff9800' : '#e91e63'}">Today's CPR ${IC.text}</span>` : '');
     return;
   }
   const r = C.rows.find((r) => (r.ce && r.ce.t === sel.t) || (r.pe && r.pe.t === sel.t));
@@ -2769,6 +2782,7 @@ async function loadChart() {
     if ((sel ? sel.t : 'index:' + idx) !== my || d.error) return;
     s.setData(agg(d.day, d.candles));
     L = sel ? d.last || null : null;
+    if (!sel) IC = d.cpr || null;
     head();
     s.setMarkers((d.marks || []).map((k) => ({time: ts(d.day, bucket(k.m)), position: k.pos, color: k.c, text: markText(k.x),
       shape: k.x === 'B' || k.x === 'BUY' ? 'arrowUp' : k.x === 'S' || k.x === 'SELL' ? 'arrowDown' : 'circle'})));
