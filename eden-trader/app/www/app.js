@@ -65,13 +65,16 @@ function show(v) {
   refresh();
 }
 
+// a chart page left open for hours (the app in the background) loads again, so it has the server's newest version
+const stale = (f) => Date.now() - (+f.dataset.at || 0) > 30 * 60 * 1000;
+
 function chartView() {
   const f = $('chart-frame');
   $('chart-empty').classList.toggle('hidden', !!ready());
   f.classList.toggle('hidden', !ready());
   if (!ready()) return;
   const src = cfg.server.replace(/\/+$/, '') + '/?key=' + encodeURIComponent(cfg.key);
-  if (f.dataset.src !== src) { f.src = src; f.dataset.src = src; }
+  if (f.dataset.src !== src || stale(f)) { f.src = src; f.dataset.src = src; f.dataset.at = Date.now(); }
 }
 
 function optionsView() {
@@ -80,7 +83,7 @@ function optionsView() {
   f.classList.toggle('hidden', !ready());
   if (!ready()) return;
   const src = cfg.server.replace(/\/+$/, '') + '/options?key=' + encodeURIComponent(cfg.key);
-  if (f.dataset.src !== src) { f.src = src; f.dataset.src = src; }
+  if (f.dataset.src !== src || stale(f)) { f.src = src; f.dataset.src = src; f.dataset.at = Date.now(); }
 }
 
 function tgts(c) {

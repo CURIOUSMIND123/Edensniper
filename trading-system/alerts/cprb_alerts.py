@@ -399,7 +399,8 @@ def option_chart(ex, t, fresh=20.0):
     cp = OPT_CPR.get(ck)
     lines = [] if not cp else [dict(p=cp['top'], c='#e91e63', t='CPR top', w=2, s=0), dict(p=cp['p'], c='#e91e63', t='Pivot', w=1, s=0),
                                dict(p=cp['bot'], c='#e91e63', t='CPR bottom', w=2, s=0),
-                               dict(p=cp['yh'], c='#f9a825', t='Yesterday high', w=1, s=2), dict(p=cp['yl'], c='#f9a825', t='Yesterday low', w=1, s=2)]
+                               dict(p=cp['yh'], c='#f9a825', t='Yesterday high', w=1, s=2), dict(p=cp['yl'], c='#f9a825', t='Yesterday low', w=1, s=2)] + \
+        pivot_lines(cp['p'], cp['yh'], cp['yl'])
     n = 'nifty' if ex == 'NSE' else 'sensex'
     today = now_ist()
     comp = [r for r in cs if day != str(today.date()) or r[0] < today.hour * 60 + today.minute]   # complete minutes
@@ -591,30 +592,35 @@ def option_alert_pass(n, day, m, sent, open_):
                          opt=dict(n=n, k=k, typ=typ, t=t, buy=buy, m=tr['m']))
             open_[oid] = dict(n=n, k=k, typ=typ, t=t, buy=buy, m=tr['m'])
 
+def pivot_lines(P, H, L):
+    """The floor pivots around the CPR's pivot P from yesterday's high H / low L, as chart lines (orange)."""
+    return [dict(p=round(p, 2), c='#ff9800', t=t, w=1, s=0)
+            for t, p in (('R1', 2 * P - L), ('S1', 2 * P - H), ('R2', P + (H - L)), ('S2', P - (H - L)))]
+
 def index_chart(n):
     """The index for the Options screen: today's candles and live minutes (as the chart page), its CPR, pivots
     R1 / S1 / R2 / S2, yesterday's high / low, the 15-minute range, the POC, and the strikes with the most call / put
     open interest."""
     d = CHART_DATA.get(n) or {}
-    if not d.get('candles'):
+    if d.get('candles'):
+        lp = live_part(n, d)
+        last = d['candles'][-1][0]
+        day, cs = d.get('day'), d['candles'] + ([b for b in lp['bars'] if b[0] > last] if lp else [])
+    elif d.get('yday'):                           # before the open: yesterday's session, with today's levels
+        day, cs = d.get('yday_date'), d['yday']
+    else:
         return dict(error='no chart data yet')
-    lp = live_part(n, d)
-    last = d['candles'][-1][0]
-    cs = d['candles'] + ([b for b in lp['bars'] if b[0] > last] if lp else [])
-    keep = ('CPR top', 'Pivot', 'CPR bottom', 'Yesterday high', 'Yesterday low', '15-min high', '15-min low', 'Vol line')
+    keep = ('CPR top', 'Pivot', 'CPR bottom', 'Yesterday high', 'Yesterday low', '15-min high', '15-min low', 'Vol line',
+            'R1', 'S1', 'R2', 'S2')
     lines = [dict(p=l['p'], c=l['c'], t=l['t'], w=l['w'], s=l['s']) for l in d.get('levels', []) if l['t'] in keep or l['t'].startswith('POC')]
-    by = {l['t']: l['p'] for l in lines}
-    if all(k in by for k in ('Pivot', 'Yesterday high', 'Yesterday low')):
-        P, H, L = by['Pivot'], by['Yesterday high'], by['Yesterday low']
-        for t, p in (('R1', 2 * P - L), ('S1', 2 * P - H), ('R2', P + (H - L)), ('S2', P - (H - L))):
-            lines.append(dict(p=round(p, 2), c='#ff9800', t=t, w=1, s=0))
     try:
         ch = option_chain(n)
         lines += [dict(p=ch['res'], c='#ef5350', t='Call OI wall', w=1, s=1), dict(p=ch['sup'], c='#26a69a', t='Put OI wall', w=1, s=1)]
     except Exception:
         pass
-    return dict(day=d.get('day'), candles=cs, lines=lines, marks=d.get('marks', []), boxes=d.get('boxes', []),
-                rows=d.get('rows', []), info=d.get('info', []))
+    today = day == d.get('day')
+    return dict(day=day, candles=cs, lines=lines, marks=d.get('marks', []) if today else [], boxes=d.get('boxes', []) if today else [],
+                rows=d.get('rows', []) if today else [], info=d.get('info', []))
 
 def live_now(n, fresh=20):
     """(price, 'hh:mm:ss') if the live price is recent, else None."""
@@ -764,6 +770,7 @@ def context(spec, sess, vol, today, daily=None):
     return dict(spec, today=today, prev=days[-1], lv=lv, rank=rank, narrow=rank < 1 / 3,
                 rel=1 if lv['bot'] > ylv['top'] else -1 if lv['top'] < ylv['bot'] else 0,
                 yc=D[days[-1]][3], yh=D[days[-1]][1], yl=D[days[-1]][2], poc=poc, vah=vah, val=val, pocn=pn, yday=sess[days[-1]],
+                poc_ref=poc_va(*combine([H[days[-1]]]), spec['bin'])[0],
                 yvol=vol.get(days[-1], {}), c5h=closes5(sess, days[-3:]),
                 lines=vol_lines(*combine([H[d] for d in days[-3:]]), spec['bin']))
 
@@ -2098,6 +2105,9 @@ def chart_update(n, cx, c_all, ts, got, day):
         levels.append(dict(p=cx['poc'], c='#9c6ade', t='POC yesterday' if cx['pocn'] == 1 else f"POC {cx['pocn']} days", s=0, w=1))
     levels += [dict(p=x, c='#26a69a', t='Vol line', s=1, w=1) for x in cx['lines']]
     levels += [dict(p=cx['yh'], c='#f9a825', t='Yesterday high', s=2, w=1), dict(p=cx['yl'], c='#f9a825', t='Yesterday low', s=2, w=1)]
+    levels += pivot_lines(lv['p'], cx['yh'], cx['yl'])
+    if cx['poc'] is None and cx.get('poc_ref') is not None:      # no POC filter on this index: yesterday's, for reference
+        levels.append(dict(p=cx['poc_ref'], c='#9c6ade', t='POC yesterday (info)', s=0, w=1))
     first = [x for x in c_all if x[0] < RANGE_END]
     if first and got >= RANGE_END - 1:
         levels += [dict(p=max(x[2] for x in first), c='#4caf50', t='15-min high', s=2, w=1),
@@ -2227,7 +2237,8 @@ moves to the entry price, so the rest can't lose. <b>Trailing SL</b>: once price
 first stop was (1R), the stop follows 1R behind the best price, locking in profit. Each trade is drawn like TradingView's long / short position tool: green from the entry to T1 (where half is
 booked; a volume-line trade: its target), lighter green on to T3 (T2 / T3: the next price levels, for reference), red to
 the stop loss; an open trade's box runs to the right edge, with its stop now (dashed) once it has moved. Pink: CPR top /
-pivot / bottom (orange on a narrow day). Purple: the volume POC (not drawn for Sensex, which has no POC filter). Teal
+pivot / bottom (orange on a narrow day). Orange: the pivots R1 / S1 / R2 / S2. Purple: the volume POC (Sensex: yesterday's,
+for reference only - no POC filter there). Teal
 dots: 3-day volume lines. Green / red dashed: the first 15 minutes' high / low. Yellow dashed: yesterday's high / low.
 Letters: B buy, S sell, T target or half booked, SL stop loss, BE stop at entry, X other exit. In market hours the last
 candle and the price line move with the live price every second; the calls use whole 1-minute candles. Fit: back to the
@@ -2236,6 +2247,7 @@ time scale (bottom) left / right; double-tap a scale or press Fit to reset.</div
 <script src="/lwc.js"></script>
 <script>
 const IDX = %INDICES%;
+const PV = '%PAGEVER%';                     // this page's version: reload when the server has a newer one
 let cur = IDX[0][0], tf = 5, plines = [], linesKey = '', fitted = '', seq = 0, shown = 0, D = null, loading = false;
 const $ = (id) => document.getElementById(id);
 const box = $('c');
@@ -2433,6 +2445,7 @@ async function tick() {                       // every second: the live price on
   let L;
   try { L = await (await fetch('/live?i=' + want + keyq(), {cache: 'no-store'})).json(); } catch (e) { return; }
   if (want !== cur || !D) return;
+  if (L.pv && L.pv !== PV) { location.reload(); return; }
   if (L.ver !== D.ver || L.day !== D.day) return full();
   D.live = L.live; D.status = L.status;
   const live = (L.live && L.live.bars) || [];
@@ -2527,6 +2540,7 @@ const keyq = () => { const k = new URLSearchParams(location.search).get('key'); 
 const fmt = (x) => x == null ? '-' : Number(x).toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2});
 const big = (x) => { const a = Math.abs(x), s = x < 0 ? '-' : ''; return a >= 1e7 ? s + (a / 1e7).toFixed(2) + 'Cr' : a >= 1e5 ? s + (a / 1e5).toFixed(1) + 'L' : a >= 1e3 ? s + (a / 1e3).toFixed(1) + 'K' : s + a; };
 const sg = (x) => (x > 0 ? '+' : '') + fmt(x);
+const PV = '%PAGEVER%';                     // this page's version: reload when the server has a newer one
 let idx = 'nifty', tf = 5, C = null, sel = null, chainBusy = false, chartBusy = false, fitted = '', lines = [], centred = '';
 let table = false, L = null, alertsOn = null;
 try { table = localStorage.getItem('optmode') === 'table'; } catch (e) {}
@@ -2731,6 +2745,7 @@ async function loadChain() {
   const want = idx;
   try {
     const d = await (await fetch('/api/options?i=' + want + keyq(), {cache: 'no-store'})).json();
+    if (d.pv && d.pv !== PV) { location.reload(); return; }
     if (want !== idx) return;
     const first = !C;
     C = d;
@@ -2761,7 +2776,7 @@ async function loadChart() {
     const key = JSON.stringify(d.lines || []);
     if (key !== s._lk) {
       lines.forEach((l) => s.removePriceLine(l)); lines = []; s._lk = key;
-      for (const l of d.lines || []) lines.push(s.createPriceLine({price: l.p, color: l.c, lineWidth: l.w, lineStyle: l.s, axisLabelVisible: l.w > 1 || l.t.indexOf('OI') >= 0, title: l.t}));
+      for (const l of d.lines || []) lines.push(s.createPriceLine({price: l.p, color: l.c, lineWidth: l.w, lineStyle: l.s, axisLabelVisible: true, title: l.t}));
     }
     if (fitted !== my + tf) { fitted = my + tf; const n = s.data().length; chart.timeScale().setVisibleLogicalRange({from: Math.max(0, n - (tf === 1 ? 120 : 80)), to: n + 3}); }
   } catch (e) {}
@@ -2854,7 +2869,16 @@ def chart_page(var='CHART_HTML'):
             P.update(mt=mt, html=html)
     except Exception:
         pass
-    return P.get('html', globals()[var])
+    html = P.get('html', globals()[var])
+    if P.get('src') is not html:
+        import hashlib
+        P.update(src=html, pv=hashlib.sha256(html.encode()).hexdigest()[:10])
+    return html.replace('%PAGEVER%', P['pv'])
+
+def page_ver(var):
+    """The version of the page now in this file: a page open in a phone reloads itself when it changes."""
+    chart_page(var)
+    return CHART_PAGE[var]['pv']
 
 def serve_chart(names):
     """Serve the chart page: on this phone / computer only (127.0.0.1), or as set by CPRB_CHART_HOST on a server."""
@@ -2923,7 +2947,7 @@ def serve_chart(names):
                 q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
                 d = CHART_DATA.get(q.get('i', [names[0]])[0], {})
                 body = json.dumps(dict(ver=d.get('ver'), day=d.get('day'), status=d.get('status'), updated=d.get('updated'),
-                                       live=live_part(q.get('i', [names[0]])[0], d) if d else None)).encode()
+                                       live=live_part(q.get('i', [names[0]])[0], d) if d else None, pv=page_ver('CHART_HTML'))).encode()
                 ctype = 'application/json'
             elif self.path.startswith('/app/ota.json'):
                 body, ctype = json.dumps(app_ota()).encode(), 'application/json'
@@ -2945,7 +2969,7 @@ def serve_chart(names):
                 q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
                 n = q.get('i', ['nifty'])[0]
                 try:
-                    body = json.dumps(option_chain(n if n in OPT_IDS else 'nifty')).encode()
+                    body = json.dumps(dict(option_chain(n if n in OPT_IDS else 'nifty'), pv=page_ver('OPTIONS_HTML'))).encode()
                 except Exception as e:
                     body = json.dumps(dict(error=f"option chain not available ({e})")).encode()
                 ctype = 'application/json'
