@@ -657,12 +657,13 @@ def history(keys, first, last):
         c = cache.get(key)
         if not c or c['from'] > str(first):
             c = {'from': str(first), 'upto': str(first - dt.timedelta(days=1)), 'days': {}}
-        if c['upto'] < str(last):
-            print(f"  downloading {key} candles {max(first, dt.date.fromisoformat(c['upto']) + dt.timedelta(days=1))} to {last} ...")
-            new = fetch_range(key, dt.date.fromisoformat(c['upto']) + dt.timedelta(days=1), last)
+        have = max(c['days']) if c['days'] else c['upto']    # the last session in hand: a run at night can find yesterday
+        if have < str(last):                                  # not published yet, so ask again from the day after it
+            print(f"  downloading {key} candles {max(first, dt.date.fromisoformat(have) + dt.timedelta(days=1))} to {last} ...")
+            new = fetch_range(key, max(first, dt.date.fromisoformat(have) + dt.timedelta(days=1)), last)
             for d, mm in new.items():
                 c['days'][d] = {str(m): v for m, v in mm.items()}
-            c['upto'] = str(last)
+            c['upto'] = max([have] + list(new))
         c['days'] = {d: v for d, v in c['days'].items() if d >= str(first)}
         c['from'] = str(first)
         cache[key] = c
