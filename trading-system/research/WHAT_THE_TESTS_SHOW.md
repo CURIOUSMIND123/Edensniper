@@ -1957,6 +1957,24 @@ still trading, so this covers 29 July - 22 October 2026 (59 sessions, the Octobe
   "D SELL (paper)" when it agreed (`DELTA_CALLS`), keeps the score (app: Calls; `DATA_DIR/delta-paper.jsonl`), and
   trades nothing differently.
 
+## MCX crude oil, 2026 (`crude_2026.py`; 23 October 2026)
+
+The indicator on crude, 2 January - 22 October 2026 (209 sessions). Upstox's free candles cover only crude contracts
+still trading, so the prices are rebuilt from Dukascopy's free 1-minute WTI candles x the day's USD/INR (MCX crude follows
+NYMEX WTI; its own prices differ a little). As TradingView runs the indicator on a crude chart: the Nifty settings
+(stops at most 55 points, CPR BREAK 60 / 35, OPEN HIGH LOW), Indian times (it trades only 9:15-3:15 of crude's
+9:00-23:30 day), NIFTYBEES volume. Costs 4 points; 1 point = Rs 100 a lot (100 barrels).
+
+| Version | The calls | CPR BREAK | OPEN HIGH LOW | Months that made money (the calls) |
+|---|---|---|---|---|
+| As on TradingView (morning, NIFTYBEES volume) | 129 trades, 36% won, +594 (April alone +679) | 86, 48%, +488 (Jan-May −437, Jul-Sep +833) | 72, 60%, −158 | 6 of 10 |
+| Crude's own volume | 114, 35%, +32 | +488 | −158 | 2 of 10 |
+| The US-hours session (6:30 pm - 12:45 am IST) | 164, 48%, −377 | 82, 34%, −437 | 31, 45%, −314 | 3 of 10 |
+
+- The TradingView version's profit is one month: without April 2026 the calls lost 85 points; the volume lines made
+  +851 of which April +671; the CPR Magnet never won (12 trades). CPR BREAK made money only from July on.
+- Not added to the alerts or the app: nothing made money steadily through the year.
+
 ## How to re-check all of this
 
 - `python research/fair_price_backtest.py` downloads the candles and re-runs the Fair Price test.

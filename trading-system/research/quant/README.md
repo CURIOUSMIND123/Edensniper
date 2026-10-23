@@ -84,6 +84,7 @@ Costs: 4 Nifty points or 12 Sensex points per trade. `pip install pandas scikit-
 | `user_rule.py` | 2023-2026: every losing family's entries and the daily CPR breakouts, as they are and reversed, with the user's 60 / 35 (Nifty) and 200 / 100 (Sensex) target / stop |
 | `reentry.py` | 2023-2026: a second trade after a stopped call (same price, trend confirmation, pullback to the CPR edge, a zone) |
 | `pivot_breaks.py` | 2023-2026: 5-minute closes through the pivot levels (S3-R3, BC / P / TC) as calls, the 2026 pick and 31 neighbours (stops, targets, filters) |
+| `crude_2026.py` | 2026: the indicator on MCX crude oil (rebuilt from Dukascopy WTI 1-minute candles x USD/INR): as TradingView runs it, with crude's own volume, and on the US-hours session |
 | `delta_test.py` | 29 Jul - 22 Oct 2026: the near Nifty future's estimated order-flow delta (from 1-minute candles): delta signals on their own, and the calls split by the delta before them |
 | `oi_test.py` | 2023-2026: option OI from the evening before (PCR, call / put OI walls): as a filter on the calls, room to the wall, wall breaks and wall fades as calls (the Sensex fade is the OI WALL call), PCR and the day's direction |
 | `extras_check.py` | the alert program's OPEN HIGH LOW / GAP FILL / SECOND CHANCE / OI WALL calls, minute by minute, against their tests |
