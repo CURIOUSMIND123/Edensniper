@@ -106,6 +106,7 @@ function callCard(c) {
       <span>Targets</span><span>${tgts(c)}</span>
       <span>Went its way</span><span>${pts(c.mfe)} pts · ${hit}</span>
       <span>Went against</span><span>${c.mae == null ? '-' : '-' + Math.round(c.mae)} pts</span>
+      ${c.delta ? `<span>Delta</span><span class="${c.delta.tag === 'with' ? 'ok' : c.delta.tag === 'against' ? 'no' : 'muted'}">${c.delta.tag === 'with' ? '<b>D ' + c.side + '</b> (paper) · ' : ''}${esc(c.delta.text)}</span>` : ''}
     </div></div>`;
 }
 
@@ -128,6 +129,13 @@ async function callsView() {
         ${calls.slice().reverse().map(callCard).join('')}
         ${d.plan ? `<details><summary>Today's plan</summary><pre>${esc(d.plan)}</pre></details>` : ''}
       </div>`);
+    }
+    const dp = st.delta && st.delta.groups;
+    if (dp) {                                                     // the paper score of the delta (order flow) tags
+      const row = (k) => { const g = dp[k] || {n: 0, won: 0, pts: 0}; return `<span>${esc(k)}</span><span>${g.n} trades, ${g.won} won, ${pts(g.pts)} pts</span>`; };
+      parts.push(`<div class="card"><div class="idx">Delta (order flow), paper only</div>
+        <div class="status">D BUY / D SELL = a call the Nifty future's delta agreed with. Not traded: watching whether they do better${st.delta.since ? ' (since ' + esc(st.delta.since) + ')' : ''}.</div>
+        <div class="kv">${row('D calls (delta agreed)')}${row('delta against')}${row('delta flat')}</div></div>`);
     }
     $('calls').innerHTML = parts.join('') || '<div class="empty">The server has no data yet today.</div>';
     const evs = evList.slice().reverse();

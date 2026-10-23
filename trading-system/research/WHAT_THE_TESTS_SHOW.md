@@ -1940,6 +1940,23 @@ BUY CALL / BUY PUT alerts follow the user's idea above (a SELL on the put -> buy
 test found still holds: about 4 in 10 won and most of the profit came on a few big trend days, so they are off until the
 user turns them on.
 
+## Order-flow delta (`delta_test.py`); D BUY / D SELL as paper calls (23 October 2026)
+
+Asked after an order-flow (footprint) chart on a YouTube stream: per candle the volume bought at the ask and sold at
+the bid, and their difference, the delta. True delta needs every trade, which isn't free; each 1-minute candle of the
+near Nifty future gives an estimate (volume x where it closed in its range). Upstox has free candles only of contracts
+still trading, so this covers 29 July - 22 October 2026 (59 sessions, the October future): a first look.
+
+- Delta signals on their own (a strong-delta 5-minute candle with high volume; a 5-minute close through a level with
+  the delta the same way; a new high / low of the day with the delta the other way - absorption): 36 versions, none
+  made money in both August-September and October.
+- As a check on our own calls (the delta of the 5 minutes before the entry): Nifty calls with the delta agreeing won
+  67% (+406 points, 42 trades), against it 50% (−42, 22 trades), in both halves; Sensex (with the Nifty future's
+  delta; Sensex's own future trades 1-3% of Nifty's volume) 58% (+1,496, 40) agreeing and 53% (+598, 30) against.
+- Too few days to switch anything on. The alert program marks each call with what the delta said and sends "D BUY" /
+  "D SELL (paper)" when it agreed (`DELTA_CALLS`), keeps the score (app: Calls; `DATA_DIR/delta-paper.jsonl`), and
+  trades nothing differently.
+
 ## How to re-check all of this
 
 - `python research/fair_price_backtest.py` downloads the candles and re-runs the Fair Price test.

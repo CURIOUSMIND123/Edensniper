@@ -91,6 +91,16 @@ OIWALL_CALLS = {'nifty': False, 'sensex': True}   # OI WALL calls (oiwall_trades
                                   # 3:15; each wall once a day. Sensex 2024 / 2025 / 2026 +464 / +401 / +406 (won 46%;
                                   # no Sensex OI before 2024); on Nifty it lost (research/quant/oi_test.py)
 OIWALL_STOP = 170
+DELTA_CALLS = True                # PAPER ONLY (asked on 23 October 2026 to watch order flow): "D BUY" / "D SELL" = one of the
+                                  # calls above confirmed by the near Nifty future's order-flow delta over the DELTA_WIN
+                                  # minutes before it (estimated from 1-minute candles: volume x where the candle closed
+                                  # in its range; buyers ahead by DELTA_MIN of the volume for a BUY, sellers for a SELL).
+                                  # The same trade as that call; tracked in DATA_DIR/delta-paper.jsonl, not counted in the
+                                  # history. 29 July - 23 October 2026 (research/quant/delta_test.py, 59 sessions): Nifty
+                                  # calls with the delta agreeing won 67% (+406, 42 trades), against it 50% (-42, 22);
+                                  # Sensex 58% (+1,496, 40) vs 53% (+598, 30); delta signals on their own lost money
+DELTA_WIN = 5
+DELTA_MIN = 0.10
 EXTRA_SRC = ('CPR BREAK', 'OPEN HIGH LOW', 'GAP FILL', 'SECOND CHANCE', 'OI WALL')   # their own trades, next to the others
 CPR_TP = {'nifty': 60, 'sensex': 200}   # the CPR BREAK calls' target and stop, index points
 CPR_SL = {'nifty': 35, 'sensex': 100}
@@ -1204,6 +1214,100 @@ def gapfill_trades(cx, c1, upto, over):
     return [dict(src='GAP FILL', side=side, m=OPEN + 4, known=OPEN + 5, e=e, stp0=stp, tgt=tgt, gap=g, full=False,
                  taken=True, **r)]
 
+FUT = {}                          # the near Nifty future: key, name, day, rows {minute: (o, h, l, c, volume)}
+DELTA_TAGS = {}                   # (index name, call kind, minute) -> what the delta said before that call
+DELTA_FILE = os.path.join(DATA_DIR, 'delta-paper.jsonl')
+
+def near_future(day):
+    """The near-month Nifty future's Upstox key (from Upstox's instrument list, downloaded once a day)."""
+    if FUT.get('kday') == day:
+        return FUT['key']
+    import gzip
+    p = os.path.join(DATA_DIR, 'upstox_NSE.json.gz')
+    if not os.path.exists(p) or time.time() - os.path.getmtime(p) > 20 * 3600:
+        urllib.request.urlretrieve('https://assets.upstox.com/market-quote/instruments/exchange/NSE.json.gz', p)
+    with gzip.open(p) as f:
+        futs = [x for x in json.load(f) if x.get('segment') == 'NSE_FO' and x.get('name') == 'NIFTY' and x.get('instrument_type') == 'FUT']
+    exp = lambda x: dt.datetime.fromtimestamp(x['expiry'] / 1000, IST).date()
+    near = min((x for x in futs if exp(x) >= dt.date.fromisoformat(day)), key=exp)
+    FUT.update(kday=day, key=near['instrument_key'], name=near.get('trading_symbol', 'NIFTY FUT'))
+    return FUT['key']
+
+def delta_feed(day):
+    """Today's 1-minute candles of the near Nifty future (for the estimated order-flow delta)."""
+    rows = fetch_today(near_future(day)).get(day, {})
+    FUT.update(day=day, rows=rows)
+
+def delta_of(m0, m1):
+    """(volume, estimated delta) of the near future over minutes m0 .. m1 - 1: each candle's volume counted as buying
+    when it closed at its high, selling at its low, in proportion in between."""
+    v = dl = 0.0
+    for m in range(m0, m1):
+        r = (FUT.get('rows') or {}).get(m)
+        if r:
+            o, h, l, c, vv = r[:5]
+            v += vv
+            dl += vv * (((c - l) - (h - c)) / (h - l) if h > l else 0)
+    return v, dl
+
+def delta_tags(cx, ts, mnow):
+    """What the delta said over the DELTA_WIN minutes before each call: 'with' (a D BUY / D SELL), 'against', 'flat';
+    decided once those minutes are in (or 2 minutes late)."""
+    rows = FUT.get('rows') or {}
+    for t in ts:
+        k = (cx['name'], t['src'], t['m'])
+        if not t['taken'] or k in DELTA_TAGS:
+            continue
+        m1 = t['known']
+        if sum(m in rows for m in range(m1 - DELTA_WIN, m1)) < DELTA_WIN and mnow < m1 + 2:
+            continue
+        v, dl = delta_of(m1 - DELTA_WIN, m1)
+        r = dl / v if v > 0 else 0.0
+        tag = 'n/a' if v <= 0 else 'with' if r * t['side'] >= DELTA_MIN else 'against' if r * t['side'] <= -DELTA_MIN else 'flat'
+        DELTA_TAGS[k] = dict(tag=tag, pct=round(100 * r), dl=round(dl), v=round(v), fresh=mnow <= m1 + 3)
+
+def delta_word(g):
+    if not g:
+        return None
+    who = 'buyers' if g['pct'] > 0 else 'sellers' if g['pct'] < 0 else 'nobody'
+    return (f"{g['tag']}: {who} ahead by {abs(g['pct'])}% of the future's volume in the {DELTA_WIN} minutes before"
+            if g['tag'] != 'n/a' else 'no futures data')
+
+def delta_log(cx, ts, day):
+    """At the close: each call of the day with what the delta said, for the paper score (once a day)."""
+    have = set()
+    try:
+        with open(DELTA_FILE, encoding='utf-8') as f:
+            have = {(r['d'], r['index'], r['src'], r['m']) for r in map(json.loads, f) if r.get('d') == day}
+    except (OSError, ValueError):
+        pass
+    with open(DELTA_FILE, 'a', encoding='utf-8') as f:
+        for t in ts:
+            g = DELTA_TAGS.get((cx['name'], t['src'], t['m']))
+            if t['taken'] and t['exit'] and g and (day, cx['name'], t['src'], t['m']) not in have:
+                f.write(json.dumps(dict(d=day, index=cx['name'], src=t['src'], m=t['m'], time=hhmm(t['m']), side=t['side'],
+                                        tag=g['tag'], pct=g['pct'], pnl=round(t['exit']['pnl'], 1))) + '\n')
+
+def delta_paper():
+    """The paper score so far: D calls (delta agreed) against the other calls, closed days plus today."""
+    rows = []
+    try:
+        with open(DELTA_FILE, encoding='utf-8') as f:
+            rows = [json.loads(x) for x in f if x.strip()]
+    except (OSError, ValueError):
+        pass
+    days = {r['d'] for r in rows}
+    for n, d in CHART_DATA.items():                   # today's closed calls, until the close writes them
+        for c in d.get('calls', []):
+            if d.get('day') not in days and c.get('delta') and not c['open']:
+                rows.append(dict(d=d.get('day'), index=d.get('name'), tag=c['delta']['tag'], pnl=c['pts']))
+    out = {}
+    for nm, f in (('D calls (delta agreed)', lambda r: r['tag'] == 'with'), ('delta against', lambda r: r['tag'] == 'against'),
+                  ('delta flat', lambda r: r['tag'] in ('flat', 'n/a'))):
+        p = [r['pnl'] for r in rows if f(r) and r.get('pnl') is not None]
+        out[nm] = dict(n=len(p), won=sum(x > 0 for x in p), pts=round(sum(p)))
+    return dict(since=min((r['d'] for r in rows), default=None), groups=out)
+
 def oi_walls(n, prev):
     """(call wall, put wall) from the exchange's F&O bhavcopy of session `prev` (published that evening): the strikes
     with the most call / put open interest in the nearest expiry after it (as research/quant/fetch_pcr.py), or None."""
@@ -1822,13 +1926,13 @@ def telegram(text):
         print(f"  (Telegram message failed: {e})")
         return False
 
-def alert(text, push=True, kind='info', index=''):
+def alert(text, push=True, kind='info', index='', title=None):
     if push and said_today(text):
         push = False                  # sent already today (the program was restarted): not again
     print(('\a>>> ' if push else '    ') + text, flush=True)
     if push:
         telegram(text)
-        record_event(text, kind, index or text.split(' ', 1)[0])
+        record_event(text, kind, index or text.split(' ', 1)[0], title=title)
 
 
 # ---------------- the app: events (notifications), today's calls, history ----------------
@@ -2014,7 +2118,10 @@ def call_info(cx, t, c1):
                 pts=round(x['pnl'], 1) if x else None, mfe=round(mfe, 1), mae=round(mae, 1), stopped=stopped, success=mfe >= need,
                 need=need, option=option(cx, sd, t['e']), targets=tg, t1=t1_word(t),
                 prob=[pr['t1'], pr['t2'], pr['t3']] if pr else None,
-                hit=[mfe >= sd * (v - t['e']) - 0.005 for v in tg])
+                hit=[mfe >= sd * (v - t['e']) - 0.005 for v in tg],
+                delta=DELTA_TAGS.get((cx['name'], t['src'], t['m'])) and dict(
+                    tag=DELTA_TAGS[(cx['name'], t['src'], t['m'])]['tag'], pct=DELTA_TAGS[(cx['name'], t['src'], t['m'])]['pct'],
+                    text=delta_word(DELTA_TAGS[(cx['name'], t['src'], t['m'])])))
 
 def record_history(cx, ts, c1, day):
     """At the close: the day's calls, with their result and whether they reached the success move."""
@@ -2073,6 +2180,11 @@ def app_state():
                                  last=lv[0] if lv else d['candles'][-1][4] if d.get('candles') else None,
                                  live=lv[1] if lv else None, calls=d.get('calls', []), updated=d.get('updated'),
                                  trend=d.get('trend'))
+    if DELTA_CALLS:
+        try:
+            out['delta'] = delta_paper()
+        except Exception:
+            pass
     return out
 
 def app_ota():
@@ -2134,7 +2246,9 @@ def chart_update(n, cx, c_all, ts, got, day):
                           sl_now=round(t['stp'], 2), t=target_levels(cx, c_all, sd, t['e'], t['known'], half_price(t)),
                           t1w=t1_word(t), pnl=round(t['exit']['pnl'], 1) if t['exit'] else None,
                           prob=[(t_probs(cx['name'], t['src']) or {}).get(k) for k in ('t1', 't2', 't3')]))
-        marks.append(dict(m=m0, pos='belowBar' if sd > 0 else 'aboveBar', c='#26a69a' if sd > 0 else '#ef5350', x='B' if sd > 0 else 'S'))
+        dg = (DELTA_TAGS.get((cx['name'], t['src'], t['m'])) or {}).get('tag') == 'with'     # delta agreed: D BUY / D SELL (paper)
+        marks.append(dict(m=m0, pos='belowBar' if sd > 0 else 'aboveBar', c='#26a69a' if sd > 0 else '#ef5350',
+                          x=('D BUY' if sd > 0 else 'D SELL') if dg else 'B' if sd > 0 else 'S'))
         for ev in t['ev']:
             if ev['kind'] == 'half':
                 marks.append(dict(m=ev['m'], pos='aboveBar' if sd > 0 else 'belowBar', c='#26a69a', x='T'))
@@ -2187,6 +2301,11 @@ def chart_update(n, cx, c_all, ts, got, day):
             ['Today', open_note(cx, ts)],
             ['On this chart', f"{len(done_)} trade{'' if len(done_) == 1 else 's'}, {len(won)} won, {len(lost)} lost"],
             ['Points won / lost / net', f"+{sum(won):.0f} / {sum(lost):.0f} / {net:+.0f}"]]
+    if DELTA_CALLS and FUT.get('rows') and FUT.get('day') == day:
+        v5, d5 = delta_of(got + 1 - DELTA_WIN, got + 1)
+        vd, dd = delta_of(OPEN, got + 1)
+        info.append([f"Delta ({FUT.get('name', 'Nifty future')})",
+                     f"last {DELTA_WIN} min {d5 / 1000:+,.1f}K ({100 * d5 / v5:+.0f}% of volume), today {dd / 1000:+,.1f}K" if v5 and vd else '-'])
     import hashlib
     d = dict(name=cx['name'], day=day, yday_date=cx['prev'], yday=[list(x) for x in cx['yday']],
              candles=[list(x) for x in c_all], levels=levels, marks=sorted(marks, key=lambda k: k['m']),
@@ -2785,7 +2904,7 @@ async function loadChart() {
     if (!sel) IC = d.cpr || null;
     head();
     s.setMarkers((d.marks || []).map((k) => ({time: ts(d.day, bucket(k.m)), position: k.pos, color: k.c, text: markText(k.x),
-      shape: k.x === 'B' || k.x === 'BUY' ? 'arrowUp' : k.x === 'S' || k.x === 'SELL' ? 'arrowDown' : 'circle'})));
+      shape: /^(D )?(B|BUY)$/.test(k.x) ? 'arrowUp' : /^(D )?(S|SELL)$/.test(k.x) ? 'arrowDown' : 'circle'})));
     pos.set((d.boxes || []).map((b) => Object.assign({}, b, {t0: ts(d.day, bucket(b.m0)), t1: b.m1 == null ? null : ts(d.day, bucket(b.m1))})));
     extras(d);
     const key = JSON.stringify(d.lines || []);
@@ -3138,6 +3257,11 @@ def live(names, lots, ladder, plan_only=False, forever=False):
                 continue
             for n in names:
                 cxs[n]['tvol'] = tvol
+        if DELTA_CALLS:
+            try:
+                delta_feed(today)
+            except Exception as e:
+                print(f"  Nifty future (delta): data error ({e})")
         for n in names:
             cx = cxs[n]
             try:
@@ -3172,6 +3296,17 @@ def live(names, lots, ladder, plan_only=False, forever=False):
                     print('    [earlier today] ' + text)
                 else:
                     alert(text, push, kind=kind_of(mid), index=cx['name'])
+            if DELTA_CALLS:
+                delta_tags(cx, ts, mnow)
+                for t in ts:
+                    g = DELTA_TAGS.get((cx['name'], t['src'], t['m']))
+                    if g and g['tag'] == 'with' and g['fresh'] and not g.get('sent'):
+                        g['sent'] = True
+                        sd = 'D BUY' if t['side'] > 0 else 'D SELL'
+                        alert(f"{cx['name']} {hhmm(t['m'])} {sd} (PAPER, order flow) at {f2(t['e'])}: the {t['src']} "
+                              f"{'BUY' if t['side'] > 0 else 'SELL'} is confirmed by the delta - {delta_word(g)}. The same "
+                              f"trade (stop {f2(t['stp0'])}); paper only, to see whether calls the delta agrees with do better.",
+                              kind='delta', index=cx['name'], title=f"{cx['name']} {sd} (paper) {f2(t['e'])}")
             last_c[n] = c1
             if CHART:
                 chart_update(n, cx, c_all, ts, got, today)
@@ -3185,6 +3320,12 @@ def live(names, lots, ladder, plan_only=False, forever=False):
                     alert(day_summary(cxs[n], last_ts[n], lots), kind='summary', index=cxs[n]['name'])
                     if n in last_c:
                         record_history(cxs[n], last_ts[n], last_c[n], today)
+                    if DELTA_CALLS:
+                        try:
+                            delta_tags(cxs[n], last_ts[n], CLOSE + 5)
+                            delta_log(cxs[n], last_ts[n], today)
+                        except Exception as e:
+                            print(f"  (delta paper log: {e})")
             print("Market closed." + ("" if forever else " Run it again tomorrow before 9:15."))
             if CHART and not forever:
                 keep_serving("")

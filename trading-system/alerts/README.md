@@ -55,6 +55,12 @@ Alerts appear on the screen (with a beep) and, if you set it up, on your phone t
   at most 170; target 2x the stop). They made money in 2024-2026 (SECOND CHANCE: every year 2023-2026; OI WALL +464 /
   +401 / +406, Sensex OI exists from 2024) and win about 4-6 in 10 (`research/quant/classic_setups.py`, `reentry.py`,
   `oi_test.py`, `extras_check.py`).
+  **D BUY / D SELL, paper only** (from 23 October 2026, `DELTA_CALLS`): each call is marked with what the near Nifty
+  future's order-flow delta said in the 5 minutes before it (estimated from its 1-minute candles: volume x where the
+  candle closed in its range): agreed (10%+ of the volume the call's way: an alert "D BUY / D SELL (PAPER, order
+  flow)", a "D BUY" mark on the chart), against, or flat. The same trade as the call; nothing else changes. The score
+  so far is on the app's Calls screen (`DATA_DIR/delta-paper.jsonl`); the chart's table shows the last 5 minutes' and
+  the day's delta. Why: `research/quant/delta_test.py` (59 sessions; Nifty calls with the delta agreeing won 67%).
   **Trend / no reversal** (from 19 October 2026): at each 5-minute close from 9:35, a FALLING day (price below both
   the day's open and the CPR) or a RISING day (above both). From such moments in 2023-2026 price turned 60 / 200
   points the other way before 35 / 100 more only about 1 time in 3 before 10:30, 1 in 4 to 12:30, 1 in 5 after
