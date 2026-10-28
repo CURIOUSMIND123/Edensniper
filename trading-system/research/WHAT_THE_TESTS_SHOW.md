@@ -1975,6 +1975,31 @@ NYMEX WTI; its own prices differ a little). As TradingView runs the indicator on
   +851 of which April +671; the CPR Magnet never won (12 trades). CPR BREAK made money only from July on.
 - Not added to the alerts or the app: nothing made money steadily through the year.
 
+## The morning range to 12:00 and the afternoon sweep (`noon_range.py`; 28 October 2026)
+
+A strategy heard of: mark the 9:15-12:00 high and low; price near the high takes the liquidity above it and goes back to
+the low (and the other way). 2026, 202 sessions; the morning range averaged 174 Nifty / 589 Sensex points.
+
+| 2026, price near the morning high at 12:00 (top 30% of the range) | Nifty (61 days) | Sensex (60 days) |
+|---|---|---|
+| went above the morning high in the afternoon | 85% | 85% |
+| how far above (median) | 7 points | 23 points |
+| came back below it (a 1-minute close; median 2 minutes later) | 96% | 94% |
+| the fall from the top of that poke (average / median) | 97 / 92 points | 327 / 314 points |
+| reached the middle of the morning range | 38% | 43% |
+| reached the morning low | 12% | 16% |
+| still closed the day above the morning high | 48% | 47% |
+
+Near the low it is the mirror (85% / 87% went below the low, then rose 79 / 238 points on average; 6% / 7% reached the
+morning high). So the poke beyond the morning high / low and the quick return are common, a fall of about half the range
+often follows, the full trip to the other side is rare, and half the days the break wins in the end.
+
+As a trade (12:00-2:30, a 5-minute candle above the morning high closing back below it -> SELL, stop beyond the
+afternoon's extreme, at most 55 / 170; the mirror at the low), only when price was near that side at 12:00:
+Sensex 2026 89 trades, 35% won, +2,043 points to the middle of the range (8 of 10 months made money), but 2023-2025
+334 trades, 25% won, −7,176; Nifty 2026 +23 (85 trades, 31%), 2023-2025 −2,755. It worked in 2026 and lost in each
+of the three years before: not added.
+
 ## How to re-check all of this
 
 - `python research/fair_price_backtest.py` downloads the candles and re-runs the Fair Price test.
