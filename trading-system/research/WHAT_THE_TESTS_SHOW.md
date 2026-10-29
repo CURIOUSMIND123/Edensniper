@@ -2008,6 +2008,22 @@ points) the stop came first on 75% / 71% of the trades and the target on 17% / 2
 −2,371 / −5,811); with a 55 / 170-point stop the target came first on 34% / 37%, the stop on 38% / 39% (Nifty +155,
 Sensex −213; 2023-2025 −3,109 / −9,838).
 
+## After 12:00: a break of the morning high runs to the next liquidity zone, taps it and comes back? (`liquidity_zones.py`)
+
+Asked on 29 October 2026. The zone = the nearest level beyond the 9:15-12:00 high (low): yesterday's high / low, the
+2-5 days before's highs / lows, R1 / R2 (S1 / S2), the CPR, the 3-day volume lines, the POC, a round number (Nifty 100s,
+Sensex 500s). 2026, and 2023-2025 as a check.
+
+- After 12:00 price went beyond the morning high or low on most days and reached the next zone 59-64% of those times
+  (the zone on average 30 Nifty / 117 Sensex points beyond).
+- After the tap it more often went on than came back: Nifty 2026 120 taps, back 75 points first 22%, 35 more beyond the
+  zone first 58% (2023-2025: 19% / 54%); Sensex 111 taps, back 200 first 25%, 100 beyond first 60% (27% / 57%). Typical
+  (median) overshoot beyond the zone 50 / 157 points, then a come-back of 47 / 140.
+- Trading it at every zone lost in every version (a limit order at the zone, or a 5-minute close back), both periods.
+- One kind of zone held up: the 3-day volume lines (the high-volume areas). Nifty, a limit order at the volume line,
+  stop 35, target 75: 2023 / 2024 / 2025 / 2026 +2 / +29 / +155 / +172 (45 trades, about one a month, 49% won); Sensex
+  (stop 100, target 200) −428 / −13 / +439 / +624. Too few trades and too thin in 2023-2024 to add.
+
 ## How to re-check all of this
 
 - `python research/fair_price_backtest.py` downloads the candles and re-runs the Fair Price test.
