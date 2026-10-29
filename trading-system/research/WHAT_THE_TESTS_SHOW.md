@@ -2000,6 +2000,14 @@ Sensex 2026 89 trades, 35% won, +2,043 points to the middle of the range (8 of 1
 334 trades, 25% won, −7,176; Nifty 2026 +23 (85 trades, 31%), 2023-2025 −2,755. It worked in 2026 and lost in each
 of the three years before: not added.
 
+The user's reading (29 October 2026): "95% came back, average 97 / 327 points, so take 75 / 200 every day?" The 94-96%
+is price closing back below the high once (the entry, not a win), and the 97 / 327 points are measured from the top of
+the poke to the lowest price any time before the close, ignoring a stop. Entering at that first close back inside,
+target 75 Nifty / 200 Sensex, price near that side at 12:00, 2026: with the stop just beyond the poke (about 18 / 61
+points) the stop came first on 75% / 71% of the trades and the target on 17% / 26% (Nifty −177, Sensex +588; 2023-2025
+−2,371 / −5,811); with a 55 / 170-point stop the target came first on 34% / 37%, the stop on 38% / 39% (Nifty +155,
+Sensex −213; 2023-2025 −3,109 / −9,838).
+
 ## How to re-check all of this
 
 - `python research/fair_price_backtest.py` downloads the candles and re-runs the Fair Price test.

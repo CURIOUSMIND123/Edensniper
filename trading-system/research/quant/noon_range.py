@@ -159,6 +159,62 @@ def trade_table():
             print(f"  {'only from near that side at 12:00, ' if near else ''}out at {how:10}  " + ' | '.join(line) +
                   f" | 2026 months +: {sum(v > 0 for v in mon.values())} of {len(mon)}")
 
+TGT = {'nifty': 75, 'sensex': 200}[NM]
+
+def exact(d, stop, near):
+    """The user's version (29 October 2026): after 12:00, at the first 1-minute close back inside the morning range
+    after a poke beyond it -> the other way at that close; target TGT points; stop beyond the poke ('poke', +0.02%, at
+    most CAP) or a fixed number of points; held at most to 3:15. -> list of (day, result, 'target' / 'stop' / '3:15')."""
+    c1 = S[d]
+    am, pm = [x for x in c1 if x[0] < NOON], [x for x in c1 if NOON <= x[0] <= LAST]
+    mh, ml = max(x[2] for x in am), min(x[3] for x in am)
+    pos = (am[-1][4] - ml) / (mh - ml) if mh > ml else 0.5
+    out = []
+    for s_, lvl in ((-1, mh), (1, ml)):                  # -1: poke above the high -> SELL; +1: below the low -> BUY
+        if near and not ((s_ < 0 and pos >= 0.7) or (s_ > 0 and pos <= 0.3)):
+            continue
+        i0 = next((i for i, x in enumerate(pm) if (x[2] > lvl if s_ < 0 else x[3] < lvl)), None)   # the poke beyond
+        if i0 is None:
+            continue
+        j = next((j for j in range(i0, len(pm)) if s_ * (pm[j][4] - lvl) > 0), None)   # the close back inside
+        if j is None:
+            continue
+        e = pm[j][4]
+        ext = max(x[2] for x in pm[i0:j + 1]) if s_ < 0 else min(x[3] for x in pm[i0:j + 1])
+        stp = (ext - s_ * 0.0002 * ext) if stop == 'poke' else e - s_ * stop
+        if stop == 'poke' and s_ * (e - stp) > CAP:
+            stp = e - s_ * CAP
+        tgt, res = e + s_ * TGT, None
+        for m, o, h, l, c in c1:
+            if m <= pm[j][0]:
+                continue
+            adv, fav = (l, h) if s_ > 0 else (h, l)
+            if s_ * (adv - stp) <= 0:
+                res = (s_ * (stp - e) - COST, 'stop'); break
+            if s_ * (fav - tgt) >= 0:
+                res = (TGT - COST, 'target'); break
+            if m >= A.OUT:
+                res = (s_ * (c - e) - COST, '3:15'); break
+        if res:
+            out.append((d, s_, e - stp if s_ > 0 else stp - e) + res)
+    return out
+
+def exact_table():
+    print(f"\n{NM.upper()}: SELL at the first 1-minute close back below the morning high after 12:00 (BUY back above the low),"
+          f" target {TGT} points")
+    for near in (False, True):
+        for stop in ('poke', {'nifty': 35, 'sensex': 100}[NM], CAP):
+            for nm, f in (('2026', lambda d: d >= '2026-01-01'), ('2023-2025', lambda d: d < '2026-01-01')):
+                r = [x for d in S if f(d) for x in exact(d, stop, near)]
+                n = len(r)
+                k = collections.Counter(x[4] for x in r)
+                net = sum(x[3] for x in r)
+                print(f"  {'near that side at 12:00, ' if near else ''}stop {'beyond the poke' if stop == 'poke' else str(stop) + ' points':16}"
+                      f" {nm:9} {n:4} trades: target first {k['target']:3} ({pct(k['target'], n)}), stop first {k['stop']:3} "
+                      f"({pct(k['stop'], n)}), neither by 3:15 {k['3:15']:3}; net {net:+7.0f} points"
+                      + (f"; average stop {st.mean(x[2] for x in r):.0f} points" if stop == 'poke' and r else ''))
+
 if __name__ == '__main__':
     study([d for d in sorted(S) if d >= '2026-01-01'])
     trade_table()
+    exact_table()
