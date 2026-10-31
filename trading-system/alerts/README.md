@@ -108,8 +108,10 @@ when Binance refuses its futures data where the server is), 1 / 5 / 15 minutes, 
 the Asia range, the London range (1:30-1:45 pm IST), the 24-hour high / low and volume POC, the round $1,000s and the
 order flow (taker buys minus sells). Paper calls (`BTC_CALLS`): the London opening-range breakout (the first 5-minute
 close beyond that range until 5:30 pm IST, target 450 / stop 150 dollars), drawn as position boxes; alerts of kind
-`btc`, off until "BTC alerts" is on (`/api/settings?btc_alerts=1`). Tested July - October 2026: 33% won, +$967 a BTC;
-no pattern reached the 80% asked for (`research/quant/btc_scalp.py`).
+`btc`, off until "BTC alerts" is on (`/api/settings?btc_alerts=1`). Chosen on July - October 2026 (+$967 a BTC), it
+FAILED the 2024-2026 re-check (`research/quant/btc_stop_autopsy.py`, the same rule): 2024 −$18,108, 2025 −$20,400,
+2026 +$1,358 a BTC, no better than random entries, so the screen marks it "watch only"; nothing tested on BTC beat a
+coin flip (`btc_scalp.py`, `btc_confluence.py`, `btc_signs.py`).
 
 The indicator on the option charts (from 21 October 2026): each option chart shows the indicator's own BUY / SELL calls
 on that option's candles (`option_trades()`), worked out as TradingView runs the indicator there: an option's price is

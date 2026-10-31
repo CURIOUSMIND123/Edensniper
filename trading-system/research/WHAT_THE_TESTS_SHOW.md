@@ -2040,6 +2040,9 @@ July-September, checked on October; costs 0.06% a trade.
   close beyond it until 12:00 UTC), target 450 / stop 150: 121 trades, 33% won, +$967 a BTC (July +766, August +205,
   September −545, October +541). In the app as paper calls on the BTC screen (alerts off until turned on); the alert
   program's trades match the test trade for trade.
+- **Re-checked on 2024-2026 (next sections): it failed** - 2024 −$18,108, 2025 −$20,400, 2026 +$1,358 a BTC with the
+  same rule; every pattern above is a coin flip over the three years (`btc_scalp.py ../.cache/btc_long`). The BTC
+  screen now marks it "watch only".
 
 ## Bitcoin: pivots, CPR, volume levels with RSI, WaveTrend ("TCI") and MACD together (`btc_confluence.py`)
 
@@ -2055,6 +2058,10 @@ histogram turning; and breakouts through the levels with all three agreeing. Sto
 - One version made money in both periods: a reversal at a level with RSI and WaveTrend, stop 300, target 600: 31
   trades (39% won, +$166 a BTC) in July-September and 12 (67%, +$3,006) in October - too few trades to tell anything
   from luck. Breakouts with all three confirmations lost heavily. Nothing added.
+- Re-checked on 2024-2026 (`btc_confluence.py ../.cache/btc_long`, chosen on 2024-2025, checked on 2026): every version
+  lost in both periods; that reversal with RSI and WaveTrend, stop 300 / target 600: 2024-2025 329 trades 31% won
+  −18,021, 2026 117 trades 38% −414. The share of winners again follows the target and the stop (stop 150 / target 450:
+  23-27%; stop 300 / target 150: 62-71%).
 
 ## Why the calls hit the stop, and what price does after it (`stop_autopsy.py`; 31 October 2026)
 
@@ -2081,6 +2088,83 @@ points before the stop (as the app's history counts it): Nifty 46% / 59%, Sensex
   49-55% in 2023-2025; with the day's trend 63-65% / 51-54%.
 - Entering lower on a pullback and trading again after the stop were tested before (`lower_buy.py`, `y2026_exits.py`,
   `reentry.py`): the pullback fills almost every loser but only 6 in 10 winners; only Sensex's second chance held.
+
+## Bitcoin over 2024-2026: a sign before the big moves? why the stop is hit, pullbacks, averaging (31 October 2026)
+
+Asked: "there should be some sign when price is going to go up so much or go down so much; why does price hit the
+stop, does it go our way after the stop or reverse completely, can we buy the pullback or average?" - on BTC.
+BTCUSDT perpetual, January 2024 - October 2026 from Binance's public archives (`btc_data.py`: 1-minute candles with
+the taker-buy volume, open interest and the trader long / short ratios every 5 minutes, funding every 8 hours);
+target 450 / stop 150 points at $70,000 (0.64% / 0.21% of the price, so every year is judged alike), costs 0.06% a
+trade (42 points); judged on 2024-2025, checked on 2026.
+
+**1. A sign before the big moves (`btc_signs.py`; every 15 minutes, 67,200 moments in 2024-2025, 28,895 in 2026).**
+The signs: the hour and the day, the move of the last 15 minutes / hour / 4 hours / day, the ranges against their
+usual size, volume against usual for the hour, aggressive buying (taker buys) over 1 and 4 hours, the place in the
+24-hour range, RSI 14, the distance from the 24-hour average, open interest changes (1 / 4 / 24 hours), the funding
+rate, the top traders' long / short ratio and its change, yesterday's range.
+
+- **The direction: no sign.** A BUY reaching 450 before 150 against (UP) and a SELL doing so (DOWN) each happen 25% of
+  the time - exactly a coin's 150 / (450 + 150). No group of any sign reached 33% in both periods (all between 21% and
+  31%). All the signs together in a gradient-boosting model: AUC 0.50 for UP and 0.51 for DOWN on 2026 (0.50 = a coin;
+  0.86-0.87 on 2024-2025 itself, i.e. it only memorised); its most confident trades lost money in 2026.
+- **The size: a clear sign.** A 1% move (700 points) one way or the other within 4 hours: 42% of moments in 2024-2025,
+  37% in 2026; 58-62% from 12:00 to 15:00 UTC (5:30-8:30 pm IST, the US open), 22-24% at weekends, 60-68% when the
+  last hour's range was 1.7x its usual size or more, 18-21% when it was under 0.6x. The model: AUC 0.76 on 2026; its
+  most confident 5% of moments were followed by a 1% move 91% of the time, its top 1% 95%. The next 4 hours' range
+  follows the last 4 hours' (correlation 0.45).
+- **Trading the size sign** (orders 50 or 150 points above and below when a big move is likely; the first filled is
+  the trade): the model's top 5%, orders 50 away: 2025 513 trades 32% won −96, 2026 397 trades 27% −11,424; orders 150
+  away: 29% −12,624 / 30% −7,176; "last hour 1.7x usual": 25-27% won, −93,000 to −138,000 a year. A big move is not a
+  clean move: it swings 150 against first just as often.
+
+**2. Why the stop is hit and what comes after (`btc_stop_autopsy.py`).** The calls: the London breakout (the app's
+paper calls), the New York breakout, yesterday's high / low swept and the Asia range swept - and, to compare, one
+random entry a day with a random side.
+
+| 2024 / 2025 / 2026 | London breakout | the four calls together | random entries |
+|---|---|---|---|
+| calls | 366 / 364 / 301 | 1,373 / 1,379 / 1,104 | 366 / 365 / 301 |
+| won (450 before 150) | 23% / 24% / 31% | 25% / 23% / 26% | 25% / 26% / 27% |
+| points | −19,008 / −18,174 / −2,151 | −54,170 / −69,831 / −36,787 | −14,786 / −12,712 / −8,923 |
+| after a stop: back at the entry within 24 h | 91% / 90% / 87% | 89% / 90% / 88% | 92% / 89% / 87% |
+| ... and then the target (a "stop hunt") | 70% / 63% / 62% | 69% / 62% / 61% | 64% / 59% / 64% |
+| never back | 9% / 10% / 13% | 11% / 10% / 12% | 8% / 11% / 13% |
+| beyond the stop first (median) | 143 / 171 / 185 | 173 / 164 / 180 | 170 / 140 / 160 |
+
+- The calls behave like random entries. Six in ten stops are followed by the target - after random entries too: a
+  150-point stop is a quarter of BTC's usual hourly swing, so price crosses it and comes back as a matter of course;
+  it is noise, not someone hunting this stop. Before coming back, price goes a median 140-185 points (75%: up to
+  410-590) beyond the stop - more than the stop itself.
+- The London breakout with the app's exact rule ($450 / $150, not scaled): 2024 −$18,108 (23% won), 2025 −$20,400
+  (26%), 2026 +$1,358 (33%) a BTC; it lost money in 20 of the 24 months of 2024-2025. July - October 2026, where it was
+  chosen, was luck. The BTC screen now marks it "watch only"; its alerts say so.
+- A wider stop (target as now; all four calls): +150: 40% won −61,997 / −60,448 / −48,757; +300: 49-50% won −71,800 /
+  −66,361 / −48,386 - more winners, more money lost. The London breakout +300: −12,058 / −15,394 / +1,717.
+- Averaging (half at the call, half half way to the stop): −49,205 / −65,096 / −32,799 against −54,170 / −69,831 /
+  −36,787 - a little less lost only because half the position is never filled on the winners; still losing.
+- A pullback entry (a limit order 75 points better for an hour): fills 33-38% of the winners and 85-90% of the others;
+  −40,750 / −53,395 / −26,552.
+- After a stop: the opposite trade at the stop (stop and reverse) won 25-30%, −19,417 / −41,993 / −11,468; the same
+  trade again when price is back at the entry within 4 hours: −30,144 / −29,915 / −21,469.
+- Signs at the entry (the hour, weekday / weekend, the opening range's width, the signal candle's volume, aggressive
+  orders in it, the 24-hour trend, open interest, funding, the top traders): the groups with 30+ calls in a period won
+  14-38%, none above 33% in both 2024-2025 and 2026 (a few late-evening hours did better on 4-15 calls - too few to
+  mean anything).
+
+**3. The rest re-checked on 2024-2026:** every pattern in `btc_scalp.py` (sweeps, spikes, absorption, volume breakouts,
+the opening-range breakouts) and every indicator mix in `btc_confluence.py` lost money in 2024-2025 and in 2026, each
+winning as often as a coin would with its target and stop (450 / 150: 22-27%; 150 / 150: 46-54%; 150 / 450: 71-77%).
+
+**4. Carried to Nifty / Sensex (`stop_autopsy.py`):** the one thing BTC showed - the size of the next move can be
+foreseen - checked on the alert program's calls: the share reaching the success move by the day's range so far against
+usual (1.5x+ / usual / under 0.7x) Nifty 45% / 46% / 44% in 2023-2025, 57% / 59% / 57% in 2026; Sensex 55% / 51% /
+49%, 61% / 60% / 56%; by yesterday's range against usual no steady difference either. Nothing added.
+
+Conclusion: at these sizes (a 150-point stop on a $60,000-120,000 coin) BTC's direction was a coin flip in all three
+years, whatever the levels, indicators, order flow, open interest or funding said; 80% winners are possible only with
+the stop about four times the target, and then the costs (42 points a trade) make it lose. When a big move is coming
+can be seen; which way it goes could not.
 
 ## How to re-check all of this
 

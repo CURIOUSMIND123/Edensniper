@@ -3,6 +3,9 @@ for 400-500 point targets with a 150-point stop, hoping for 80% winners). Binanc
 (data.binance.vision, futures UM), with the real taker-buy volume (aggressive buyers) in every candle.
 
     python -I btc_scalp.py ../.cache/btc_raw
+    python -I btc_scalp.py ../.cache/btc_long     January 2024 - October 2026 (btc_data.py fetches it): chosen on
+                                                  2024-2025, checked on 2026; targets and stops scaled with the price
+                                                  (points at $70,000, as btc_data.py explains)
 
 Patterns are chosen on July-September and checked on October. A trade: entry at the signal candle's close, out at the
 target or the stop (a candle reaching both counts as the stop), or after 24 hours at the close; one at a time per
@@ -25,8 +28,17 @@ import collections, csv, datetime as dt, io, os, statistics as st, sys, zipfile
 
 SRC = sys.argv[1] if len(sys.argv) > 1 else '../.cache/btc_raw'
 COST = 0.0006
-SEL_END = dt.datetime(2026, 10, 1, tzinfo=dt.timezone.utc)
-START = dt.datetime(2026, 7, 1, tzinfo=dt.timezone.utc)
+LONG = os.path.basename(os.path.normpath(SRC)) == 'btc_long'
+if LONG:
+    SEL_END, START = dt.datetime(2026, 1, 1, tzinfo=dt.timezone.utc), dt.datetime(2024, 2, 1, tzinfo=dt.timezone.utc)
+    SEL_NAME, CHK_NAME = '2024-25', '2026'
+else:
+    SEL_END, START = dt.datetime(2026, 10, 1, tzinfo=dt.timezone.utc), dt.datetime(2026, 7, 1, tzinfo=dt.timezone.utc)
+    SEL_NAME, CHK_NAME = 'Jul-Sep', 'Oct'
+REF = 70000.0
+def U(e):
+    """Price units per point: 1 (plain points), or e / $70,000 in the long test."""
+    return e / REF if LONG else 1.0
 
 def load():
     rows = {}
@@ -60,15 +72,17 @@ def outcome(k0, side, e, tp, sl, hours=24):
     i = POS.get(k0)
     if i is None:
         return None
-    stp, tgt = e - side * sl, e + side * tp
+    u = U(e)
+    cost = COST * e / u
+    stp, tgt = e - side * sl * u, e + side * tp * u
     for k in KS[i:i + hours * 60]:
         o, h, l, c, v, tb = R[k]
         if side * ((l if side > 0 else h) - stp) <= 0:
-            return 'loss', -sl - COST * e
+            return 'loss', -sl - cost
         if side * ((h if side > 0 else l) - tgt) >= 0:
-            return 'win', tp - COST * e
+            return 'win', tp - cost
     c = R[KS[min(i + hours * 60, len(KS)) - 1]][3]
-    return 'time', side * (c - e) - COST * e
+    return 'time', side * (c - e) / u - cost
 
 def day_levels():
     """UTC day -> (yesterday's high, low), (the Asia range 00:00-08:00 high, low)."""
@@ -189,7 +203,7 @@ def run(signals, tp, sl):
         out.append((k, r[0], r[1]))
         i = POS[k]
         # free again when the trade is over: find its exit minute
-        stp, tgt = e - side * sl, e + side * tp
+        stp, tgt = e - side * sl * U(e), e + side * tp * U(e)
         j = i
         for j in range(i, min(i + 24 * 60, len(KS))):
             o, h, l, c, v, tb = R[KS[j]]
@@ -202,7 +216,7 @@ def line(rows):
     sel = [x for x in rows if T(x[0]) < SEL_END]
     chk = [x for x in rows if T(x[0]) >= SEL_END]
     f = lambda r: (f"{len(r):4} tr {round(100 * sum(x[1] == 'win' for x in r) / len(r)) if r else 0:3}% won {sum(x[2] for x in r):+8,.0f}")
-    return f"Jul-Sep {f(sel)} | Oct {f(chk)}"
+    return f"{SEL_NAME} {f(sel)} | {CHK_NAME} {f(chk)}"
 
 if __name__ == '__main__':
     print(f"BTCUSDT perpetual, {T(KS[0]):%Y-%m-%d} - {T(KS[-1]):%Y-%m-%d %H:%M} UTC; trades from {START:%Y-%m-%d}; "

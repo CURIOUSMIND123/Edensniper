@@ -11,7 +11,9 @@ settings and the extra calls), 2023-2026, 1-minute candles; costs 4 / 12 points.
    the whole position at the call.
 4. SIGNS AT THE ENTRY: the share of calls that reached the success move (50 Nifty / 150 Sensex points before the stop,
    as the app's history counts it) by time of day, the day's trend, CPR width, the opening gap, how far the day had
-   already moved, RSI 14 (5-minute) and the kind of call; 2023-2025 and 2026 apart.
+   already moved, RSI 14 (5-minute) and the kind of call; 2023-2025 and 2026 apart. Added after the Bitcoin test
+   (btc_signs.py: the size of the next move can be foreseen there, its direction not): the day's range so far against
+   its usual size by that minute (the median of the 20 days before) and yesterday's range against usual.
 """
 import collections, statistics as st, sys
 import levels_style as LS
@@ -46,8 +48,14 @@ def first(c1, start, side, e, up, down, last=A.OUT):
 def close_at(c1, m):
     return next((x[4] for x in c1 if x[0] >= m), c1[-1][4])
 
+DRANGE = {d: max(x[2] for x in LS.sess[d]) - min(x[3] for x in LS.sess[d]) for d in LS.DAYS}
+
+def range_by(d, m):
+    xs = [x for x in LS.sess[d] if x[0] < m]
+    return (max(x[2] for x in xs) - min(x[3] for x in xs)) if xs else None
+
 CALLS = []
-for d in LS.DAYS:
+for n_d, d in enumerate(LS.DAYS):
     cx, c1 = LS.CX[d], LS.sess[d]
     for t in A.day_trades(cx, c1, 929, True, False, 'classic'):
         if not (t['taken'] and t['exit']):
@@ -99,6 +107,15 @@ for d in LS.DAYS:
         rs = rsi14(cx.get('c5h', [])[-30:] + cl5)
         r['rsi'] = 'RSI n/a' if rs is None else ('RSI stretched its way (70+/30-)' if (rs >= 70 if sd > 0 else rs <= 30) else
                                                'RSI against (under 50 for a BUY)' if (rs < 50 if sd > 0 else rs > 50) else 'RSI 50-70 its way')
+        prev = LS.DAYS[max(0, n_d - 20):n_d]
+        so_far = range_by(d, t['known'])
+        usual = st.median([v for v in (range_by(p, t['known']) for p in prev) if v]) if len(prev) >= 10 else None
+        r['range_now'] = ('range so far n/a' if not (so_far and usual) else 'range so far 1.5x+ usual' if so_far >= 1.5 * usual else
+                          'range so far under 0.7x usual' if so_far < 0.7 * usual else 'range so far usual')
+        yu = st.median(DRANGE[p] for p in prev[:-1]) if len(prev) >= 10 else None
+        yd = DRANGE[prev[-1]] if prev else None
+        r['range_y'] = ('yesterday n/a' if not (yu and yd) else 'yesterday 1.5x+ usual range' if yd >= 1.5 * yu else
+                        'yesterday under 0.7x usual range' if yd < 0.7 * yu else 'yesterday usual range')
         CALLS.append(r)
 
 def pct(n, d):
@@ -128,7 +145,7 @@ if __name__ == '__main__':
         print(f"  3. AVERAGING (half now, half half way to the stop; T1 / stop as now): {pct(sum(x > 0 for x in pa), len(pa))} won "
               f"{sum(pa):+,.0f} points (in whole-position units) against the whole position at the call {sum(p0):+,.0f}")
         print(f"  4. SIGNS AT THE ENTRY (share reaching {NEED} points before the stop; calls):")
-        for key in ('src', 'hour', 'trend', 'cpr', 'gap', 'moved', 'rsi'):
+        for key in ('src', 'hour', 'trend', 'cpr', 'gap', 'moved', 'rsi', 'range_now', 'range_y'):
             groups = collections.defaultdict(list)
             for r in cs:
                 groups[r[key]].append(r['success'])

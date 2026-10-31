@@ -101,13 +101,14 @@ DELTA_CALLS = True                # PAPER ONLY (asked on 23 October 2026 to watc
                                   # Sensex 58% (+1,496, 40) vs 53% (+598, 30); delta signals on their own lost money
 DELTA_WIN = 5
 DELTA_MIN = 0.10
-BTC_CALLS = True                  # PAPER ONLY (asked on 31 October 2026): Bitcoin (BTCUSDT perpetual, Binance) on its own
-                                  # screen, with the London opening-range breakout: each UTC day the 08:00-08:15 range
-                                  # (1:30-1:45 pm IST); the first 5-minute close beyond it until 12:00 UTC -> that way,
-                                  # target BTC_TP, stop BTC_SL dollars, out after 24 hours. July - October 2026
-                                  # (research/quant/btc_scalp.py): 121 trades, 33% won, +$967 a BTC after costs (July
-                                  # +766, August +205, September -545, October +541). No pattern reached 80% with a
-                                  # 400-500 target and a 150 stop (random entries: 24%), most lost money
+BTC_CALLS = True                  # PAPER ONLY, WATCH ONLY (asked on 31 October 2026): Bitcoin (BTCUSDT perpetual,
+                                  # Binance) on its own screen, with the London opening-range breakout: each UTC day the
+                                  # 08:00-08:15 range (1:30-1:45 pm IST); the first 5-minute close beyond it until 12:00
+                                  # UTC -> that way, target BTC_TP, stop BTC_SL dollars, out after 24 hours. Chosen on
+                                  # July - October 2026 (+$967 a BTC), it FAILED the 2024-2026 re-check
+                                  # (research/quant/btc_stop_autopsy.py, this exact rule): 2024 -$18,108, 2025 -$20,400,
+                                  # 2026 +$1,358 a BTC (lost money in 20 of the 24 months of 2024-2025) - no better than
+                                  # random entries. Kept on the chart to watch; nothing tested on BTC beat a coin
 BTC_TP, BTC_SL = 450, 150
 EXTRA_SRC = ('CPR BREAK', 'OPEN HIGH LOW', 'GAP FILL', 'SECOND CHANCE', 'OI WALL')   # their own trades, next to the others
 CPR_TP = {'nifty': 60, 'sensex': 200}   # the CPR BREAK calls' target and stop, index points
@@ -774,7 +775,7 @@ def btc_chart():
              or ('waiting: from 1:45 pm IST, the first 5-minute close beyond the 1:30-1:45 range' if now_m < day * 1440 + 720
                  else 'no breakout today (none by 5:30 pm IST)')],
             ['On this chart', f"{len(done)} trades, {sum(t['exit']['pnl'] > 0 for t in done)} won, {sum(t['exit']['pnl'] for t in done):+,.0f} $ a BTC"],
-            ['Tested (paper only)', f"July - October 2026: 121 trades, 33% won, +$967 a BTC (target {BTC_TP} / stop {BTC_SL})"]]
+            ['Tested 2024 - 2026', "FAILED: 2024 -$18,108, 2025 -$20,400, 2026 +$1,358 a BTC - no better than random entries. Watch only, don't trade it"]]
     return dict(src=B['src'], px=px, chg=round(px - first[3], 1) if first else 0, pct=round(100 * (px - first[3]) / first[3], 2) if first else 0,
                 candles=[[btc_ist(k)] + list(rows[k][:4]) for k in ks if k >= (day - 1) * 1440],
                 lines=[dict(l, p=round(l['p'], 1)) for l in lines], marks=sorted(marks, key=lambda m: m['m']), boxes=boxes,
@@ -797,7 +798,7 @@ def btc_alerts():
                         sent.add(k)
                         record_event(f"BTC {sd} (PAPER, London breakout) at {t['e']:,.1f}: a 5-minute close beyond the 1:30-1:45 pm IST "
                                      f"range ({t['lo']:,.1f} - {t['hi']:,.1f}). Target {t['tgt']:,.1f} (+{BTC_TP}), stop {t['stp']:,.1f} "
-                                     f"(-{BTC_SL}). Tested July-October 2026: 33% won, +$967 a BTC; paper only.",
+                                     f"(-{BTC_SL}). WATCH ONLY: this breakout lost money in 2024 and 2025 (2024-2026 test) - don't trade it.",
                                      'btc', 'BTC', title=f"BTC {sd} (paper) {t['e']:,.0f}", oid=k)
                     x = t['exit']
                     if x and k + 'x' not in sent and x['m'] >= now_m - 3:
@@ -3170,7 +3171,7 @@ button.on{color:#2962ff;background:#f0f3fa;font-weight:600}
 <div id="head"></div>
 <div id="cw"><div id="c"></div><table id="tbl" class="hidden"></table></div>
 <div id="msg"></div>
-<div id="panel" class="hidden"><h4>London breakout trades (paper)</h4>
+<div id="panel" class="hidden"><h4>London breakout trades (watch only: it failed the 2024-2026 test)</h4>
 <table><thead><tr><th>Time (IST)</th><th>Trade</th><th>Entry</th><th>Stop</th><th>Result</th></tr></thead><tbody id="list"></tbody></table></div>
 <script src="/lwc.js"></script>
 <script>
@@ -3304,12 +3305,12 @@ function draw() {
     `<span class="${D.chg >= 0 ? 'up' : 'dn'}">${D.chg >= 0 ? '+' : ''}${fmt(D.chg)} (${D.pct}%, 24h)</span>` +
     `<span class="${D.d15 >= 0 ? 'up' : 'dn'}">order flow 15 min ${D.d15 >= 0 ? '+' : ''}${fmt0(D.d15)} BTC</span>`;
   $('info').innerHTML = 'Binance &middot; ' + D.at + ' IST';
-  $('tbl').innerHTML = '<tr><td>BTC (paper)</td><td>London breakout</td></tr>' + D.info.map((r) => '<tr><td>' + r[0] + '</td><td>' + r[1] + '</td></tr>').join('');
+  $('tbl').innerHTML = '<tr><td>BTC (watch only)</td><td>London breakout</td></tr>' + D.info.map((r) => '<tr><td>' + r[0] + '</td><td>' + r[1] + '</td></tr>').join('');
   $('tbl').classList.toggle('hidden', !tblOn);
   $('infob').classList.toggle('on', tblOn);
   $('list').innerHTML = D.rows.length ? D.rows.slice().reverse().map((r) => '<tr>' + r.map((x) => '<td>' + x + '</td>').join('') + '</tr>').join('')
     : '<tr><td colspan="5">No trades on this chart yet.</td></tr>';
-  $('msg').textContent = 'Paper only: the London breakout won 33% of its trades in July - October 2026 (target 450 / stop 150).';
+  $('msg').textContent = "Watch only: the London breakout lost money in 2024 (-$18,108 a BTC) and 2025 (-$20,400); nothing tested on BTC beat a coin flip (2024-2026).";
 }
 async function load() {
   if (busy) return;

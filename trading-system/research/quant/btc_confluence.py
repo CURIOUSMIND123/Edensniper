@@ -4,6 +4,7 @@ trades from July 2026; chosen on July-September, checked on October; costs 0.06%
 stop and the target counts as the stop; out after 24 hours; one trade at a time per setup.
 
     python -I btc_confluence.py ../.cache/btc_raw
+    python -I btc_confluence.py ../.cache/btc_long   January 2024 - October 2026: chosen on 2024-2025, checked on 2026
 
 Levels for each UTC day: the floor pivots from the day before (P, R1, R2, S1, S2) and the CPR (TC / BC); the volume
 profile of the 3 days before (real BTC volume, $50 bins): the POC, the value area edges (VAH / VAL) and the high-volume
@@ -129,7 +130,7 @@ def table(name, sig):
         chk = [x for x in rows if B.T(x[0]) >= B.SEL_END]
         w = lambda r: round(100 * sum(x[1] == 'win' for x in r) / len(r)) if r else 0
         n = lambda r: sum(x[2] for x in r)
-        print(f"    stop {sl} target {tp}: Jul-Sep {len(sel):4} tr {w(sel):3}% won {n(sel):+8,.0f} | Oct {len(chk):3} tr {w(chk):3}% won {n(chk):+7,.0f}"
+        print(f"    stop {sl} target {tp}: {B.SEL_NAME} {len(sel):4} tr {w(sel):3}% won {n(sel):+8,.0f} | {B.CHK_NAME} {len(chk):3} tr {w(chk):3}% won {n(chk):+7,.0f}"
               + ('   <- both +' if n(sel) > 0 and n(chk) > 0 else ''))
 
 if __name__ == '__main__':
