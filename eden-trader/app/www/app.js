@@ -62,11 +62,29 @@ function show(v) {
   for (const s of document.querySelectorAll('.view')) s.classList.add('hidden');
   $('v-' + v).classList.remove('hidden');
   for (const b of document.querySelectorAll('nav button')) b.classList.toggle('on', b.dataset.v === v);
+  const fr = $({chart: 'chart-frame', options: 'opt-frame', btc: 'btc-frame'}[v]);
+  if (fr) fr.dataset.tries = '0';                     // a tap on the tab always allows another try
   refresh();
 }
 
 // a chart page left open for hours (the app in the background) loads again, so it has the server's newest version
 const stale = (f) => Date.now() - (+f.dataset.at || 0) > 30 * 60 * 1000;
+
+// each tab's page tells the app when it has loaded; a page that never did (the server was restarting for an update, or
+// no network) loads again when its tab is shown, and every 15 seconds while it is on screen (for up to 10 minutes)
+window.addEventListener('message', (e) => {
+  if (!e.data || e.data.eden !== 'loaded') return;
+  for (const id of ['chart-frame', 'opt-frame', 'btc-frame']) {
+    const f = $(id);
+    if (f && f.contentWindow === e.source) { f.dataset.ok = '1'; f.dataset.tries = '0'; }
+  }
+});
+const failed = (f) => !!f.dataset.src && f.dataset.ok !== '1' && Date.now() - (+f.dataset.at || 0) > 15000 && (+f.dataset.tries || 0) < 40;
+function loadFrame(f, src) {
+  if (f.dataset.src === src && !stale(f) && !failed(f)) return;
+  f.dataset.tries = String(f.dataset.src === src && f.dataset.ok !== '1' ? (+f.dataset.tries || 0) + 1 : 0);
+  f.src = src; f.dataset.src = src; f.dataset.at = Date.now(); f.dataset.ok = '';
+}
 
 function chartView() {
   const f = $('chart-frame');
@@ -74,7 +92,7 @@ function chartView() {
   f.classList.toggle('hidden', !ready());
   if (!ready()) return;
   const src = cfg.server.replace(/\/+$/, '') + '/?key=' + encodeURIComponent(cfg.key);
-  if (f.dataset.src !== src || stale(f)) { f.src = src; f.dataset.src = src; f.dataset.at = Date.now(); }
+  loadFrame(f, src);
 }
 
 function optionsView() {
@@ -83,7 +101,7 @@ function optionsView() {
   f.classList.toggle('hidden', !ready());
   if (!ready()) return;
   const src = cfg.server.replace(/\/+$/, '') + '/options?key=' + encodeURIComponent(cfg.key);
-  if (f.dataset.src !== src || stale(f)) { f.src = src; f.dataset.src = src; f.dataset.at = Date.now(); }
+  loadFrame(f, src);
 }
 
 function btcView() {
@@ -92,7 +110,7 @@ function btcView() {
   f.classList.toggle('hidden', !ready());
   if (!ready()) return;
   const src = cfg.server.replace(/\/+$/, '') + '/btc?key=' + encodeURIComponent(cfg.key);
-  if (f.dataset.src !== src || stale(f)) { f.src = src; f.dataset.src = src; f.dataset.at = Date.now(); }
+  loadFrame(f, src);
 }
 
 function tgts(c) {
@@ -320,6 +338,7 @@ async function main() {
     }
   };
   timer = setInterval(() => { if (!document.hidden && view === 'calls') callsView(); }, 3000);
+  setInterval(() => { if (!document.hidden && (view === 'chart' || view === 'options' || view === 'btc')) refresh(); }, 15000);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) { refresh(); checkOta(); } });
   if (window.__otaBooted) window.__otaBooted();
   if (!ready()) { show('settings'); return; }

@@ -2576,6 +2576,7 @@ time scale (bottom) left / right; double-tap a scale or press Fit to reset.</div
 <script>
 const IDX = %INDICES%;
 const PV = '%PAGEVER%';                     // this page's version: reload when the server has a newer one
+try { if (window.parent !== window) window.parent.postMessage({eden: 'loaded'}, '*'); } catch (e) { /* not inside the app */ }
 let cur = IDX[0][0], tf = 5, plines = [], linesKey = '', fitted = '', seq = 0, shown = 0, D = null, loading = false;
 const $ = (id) => document.getElementById(id);
 const box = $('c');
@@ -2870,6 +2871,7 @@ const fmt = (x) => x == null ? '-' : Number(x).toLocaleString('en-IN', {minimumF
 const big = (x) => { const a = Math.abs(x), s = x < 0 ? '-' : ''; return a >= 1e7 ? s + (a / 1e7).toFixed(2) + 'Cr' : a >= 1e5 ? s + (a / 1e5).toFixed(1) + 'L' : a >= 1e3 ? s + (a / 1e3).toFixed(1) + 'K' : s + a; };
 const sg = (x) => (x > 0 ? '+' : '') + fmt(x);
 const PV = '%PAGEVER%';                     // this page's version: reload when the server has a newer one
+try { if (window.parent !== window) window.parent.postMessage({eden: 'loaded'}, '*'); } catch (e) { /* not inside the app */ }
 let idx = 'nifty', tf = 5, C = null, sel = null, chainBusy = false, chartBusy = false, fitted = '', lines = [], centred = '';
 let table = false, L = null, alertsOn = null, IC = null;
 try { table = localStorage.getItem('optmode') === 'table'; } catch (e) {}
@@ -3177,6 +3179,7 @@ button.on{color:#2962ff;background:#f0f3fa;font-weight:600}
 <script>
 const $ = (id) => document.getElementById(id);
 const PV = '%PAGEVER%';
+try { if (window.parent !== window) window.parent.postMessage({eden: 'loaded'}, '*'); } catch (e) { /* not inside the app */ }
 const keyq = () => { const k = new URLSearchParams(location.search).get('key'); return k ? '&key=' + encodeURIComponent(k) : ''; };
 const fmt = (x) => x == null ? '-' : Number(x).toLocaleString('en-US', {minimumFractionDigits: 1, maximumFractionDigits: 1});
 const fmt0 = (x) => Number(x).toLocaleString('en-US', {maximumFractionDigits: 0});
