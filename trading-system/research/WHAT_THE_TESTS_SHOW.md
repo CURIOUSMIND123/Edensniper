@@ -2056,6 +2056,32 @@ histogram turning; and breakouts through the levels with all three agreeing. Sto
   trades (39% won, +$166 a BTC) in July-September and 12 (67%, +$3,006) in October - too few trades to tell anything
   from luck. Breakouts with all three confirmations lost heavily. Nothing added.
 
+## Why the calls hit the stop, and what price does after it (`stop_autopsy.py`; 31 October 2026)
+
+All the alert program's calls (default + extra calls), 2023-2025 and 2026 apart. Success = 50 Nifty / 150 Sensex
+points before the stop (as the app's history counts it): Nifty 46% / 59%, Sensex 51% / 60%.
+
+| After a full stop | Nifty 2023-25 / 2026 | Sensex 2023-25 / 2026 |
+|---|---|---|
+| calls that lost the full stop | 418 / 88 | 345 / 92 |
+| came back to the entry later that day | 59% / 65% | 62% / 67% |
+| ... and went on to T1 (a stop hunt) | 28% / 30% | 30% / 30% |
+| never came back (a real reversal) | 41% / 35% | 38% / 33% |
+| how far beyond the stop first (median) | 41 / 36 points (the stop: 42) | 117 / 98 points (the stop: 125) |
+
+- About 3 in 10 stops are stop hunts, but price first runs about one more full stop beyond: a stop that survives
+  them is about twice as wide, and then the real reversals lose twice as much.
+- All out at T1, the stop X points wider: more winners (Nifty 2026 60% -> 72% at +50, Sensex 60% -> 71% at +150),
+  not more money in every year: Nifty lost more in 2023-2025 at every width; Sensex +60 was better in 2024 and 2026,
+  worse in 2023 and 2025.
+- Averaging (half at the call, half half way to the stop): less than the whole position at the call in both periods
+  on both indices (Nifty 2026 +1,815 against +2,460; Sensex +9,253 against +11,050).
+- Signs at the entry (the time, the day's trend, CPR width, the gap, how far the day had moved, RSI 14, the kind of
+  call): no group reached 80% in both periods; the best (RSI already stretched the call's way) 70-71% in 2026 but
+  49-55% in 2023-2025; with the day's trend 63-65% / 51-54%.
+- Entering lower on a pullback and trading again after the stop were tested before (`lower_buy.py`, `y2026_exits.py`,
+  `reentry.py`): the pullback fills almost every loser but only 6 in 10 winners; only Sensex's second chance held.
+
 ## How to re-check all of this
 
 - `python research/fair_price_backtest.py` downloads the candles and re-runs the Fair Price test.
