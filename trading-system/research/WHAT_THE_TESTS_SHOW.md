@@ -2041,6 +2041,21 @@ July-September, checked on October; costs 0.06% a trade.
   September −545, October +541). In the app as paper calls on the BTC screen (alerts off until turned on); the alert
   program's trades match the test trade for trade.
 
+## Bitcoin: pivots, CPR, volume levels with RSI, WaveTrend ("TCI") and MACD together (`btc_confluence.py`)
+
+Asked on 31 October 2026. July - October 2026, BTCUSDT perpetual; a reversal at a level (the day's pivots P / R1 / R2
+/ S1 / S2, the CPR, the 3-day volume POC / value area edges / high-volume lines) - a 5-minute candle reaching it and
+closing back - alone and with RSI 14 (<= 35 / >= 65), a WaveTrend cross (below −40 / above 40) and the 15-minute MACD
+histogram turning; and breakouts through the levels with all three agreeing. Stops 150 / 200 / 300, targets 150 -
+600; chosen on July-September, checked on October; costs 0.06% a trade.
+
+- The share of winners follows the target and the stop, not the indicators: target 150 / stop 300 won 64-73% in every
+  version, target 600 / stop 150 about 20%; and every such version lost money.
+- More confirmations made fewer trades, not better ones: all four together gave 7 signals in 4 months.
+- One version made money in both periods: a reversal at a level with RSI and WaveTrend, stop 300, target 600: 31
+  trades (39% won, +$166 a BTC) in July-September and 12 (67%, +$3,006) in October - too few trades to tell anything
+  from luck. Breakouts with all three confirmations lost heavily. Nothing added.
+
 ## How to re-check all of this
 
 - `python research/fair_price_backtest.py` downloads the candles and re-runs the Fair Price test.

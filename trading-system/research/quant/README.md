@@ -84,6 +84,7 @@ Costs: 4 Nifty points or 12 Sensex points per trade. `pip install pandas scikit-
 | `user_rule.py` | 2023-2026: every losing family's entries and the daily CPR breakouts, as they are and reversed, with the user's 60 / 35 (Nifty) and 200 / 100 (Sensex) target / stop |
 | `reentry.py` | 2023-2026: a second trade after a stopped call (same price, trend confirmation, pullback to the CPR edge, a zone) |
 | `pivot_breaks.py` | 2023-2026: 5-minute closes through the pivot levels (S3-R3, BC / P / TC) as calls, the 2026 pick and 31 neighbours (stops, targets, filters) |
+| `btc_confluence.py` | Jul-Oct 2026, BTCUSDT perpetual: reversals at pivots / CPR / volume levels with RSI, WaveTrend (TCI) and MACD confirmations, and breakouts with all three; stops 150-300, targets 150-600 |
 | `btc_scalp.py` | Jul-Oct 2026, BTCUSDT perpetual: trap / liquidity-sweep / volume / order-flow / opening-range patterns with a 400-500 target and a 150 stop (`python -I btc_scalp.py ../.cache/btc_raw`, the Binance archives from data.binance.vision) |
 | `liquidity_zones.py` | After 12:00, a break of the morning high / low that runs to the next liquidity zone (yesterday's high / low, earlier highs / lows, pivots, CPR, volume lines, POC, round numbers): how often it reverses there, by kind of zone, and the trades |
 | `noon_range.py` | The 9:15-12:00 high / low and the afternoon: how often price pokes beyond it, comes back, reaches the middle / the other side, how many points; the sweep-fade trade (2026, and 2023-2025 as a check) |
