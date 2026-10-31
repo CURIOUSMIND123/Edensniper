@@ -103,6 +103,14 @@ OI recorder: in market hours the program writes each index's chain around the mo
 `DATA_DIR/oi/<day>-<index>.jsonl` (minute, spot, PCR, walls, and per strike call OI / price, put OI / price) - free
 intraday OI history doesn't exist for past days, so this builds it for later tests (about 1 MB a day).
 
+Bitcoin (from 31 October 2026, `/btc`, the app's BTC screen): BTCUSDT perpetual from Binance's public data (spot
+when Binance refuses its futures data where the server is), 1 / 5 / 15 minutes, with yesterday's (UTC) high / low,
+the Asia range, the London range (1:30-1:45 pm IST), the 24-hour high / low and volume POC, the round $1,000s and the
+order flow (taker buys minus sells). Paper calls (`BTC_CALLS`): the London opening-range breakout (the first 5-minute
+close beyond that range until 5:30 pm IST, target 450 / stop 150 dollars), drawn as position boxes; alerts of kind
+`btc`, off until "BTC alerts" is on (`/api/settings?btc_alerts=1`). Tested July - October 2026: 33% won, +$967 a BTC;
+no pattern reached the 80% asked for (`research/quant/btc_scalp.py`).
+
 The indicator on the option charts (from 21 October 2026): each option chart shows the indicator's own BUY / SELL calls
 on that option's candles (`option_trades()`), worked out as TradingView runs the indicator there: an option's price is
 under 50,000, so the Nifty settings (yesterday's POC, no volume check, stops at most 55 points), the CPR from the

@@ -101,6 +101,14 @@ DELTA_CALLS = True                # PAPER ONLY (asked on 23 October 2026 to watc
                                   # Sensex 58% (+1,496, 40) vs 53% (+598, 30); delta signals on their own lost money
 DELTA_WIN = 5
 DELTA_MIN = 0.10
+BTC_CALLS = True                  # PAPER ONLY (asked on 31 October 2026): Bitcoin (BTCUSDT perpetual, Binance) on its own
+                                  # screen, with the London opening-range breakout: each UTC day the 08:00-08:15 range
+                                  # (1:30-1:45 pm IST); the first 5-minute close beyond it until 12:00 UTC -> that way,
+                                  # target BTC_TP, stop BTC_SL dollars, out after 24 hours. July - October 2026
+                                  # (research/quant/btc_scalp.py): 121 trades, 33% won, +$967 a BTC after costs (July
+                                  # +766, August +205, September -545, October +541). No pattern reached 80% with a
+                                  # 400-500 target and a 150 stop (random entries: 24%), most lost money
+BTC_TP, BTC_SL = 450, 150
 EXTRA_SRC = ('CPR BREAK', 'OPEN HIGH LOW', 'GAP FILL', 'SECOND CHANCE', 'OI WALL')   # their own trades, next to the others
 CPR_TP = {'nifty': 60, 'sensex': 200}   # the CPR BREAK calls' target and stop, index points
 CPR_SL = {'nifty': 35, 'sensex': 100}
@@ -616,6 +624,191 @@ def pivot_lines(P, H, L):
     """The floor pivots around the CPR's pivot P from yesterday's high H / low L, as chart lines (orange)."""
     return [dict(p=round(p, 2), c='#ff9800', t=t, w=1, s=0)
             for t, p in (('R1', 2 * P - L), ('S1', 2 * P - H), ('R2', P + (H - L)), ('S2', P - (H - L)))]
+
+# ---------------- Bitcoin: BTCUSDT perpetual (Binance), its levels and the London breakout (paper) ----------------
+BTC_URLS = ('https://fapi.binance.com/fapi/v1/klines?symbol=BTCUSDT&interval=1m&limit=1500',           # the perpetual
+            'https://data-api.binance.vision/api/v3/klines?symbol=BTCUSDT&interval=1m&limit=1500')    # spot, if refused
+BTC = {}                          # 'at', 'src', 'rows': {UTC minute: (o, h, l, c, volume, taker buys)}
+BTC_LOCK = threading.Lock()
+BTC_COST = 0.0006                 # a trade's costs, as a share of the price (taker fee in, maker out)
+
+def btc_rows(fresh=15.0):
+    """The last two days of BTCUSDT 1-minute candles from Binance's public data: the perpetual, or spot when Binance
+    refuses its futures data where the server is (the two move together within a few dollars)."""
+    with BTC_LOCK:
+        if BTC.get('rows') and time.time() - BTC['at'] < fresh:
+            return BTC
+    err = None
+    for url in BTC_URLS:
+        try:
+            rows, end = {}, int(time.time() * 1000)
+            for _ in range(2):                         # 2 x 1,500 minutes: yesterday (UTC) and today
+                req = urllib.request.Request(url + f'&endTime={end}', headers={'User-Agent': 'Mozilla/5.0'})
+                with urllib.request.urlopen(req, timeout=15) as r:
+                    d = json.load(r)
+                for x in d:
+                    rows[int(x[0]) // 60000] = (float(x[1]), float(x[2]), float(x[3]), float(x[4]), float(x[5]), float(x[9]))
+                if not d:
+                    break
+                end = int(d[0][0]) - 1
+            with BTC_LOCK:
+                BTC.update(at=time.time(), src='perpetual' if 'fapi' in url else 'spot', rows=rows)
+            return BTC
+        except Exception as e:
+            err = e
+    if BTC.get('rows'):
+        return BTC
+    raise ValueError(f'no Bitcoin data ({err})')
+
+def btc_orb(rows, now_m):
+    """The London breakout trades in these candles (UTC minutes), as research/quant/btc_scalp.py tests them: each UTC day
+    the 08:00-08:15 range; the first 5-minute close beyond it from 08:15 to 12:00 -> that way at that close (once a
+    day); target BTC_TP / stop BTC_SL (a candle reaching both counts as the stop); out after 24 hours; one at a time."""
+    out, free = [], 0
+    for day in sorted({k // 1440 for k in rows if k < now_m}):
+        m0 = day * 1440 + 480
+        rng = [rows[k] for k in range(m0, m0 + 15) if k in rows]
+        if len(rng) < 15:
+            continue
+        hi, lo = max(r[1] for r in rng), min(r[2] for r in rng)
+        for b in range(m0 + 15, m0 + 240, 5):
+            if b + 5 > now_m:
+                break
+            blk = [rows.get(k) for k in range(b, b + 5)]
+            if any(x is None for x in blk):
+                continue
+            c = blk[-1][3]
+            if hi >= c >= lo:
+                continue
+            side, k0 = (1 if c > hi else -1), b + 5
+            if k0 >= free:
+                t = dict(side=side, e=c, m=k0, stp=c - side * BTC_SL, tgt=c + side * BTC_TP, exit=None, hi=hi, lo=lo)
+                for k in range(k0, min(k0 + 1440, now_m)):
+                    r = rows.get(k)
+                    if not r:
+                        continue
+                    if side * ((r[2] if side > 0 else r[1]) - t['stp']) <= 0:
+                        t['exit'] = dict(m=k, px=t['stp'], why='stop', pnl=-BTC_SL - BTC_COST * c)
+                        break
+                    if side * ((r[1] if side > 0 else r[2]) - t['tgt']) >= 0:
+                        t['exit'] = dict(m=k, px=t['tgt'], why='target', pnl=BTC_TP - BTC_COST * c)
+                        break
+                else:
+                    last = max((k for k in rows if k < min(k0 + 1440, now_m)), default=None)
+                    if k0 + 1440 <= now_m and last is not None:
+                        t['exit'] = dict(m=last, px=rows[last][3], why='24 hours', pnl=side * (rows[last][3] - c) - BTC_COST * c)
+                out.append(t)
+                free = t['exit']['m'] + 1 if t['exit'] else 10 ** 12
+            break
+    return out
+
+def btc_ist(k):
+    """A UTC minute as the chart's time (IST clock, as the other charts)."""
+    return (k + 330) * 60
+
+def btc_chart():
+    """The Bitcoin screen: the last two days' 1-minute candles, the levels traders watch (yesterday's high / low, the
+    Asia range, the London range, the 24-hour high / low and volume POC, the round $1,000s), the real order flow (taker
+    buys minus sells) and the London breakout trades."""
+    B = btc_rows()
+    rows, now_m = B['rows'], int(time.time() // 60)
+    ks = sorted(rows)
+    day = now_m // 1440
+    seg = lambda a, b: [rows[k] for k in ks if a <= k < b]
+    yd, asia, lon, h24 = seg((day - 1) * 1440, day * 1440), seg(day * 1440, day * 1440 + 480), \
+        seg(day * 1440 + 480, day * 1440 + 495), seg(now_m - 1440, now_m + 1)
+    px = rows[ks[-1]][3]
+    lines = []
+    if yd:
+        lines += [dict(p=max(r[1] for r in yd), c='#f9a825', t='Yesterday high', w=1, s=2),
+                  dict(p=min(r[2] for r in yd), c='#f9a825', t='Yesterday low', w=1, s=2)]
+    if asia:
+        lines += [dict(p=max(r[1] for r in asia), c='#ab47bc', t='Asia high', w=1, s=2),
+                  dict(p=min(r[2] for r in asia), c='#ab47bc', t='Asia low', w=1, s=2)]
+    if len(lon) == 15:
+        lines += [dict(p=max(r[1] for r in lon), c='#2962ff', t='London high', w=2, s=0),
+                  dict(p=min(r[2] for r in lon), c='#2962ff', t='London low', w=2, s=0)]
+    if h24:
+        lines += [dict(p=max(r[1] for r in h24), c='#089981', t='24h high', w=1, s=1),
+                  dict(p=min(r[2] for r in h24), c='#f23645', t='24h low', w=1, s=1)]
+        H = day_hist([(k,) + rows[k][:4] for k in ks if k >= now_m - 1440], {k: rows[k][4] for k in ks if k >= now_m - 1440}, 50.0)
+        poc, vah, val = poc_va(*combine([H]), 50.0)
+        if poc is not None:
+            lines += [dict(p=poc, c='#9c6ade', t='POC 24h', w=1, s=0)]
+    base = int(px // 1000) * 1000
+    lines += [dict(p=float(base), c='#787b86', t='$' + format(base, ','), w=1, s=1),
+              dict(p=float(base + 1000), c='#787b86', t='$' + format(base + 1000, ','), w=1, s=1)]
+    d15 = sum(2 * r[5] - r[4] for r in seg(now_m - 15, now_m + 1))
+    dday = sum(2 * r[5] - r[4] for r in seg(day * 1440, now_m + 1))
+    trades = btc_orb(rows, now_m) if BTC_CALLS else []
+    marks, boxes, trows, open_t = [], [], [], None
+    for t in trades:
+        sd, x = t['side'], t['exit']
+        marks.append(dict(m=t['m'] - 1, pos='belowBar' if sd > 0 else 'aboveBar', c='#089981' if sd > 0 else '#f23645',
+                          x='BUY' if sd > 0 else 'SELL'))
+        if x:
+            marks.append(dict(m=x['m'], pos=('belowBar' if sd > 0 else 'aboveBar') if x['why'] == 'stop' else ('aboveBar' if sd > 0 else 'belowBar'),
+                              c='#089981' if x['pnl'] > 0 else '#f23645', x='SL' if x['why'] == 'stop' else 'T' if x['why'] == 'target' else 'X'))
+        else:
+            open_t = t
+        boxes.append(dict(m0=t['m'] - 1, m1=x['m'] if x else None, side=sd, e=round(t['e'], 1), sl=round(t['stp'], 1),
+                          sl_now=round(t['stp'], 1), t=[round(t['tgt'], 1)], pnl=round(x['pnl']) if x else None, prob=None))
+        trows.append([time.strftime('%d %b %H:%M', time.gmtime(btc_ist(t['m'] - 1))), ('BUY' if sd > 0 else 'SELL') + ' London breakout',
+                      f"{t['e']:,.1f}", f"{t['stp']:,.1f}", f"{x['why']} at {x['px']:,.1f}: {x['pnl']:+,.0f} $" if x else 'open'])
+    for m in marks:
+        m['t'] = btc_ist(m['m'])
+    for b in boxes:
+        b['t0'], b['t1'] = btc_ist(b['m0']), btc_ist(b['m1']) if b['m1'] is not None else None
+    if open_t:
+        lines += [dict(p=open_t['tgt'], c='#089981', t='Target', w=1, s=2), dict(p=open_t['stp'], c='#f23645', t='SL', w=1, s=2)]
+    done = [t for t in trades if t['exit']]
+    first = rows.get(min((k for k in ks if k >= now_m - 1440), default=ks[0]))
+    info = [['Data', 'Binance BTCUSDT ' + ('perpetual' if B['src'] == 'perpetual' else 'spot (Binance refused its futures data here)')],
+            ['Yesterday (UTC) high / low', f"{max(r[1] for r in yd):,.1f} / {min(r[2] for r in yd):,.1f}" if yd else '-'],
+            ['Asia range (5:30 am - 1:30 pm IST)', f"{min(r[2] for r in asia):,.1f} - {max(r[1] for r in asia):,.1f}" if asia else '-'],
+            ['London range (1:30 - 1:45 pm IST)', f"{min(r[2] for r in lon):,.1f} - {max(r[1] for r in lon):,.1f}" if len(lon) == 15 else 'not yet'],
+            ['Order flow (taker buys - sells)', f"last 15 min {d15:+,.0f} BTC, today (UTC) {dday:+,.0f} BTC"],
+            ['Today', ('open: ' + ('BUY' if open_t['side'] > 0 else 'SELL') + f" from {open_t['e']:,.1f}, target {open_t['tgt']:,.1f}, stop {open_t['stp']:,.1f}")
+             if open_t else next((('BUY' if t['side'] > 0 else 'SELL') + f" at {t['e']:,.1f}: {t['exit']['why']}, {t['exit']['pnl']:+,.0f} $"
+                                  for t in trades if t['m'] // 1440 == day), None)
+             or ('waiting: from 1:45 pm IST, the first 5-minute close beyond the 1:30-1:45 range' if now_m < day * 1440 + 720
+                 else 'no breakout today (none by 5:30 pm IST)')],
+            ['On this chart', f"{len(done)} trades, {sum(t['exit']['pnl'] > 0 for t in done)} won, {sum(t['exit']['pnl'] for t in done):+,.0f} $ a BTC"],
+            ['Tested (paper only)', f"July - October 2026: 121 trades, 33% won, +$967 a BTC (target {BTC_TP} / stop {BTC_SL})"]]
+    return dict(src=B['src'], px=px, chg=round(px - first[3], 1) if first else 0, pct=round(100 * (px - first[3]) / first[3], 2) if first else 0,
+                candles=[[btc_ist(k)] + list(rows[k][:4]) for k in ks if k >= (day - 1) * 1440],
+                lines=[dict(l, p=round(l['p'], 1)) for l in lines], marks=sorted(marks, key=lambda m: m['m']), boxes=boxes,
+                rows=trows, info=info, d15=round(d15), at=time.strftime('%H:%M:%S', time.gmtime(time.time() + 19800)))
+
+BTC_THREAD = []
+def btc_alerts():
+    """Every 30 seconds: a new London breakout trade -> "BTC BUY / SELL (paper)", its end -> an EXIT; kind 'btc' (the app
+    shows them only while 'BTC alerts' is on)."""
+    if BTC_THREAD or not BTC_CALLS:
+        return
+    def run():
+        sent = {e['oid'] for e in EVENTS if str(e.get('oid', '')).startswith('btc|')}
+        while True:
+            try:
+                rows, now_m = btc_rows(fresh=20)['rows'], int(time.time() // 60)
+                for t in btc_orb(rows, now_m):
+                    k, sd = f"btc|{t['m']}", 'BUY' if t['side'] > 0 else 'SELL'
+                    if k not in sent and t['m'] >= now_m - 3:
+                        sent.add(k)
+                        record_event(f"BTC {sd} (PAPER, London breakout) at {t['e']:,.1f}: a 5-minute close beyond the 1:30-1:45 pm IST "
+                                     f"range ({t['lo']:,.1f} - {t['hi']:,.1f}). Target {t['tgt']:,.1f} (+{BTC_TP}), stop {t['stp']:,.1f} "
+                                     f"(-{BTC_SL}). Tested July-October 2026: 33% won, +$967 a BTC; paper only.",
+                                     'btc', 'BTC', title=f"BTC {sd} (paper) {t['e']:,.0f}", oid=k)
+                    x = t['exit']
+                    if x and k + 'x' not in sent and x['m'] >= now_m - 3:
+                        sent.add(k + 'x')
+                        record_event(f"BTC EXIT ({x['why']}) at {x['px']:,.1f}: the {sd} from {t['e']:,.1f}, {x['pnl']:+,.0f} $ a BTC (paper).",
+                                     'btc', 'BTC', title=f"BTC EXIT ({x['why']}) {x['pnl']:+,.0f} $", oid=k + 'x')
+            except Exception as e:
+                print(f"  (Bitcoin: {e})")
+            time.sleep(30)
+    BTC_THREAD.append(threading.Thread(target=run, daemon=True))
+    BTC_THREAD[0].start()
 
 def index_chart(n):
     """The index for the Options screen: today's candles and live minutes (as the chart page), its CPR, pivots
@@ -1995,11 +2188,13 @@ def app_settings(**change):
                 SETTINGS.update(json.load(f))
         except (OSError, ValueError):
             pass
-        SETTINGS.setdefault('opt_alerts', False)
-        SETTINGS.setdefault('opt_from', 0)
+        for k in ('opt', 'btc'):
+            SETTINGS.setdefault(k + '_alerts', False)
+            SETTINGS.setdefault(k + '_from', 0)
     if change:
-        if change.get('opt_alerts') and not SETTINGS['opt_alerts']:
-            SETTINGS['opt_from'] = EVENTS[-1]['id'] if EVENTS else 0
+        for k in ('opt', 'btc'):
+            if change.get(k + '_alerts') and not SETTINGS[k + '_alerts']:
+                SETTINGS[k + '_from'] = EVENTS[-1]['id'] if EVENTS else 0
         SETTINGS.update(change)
         try:
             with open(SETTINGS_FILE, 'w', encoding='utf-8') as f:
@@ -2009,8 +2204,9 @@ def app_settings(**change):
     return dict(SETTINGS)
 
 def shown_event(e, st):
-    """Does the app get this alert? The option alerts only while they are on."""
-    return e.get('kind') != 'option' or (st['opt_alerts'] and e['id'] > st['opt_from'])
+    """Does the app get this alert? The option and Bitcoin alerts only while they are on."""
+    k = {'option': 'opt', 'btc': 'btc'}.get(e.get('kind'))
+    return not k or (st[k + '_alerts'] and e['id'] > st[k + '_from'])
 
 def kind_of(mid):
     if isinstance(mid, tuple):
@@ -2943,6 +3139,202 @@ setInterval(loadChain, 3000);
 setInterval(loadChart, 3000);
 </script></body></html>"""
 
+BTC_HTML = """<!doctype html><html><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#ffffff"><title>BTC</title>
+<style>
+html,body{height:100%}
+body{margin:0;background:#ffffff;color:#131722;font:13px -apple-system,BlinkMacSystemFont,Roboto,Ubuntu,sans-serif;display:flex;flex-direction:column;overflow:hidden}
+#bar{display:flex;flex-wrap:wrap;gap:2px;align-items:center;padding:3px 6px;border-bottom:1px solid #e0e3eb}
+button{background:transparent;color:#131722;border:0;border-radius:4px;padding:7px 8px;font:inherit}
+button.on{color:#2962ff;background:#f0f3fa;font-weight:600}
+#bell.on{color:#f5a623}
+.sep{width:1px;height:20px;background:#e0e3eb;margin:0 3px}
+#info{margin-left:auto;font-size:11px;color:#787b86;text-align:right;line-height:1.3}
+#head{display:flex;flex-wrap:wrap;gap:2px 8px;align-items:baseline;padding:4px 8px;border-bottom:1px solid #e0e3eb;font-size:12px}
+#head .nm{font-weight:600;font-size:13px}
+.up{color:#089981}.dn{color:#f23645}.mut{color:#787b86}
+#cw{position:relative;flex:1;min-height:200px}
+#c{position:absolute;inset:0}
+#tbl{position:absolute;right:72px;top:4px;z-index:3;background:rgba(255,255,255,0.94);border:1px solid #d1d4dc;font-size:11px;max-width:min(430px,calc(100% - 84px));border-collapse:collapse}
+#tbl td{padding:3px 7px;border-bottom:1px solid #e0e3eb;border-right:1px solid #e0e3eb;vertical-align:top}
+#tbl td:first-child{color:#50535e;white-space:nowrap}#tbl td:last-child{color:#f23645;border-right:0}
+#panel{position:fixed;left:0;right:0;bottom:0;max-height:55%;overflow:auto;background:#ffffff;border-top:1px solid #e0e3eb;z-index:5;box-shadow:0 -4px 16px rgba(0,0,0,0.12)}
+#panel h4{margin:8px;font-size:13px}
+#panel table{width:100%;border-collapse:collapse}#panel td,#panel th{padding:5px 8px;border-bottom:1px solid #e0e3eb;text-align:left;font-size:12px}
+.hidden{display:none!important}
+#msg{padding:6px 8px;color:#787b86;font-size:12px}
+@media (max-width:699px){#tbl{font-size:10px;right:62px;max-width:calc(100% - 66px)}#tbl td{padding:2px 5px}}
+</style></head><body>
+<div id="bar"><button data-tf="1">1m</button><button data-tf="5" class="on">5m</button><button data-tf="15">15m</button><span class="sep"></span>
+<button id="infob">Info</button><button id="tradesb">&#9776; Trades</button><button id="bell" title="BTC alerts (paper)">&#128277; alerts off</button><div id="info"></div></div>
+<div id="head"></div>
+<div id="cw"><div id="c"></div><table id="tbl" class="hidden"></table></div>
+<div id="msg"></div>
+<div id="panel" class="hidden"><h4>London breakout trades (paper)</h4>
+<table><thead><tr><th>Time (IST)</th><th>Trade</th><th>Entry</th><th>Stop</th><th>Result</th></tr></thead><tbody id="list"></tbody></table></div>
+<script src="/lwc.js"></script>
+<script>
+const $ = (id) => document.getElementById(id);
+const PV = '%PAGEVER%';
+const keyq = () => { const k = new URLSearchParams(location.search).get('key'); return k ? '&key=' + encodeURIComponent(k) : ''; };
+const fmt = (x) => x == null ? '-' : Number(x).toLocaleString('en-US', {minimumFractionDigits: 1, maximumFractionDigits: 1});
+const fmt0 = (x) => Number(x).toLocaleString('en-US', {maximumFractionDigits: 0});
+const sgn = (n) => (n > 0 ? '+' : n < 0 ? '-' : '') + Math.round(Math.abs(n));
+let tf = 5, D = null, lines = [], lk = '', fitted = '', alertsOn = null, tblOn = innerWidth >= 700, busy = false;
+try { const v = localStorage.getItem('btctbl'); if (v) tblOn = v === 'on'; } catch (e) {}
+const box = $('c');
+const chart = LightweightCharts.createChart(box, {
+  layout: {background: {type: 'solid', color: '#ffffff'}, textColor: '#131722', fontSize: 11},
+  grid: {vertLines: {color: '#f0f3fa'}, horzLines: {color: '#f0f3fa'}},
+  rightPriceScale: {borderColor: '#e0e3eb', scaleMargins: {top: 0.1, bottom: 0.08}},
+  timeScale: {timeVisible: true, secondsVisible: false, borderColor: '#e0e3eb', rightOffset: 4},
+  crosshair: {mode: 0}, localization: {locale: 'en-US', priceFormatter: fmt}});
+const s = chart.addCandlestickSeries({upColor: '#089981', downColor: '#f23645', borderVisible: false, wickUpColor: '#089981', wickDownColor: '#f23645', priceLineStyle: 1});
+new ResizeObserver(() => chart.applyOptions({width: box.clientWidth, height: box.clientHeight})).observe(box);
+// ---- trades as TradingView's long / short position tool ----
+function pill(g, x, y, text, bg, right) {
+  g.font = '11px -apple-system,Roboto,sans-serif';
+  const w = g.measureText(text).width + 10, h = 17, x0 = right ? x - w : x;
+  g.fillStyle = bg; g.beginPath();
+  if (g.roundRect) g.roundRect(x0, y - h / 2, w, h, 3); else g.rect(x0, y - h / 2, w, h);
+  g.fill(); g.fillStyle = '#fff'; g.textBaseline = 'middle'; g.fillText(text, x0 + 5, y + 0.5);
+  return w;
+}
+function hline(g, x1, x2, y, color, dash) {
+  if (y == null) return;
+  g.strokeStyle = color; g.lineWidth = 1; g.setLineDash(dash); g.beginPath(); g.moveTo(x1, Math.round(y) + 0.5); g.lineTo(x2, Math.round(y) + 0.5); g.stroke(); g.setLineDash([]);
+}
+class Positions {
+  constructor() { this.items = []; }
+  attached(p) { this.chart = p.chart; this.series = p.series; this.req = p.requestUpdate; }
+  detached() { this.req = null; }
+  set(items) { this.items = items || []; if (this.req) this.req(); }
+  updateAllViews() {}
+  autoscaleInfo() {                          // the price scale always shows an open trade's T1 and stop loss
+    const o = this.items.filter((b) => b.t1 == null);
+    if (!o.length) return null;
+    const v = [].concat(...o.map((b) => [b.e, b.sl, b.sl_now, b.t[0]]));
+    return {priceRange: {minValue: Math.min(...v), maxValue: Math.max(...v)}};
+  }
+  paneViews() {                              // the zones under the candles, the labels over them
+    return [{zOrder: () => 'bottom', renderer: () => ({draw: (t) => this.draw(t, false)})},
+            {zOrder: () => 'top', renderer: () => ({draw: (t) => this.draw(t, true)})}];
+  }
+  draw(target, labels) {
+    target.useMediaCoordinateSpace(({context: g, mediaSize: sz}) => {
+      const tsc = this.chart.timeScale(), y = (p) => (p == null ? null : this.series.priceToCoordinate(p));
+      for (const b of this.items) {
+        const x1 = tsc.timeToCoordinate(b.t0);
+        if (x1 == null) continue;
+        const open = b.t1 == null;
+        let x2 = open ? sz.width : tsc.timeToCoordinate(b.t1);      // an open trade: on to the price scale
+        if (x2 == null || x2 - x1 < 14) x2 = x1 + 14;
+        const ye = y(b.e), ys = y(b.sl), y1 = y(b.t[0]), y2 = y(b.t[1]), y3 = y(b.t[2]), yn = y(b.sl_now);
+        if (ye == null || ys == null || y1 == null) continue;
+        const moved = open && Math.abs(b.sl_now - b.sl) > 0.01, dir = b.side > 0 ? 1 : -1;
+        if (!labels) {
+          const fill = (ya, yb, c) => { g.fillStyle = c; g.fillRect(x1, Math.min(ya, yb), x2 - x1, Math.abs(yb - ya)); };
+          fill(ye, ys, 'rgba(242,54,69,0.22)');
+          fill(ye, y1, 'rgba(8,153,129,0.30)');
+          if (y3 != null) fill(y1, y3, 'rgba(8,153,129,0.10)');
+          hline(g, x1, x2, ye, '#9598a1', []);
+          hline(g, x1, x2, y2, 'rgba(8,153,129,0.8)', [4, 3]);
+          hline(g, x1, x2, y3, 'rgba(8,153,129,0.8)', [4, 3]);
+          if (moved) hline(g, x1, x2, yn, '#f23645', [4, 3]);
+          continue;
+        }
+        const left = x2 - x1 < 110, used = [];       // a narrow box (a recent entry): the labels left of it
+        const put = (yy, text, bg) => {              // a label at its price, moved aside if it would cover another
+          if (yy == null) return;
+          let xx = left ? x1 - 3 : x1 + 3;
+          for (const u of used) if (Math.abs(u.y - yy) < 17) xx = left ? Math.min(xx, u.l - 4) : Math.max(xx, u.r + 4);
+          const w = pill(g, xx, yy, text, bg, left);
+          used.push({y: yy, l: left ? xx - w : xx, r: left ? xx : xx + w});
+        };
+        put(ye, (b.side > 0 ? 'BUY ' : 'SELL ') + fmt0(b.e) + (open ? '' : '  ' + sgn(b.pnl) + ' pts'), open ? '#2962ff' : '#5d606b');
+        const pct = (k) => (b.prob && b.prob[k] != null ? ' ' + b.prob[k] + '%' : '');
+        put(y1, 'T1 ' + fmt0(b.t[0]) + ' (' + sgn(dir * (b.t[0] - b.e)) + ')' + pct(0), '#089981');
+        if (open || x2 - x1 > 90) {
+          put(y2, 'T2 ' + fmt0(b.t[1]) + ' (' + sgn(dir * (b.t[1] - b.e)) + ')' + pct(1), 'rgba(8,153,129,0.8)');
+          put(y3, 'T3 ' + fmt0(b.t[2]) + ' (' + sgn(dir * (b.t[2] - b.e)) + ')' + pct(2), 'rgba(8,153,129,0.8)');
+        }
+        put(ys, 'SL ' + fmt0(b.sl) + ' (' + sgn(dir * (b.sl - b.e)) + ')', '#f23645');
+        if (moved) put(yn, stopName(b) + ' ' + fmt0(b.sl_now), stopName(b) === 'BE' ? '#787b86' : '#f23645');
+      }
+    });
+  }
+}
+function stopName(b) {                      // the stop now: the first one, at the entry (breakeven), or trailing
+  const d = (b.side > 0 ? 1 : -1) * (b.sl_now - b.e);
+  return Math.abs(d) < 0.01 ? 'BE' : d > 0 ? 'Trailing SL' : 'SL';
+}
+const pos = new Positions();
+s.attachPrimitive(pos);
+const bucket = (t) => Math.floor(t / (tf * 60)) * tf * 60;
+function agg(rows) {
+  const out = [];
+  for (const [t, o, h, l, c] of rows) {
+    const b = bucket(t), x = out[out.length - 1];
+    if (x && x.time === b) { x.high = Math.max(x.high, h); x.low = Math.min(x.low, l); x.close = c; }
+    else out.push({time: b, open: o, high: h, low: l, close: c});
+  }
+  return out;
+}
+async function bell(change) {
+  try {
+    const d = await (await fetch('/api/settings?' + (change == null ? '' : 'btc_alerts=' + (change ? 1 : 0)) + keyq(), {cache: 'no-store'})).json();
+    alertsOn = !!d.btc_alerts;
+  } catch (e) {}
+  $('bell').innerHTML = alertsOn ? '&#128276; alerts on' : '&#128277; alerts off';
+  $('bell').classList.toggle('on', !!alertsOn);
+}
+function draw() {
+  if (!D) return;
+  s.setData(agg(D.candles));
+  s.setMarkers(D.marks.map((k) => ({time: bucket(k.t), position: k.pos, color: k.c, text: k.x,
+    shape: k.x === 'BUY' ? 'arrowUp' : k.x === 'SELL' ? 'arrowDown' : 'circle'})));
+  pos.set(D.boxes.map((b) => Object.assign({}, b, {t0: bucket(b.t0), t1: b.t1 == null ? null : bucket(b.t1)})));
+  const key = JSON.stringify(D.lines);
+  if (key !== lk) {
+    lines.forEach((l) => s.removePriceLine(l)); lines = []; lk = key;
+    for (const l of D.lines) lines.push(s.createPriceLine({price: l.p, color: l.c, lineWidth: l.w, lineStyle: l.s, axisLabelVisible: true, title: l.t}));
+  }
+  if (fitted !== String(tf)) { fitted = String(tf); const n = s.data().length; chart.timeScale().setVisibleLogicalRange({from: Math.max(0, n - (tf === 1 ? 180 : 120)), to: n + 4}); }
+  $('head').innerHTML = `<span class="nm">BTCUSDT ${D.src === 'perpetual' ? 'perpetual' : 'spot'}</span><b>${fmt(D.px)}</b>` +
+    `<span class="${D.chg >= 0 ? 'up' : 'dn'}">${D.chg >= 0 ? '+' : ''}${fmt(D.chg)} (${D.pct}%, 24h)</span>` +
+    `<span class="${D.d15 >= 0 ? 'up' : 'dn'}">order flow 15 min ${D.d15 >= 0 ? '+' : ''}${fmt0(D.d15)} BTC</span>`;
+  $('info').innerHTML = 'Binance &middot; ' + D.at + ' IST';
+  $('tbl').innerHTML = '<tr><td>BTC (paper)</td><td>London breakout</td></tr>' + D.info.map((r) => '<tr><td>' + r[0] + '</td><td>' + r[1] + '</td></tr>').join('');
+  $('tbl').classList.toggle('hidden', !tblOn);
+  $('infob').classList.toggle('on', tblOn);
+  $('list').innerHTML = D.rows.length ? D.rows.slice().reverse().map((r) => '<tr>' + r.map((x) => '<td>' + x + '</td>').join('') + '</tr>').join('')
+    : '<tr><td colspan="5">No trades on this chart yet.</td></tr>';
+  $('msg').textContent = 'Paper only: the London breakout won 33% of its trades in July - October 2026 (target 450 / stop 150).';
+}
+async function load() {
+  if (busy) return;
+  busy = true;
+  try {
+    const d = await (await fetch('/api/btc?x=1' + keyq(), {cache: 'no-store'})).json();
+    if (d.pv && d.pv !== PV) { location.reload(); return; }
+    if (d.error) { $('msg').textContent = d.error; return; }
+    D = d; draw();
+  } catch (e) { $('msg').textContent = 'No data: is the program running?'; }
+  finally { busy = false; }
+}
+for (const b of document.querySelectorAll('#bar button')) b.onclick = () => {
+  if (b.id === 'bell') { if (alertsOn !== null) bell(!alertsOn); return; }
+  if (b.id === 'infob') { tblOn = !tblOn; try { localStorage.setItem('btctbl', tblOn ? 'on' : 'off'); } catch (e) {} draw(); return; }
+  if (b.id === 'tradesb') { $('panel').classList.toggle('hidden'); b.classList.toggle('on', !$('panel').classList.contains('hidden')); return; }
+  tf = +b.dataset.tf; fitted = '';
+  for (const x of document.querySelectorAll('#bar button[data-tf]')) x.classList.toggle('on', x === b);
+  draw();
+};
+bell();
+load();
+setInterval(load, 5000);
+</script></body></html>"""
+
 LWC_URL = 'https://cdn.jsdelivr.net/npm/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js'
 LWC_FILE = os.path.join(DATA_DIR, 'lightweight-charts-4.1.3.js')
 
@@ -3095,7 +3487,7 @@ def serve_chart(names):
                                               events=[e for e in EVENTS if e['id'] > since and shown_event(e, st)][-50:])).encode(), 'application/json'
             elif self.path.startswith('/api/settings'):
                 q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
-                ch = {k: q[k][0] == '1' for k in ('opt_alerts',) if k in q}
+                ch = {k: q[k][0] == '1' for k in ('opt_alerts', 'btc_alerts') if k in q}
                 body, ctype = json.dumps(app_settings(**ch)).encode(), 'application/json'
             elif self.path.startswith('/api/history'):
                 body, ctype = json.dumps(history_all()).encode(), 'application/json'
@@ -3120,6 +3512,14 @@ def serve_chart(names):
                 except Exception as e:
                     body = json.dumps(dict(error=f"chart not available ({e})")).encode()
                 ctype = 'application/json'
+            elif self.path.startswith('/api/btc'):
+                try:
+                    body = json.dumps(dict(btc_chart(), pv=page_ver('BTC_HTML'))).encode()
+                except Exception as e:
+                    body = json.dumps(dict(error=f"Bitcoin not available ({e})")).encode()
+                ctype = 'application/json'
+            elif self.path.split('?')[0] == '/btc':
+                body, ctype = chart_page('BTC_HTML').encode(), 'text/html; charset=utf-8'
             elif self.path.split('?')[0] == '/options':
                 body, ctype = chart_page('OPTIONS_HTML').encode(), 'text/html; charset=utf-8'
             else:
@@ -3146,6 +3546,7 @@ def serve_chart(names):
         return False
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     CHART_SERVER.append(srv)
+    btc_alerts()
     if CHART_HOST == '127.0.0.1' and not (CHART_KEY or CHART_KEY_SHA256):
         print(f"LIVE CHART: open http://127.0.0.1:{CHART_PORT} in Chrome on this phone.")
     else:

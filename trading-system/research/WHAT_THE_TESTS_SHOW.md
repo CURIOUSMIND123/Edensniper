@@ -2024,6 +2024,23 @@ Sensex 500s). 2026, and 2023-2025 as a check.
   stop 35, target 75: 2023 / 2024 / 2025 / 2026 +2 / +29 / +155 / +172 (45 trades, about one a month, 49% won); Sensex
   (stop 100, target 200) −428 / −13 / +439 / +624. Too few trades and too thin in 2023-2024 to add.
 
+## Bitcoin scalping, July - October 2026 (`btc_scalp.py`; 31 October 2026)
+
+Asked for: patterns (traps, liquidity sweeps, volume) that reach a 400-500 point target before a 150-point stop at least
+80% of the time. BTCUSDT perpetual, Binance's public 1-minute archives with the real taker-buy volume; chosen on
+July-September, checked on October; costs 0.06% a trade.
+
+- With the target three times the stop, a random entry reaches the target first 24% of the time. Every pattern tested
+  stayed near that: yesterday's high / low swept and reclaimed 36% (Jul-Sep) / 18% (Oct), the Asia range 24% / 21%,
+  4-hour / 24-hour swing sweeps 26% / 22%, $1,000 levels 23%, volume-spike rejections 27% / 22%, absorption (heavy
+  buying at a new high closing weak) 28% / 22%, volume breakouts 28% / 23%, the New York 13:30 UTC range breakout 33% /
+  10%. Most lost thousands of dollars a BTC. Nothing came near 80%; patterns that win 70-80% need the stop three times
+  the target (150 / 450), and those lost money too.
+- One held in both periods: the London opening-range breakout (08:00-08:15 UTC, 1:30-1:45 pm IST; the first 5-minute
+  close beyond it until 12:00 UTC), target 450 / stop 150: 121 trades, 33% won, +$967 a BTC (July +766, August +205,
+  September −545, October +541). In the app as paper calls on the BTC screen (alerts off until turned on); the alert
+  program's trades match the test trade for trade.
+
 ## How to re-check all of this
 
 - `python research/fair_price_backtest.py` downloads the candles and re-runs the Fair Price test.

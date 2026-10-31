@@ -86,6 +86,15 @@ function optionsView() {
   if (f.dataset.src !== src || stale(f)) { f.src = src; f.dataset.src = src; f.dataset.at = Date.now(); }
 }
 
+function btcView() {
+  const f = $('btc-frame');
+  $('btc-empty').classList.toggle('hidden', !!ready());
+  f.classList.toggle('hidden', !ready());
+  if (!ready()) return;
+  const src = cfg.server.replace(/\/+$/, '') + '/btc?key=' + encodeURIComponent(cfg.key);
+  if (f.dataset.src !== src || stale(f)) { f.src = src; f.dataset.src = src; f.dataset.at = Date.now(); }
+}
+
 function tgts(c) {
   // T1 = where the call books half (or its one target); T2 / T3 = the next price levels after it, for reference;
   // the % = how often calls of this kind got there (2023-2026)
@@ -196,6 +205,7 @@ function settingsView() {
   $('s-server').value = cfg.server || DEFAULT_SERVER;
   $('s-key').value = cfg.key || '';
   optAlerts();
+  btcAlerts();
 }
 
 // the option alerts switch is kept on the server, so the notification service (and every phone) follows it
@@ -213,9 +223,25 @@ async function optAlerts(change) {
   }
 }
 
+// the BTC alerts switch, kept on the server like the option alerts
+let btcOn = null;
+async function btcAlerts(change) {
+  const b = $('s-btc');
+  if (!ready()) { b.textContent = 'BTC alerts: set the server and key first'; return; }
+  try {
+    const d = await getJSON('/api/settings' + (change == null ? '' : '?btc_alerts=' + (change ? 1 : 0)));
+    btcOn = !!d.btc_alerts;
+    b.textContent = btcOn ? 'BTC alerts: ON (tap to turn off)' : 'BTC alerts: OFF (tap to turn on)';
+    b.classList.toggle('primary', btcOn);
+  } catch (e) {
+    b.textContent = 'BTC alerts: ' + (e.message || 'cannot reach the server');
+  }
+}
+
 async function refresh() {
   if (view === 'chart') chartView();
   else if (view === 'options') optionsView();
+  else if (view === 'btc') btcView();
   else if (view === 'calls') await callsView();
   else if (view === 'history') await historyView();
   else if (view === 'settings') settingsView();
@@ -275,6 +301,7 @@ async function main() {
   $('s-perm').onclick = askPermission;
   $('s-test').onclick = testNotification;
   $('s-opt').onclick = () => { if (optOn !== null) optAlerts(!optOn); };
+  $('s-btc').onclick = () => { if (btcOn !== null) btcAlerts(!btcOn); };
   $('s-save').onclick = async () => {
     cfg.server = ($('s-server').value || DEFAULT_SERVER).trim().replace(/\/+$/, '');
     if (!/^https?:\/\//.test(cfg.server)) cfg.server = 'https://' + cfg.server;

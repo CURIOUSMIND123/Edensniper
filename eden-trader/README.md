@@ -13,6 +13,9 @@ Nifty / Sensex CPR Breakout calls on your phone: an Android app with **notificat
   pivots R1-R3 / S1-S3, yesterday's high / low, the 15-minute range, the volume lines, the POC). In every call, on the
   chart and in the history, with how far each call went its way and against it. The trades themselves (entries,
   stop, book half, trail) are exactly the strategy's.
+- **BTC** (from 31 October 2026): Bitcoin (BTCUSDT perpetual, Binance) live, with yesterday's high / low, the Asia
+  and London ranges, the 24-hour high / low and POC, round $1,000s and the order flow; the London breakout as paper
+  calls (BUY / SELL boxes, target 450 / stop 150). BTC alerts are off until turned on in Settings or with the bell.
 - **Options** (from 21 October 2026): the current expiry's option chain for Nifty and Sensex, live (prices, change,
   open interest and its change; the at-the-money strike in blue, the index price as an orange line, in-the-money
   sides shaded), and a live chart of any call or put you tap (1 / 3 / 5 minutes) with that option's own CPR and
